@@ -1,0 +1,38 @@
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator, Dict
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from database import Base, engine
+from routes import analysis, chat, dashboards, datasets, relations, uploads
+from schemas import HealthResponse
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title="Excel Consultant", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(uploads.router)
+app.include_router(datasets.router)
+app.include_router(analysis.router)
+app.include_router(dashboards.router)
+app.include_router(chat.router)
+app.include_router(relations.router)
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check() -> Dict[str, str]:
+    return {"status": "ok"}

@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pandas
+openpyxl
+python-multipart
+openai
+pydantic
+pydantic-settings
+sqlalchemy
+pyarrow
+python-dotenv
