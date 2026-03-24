@@ -82,32 +82,69 @@ sequenceDiagram
   fe-->>user: Show answer
 ```
 
+## Authentication Flow
+
+```mermaid
+sequenceDiagram
+  participant user as User
+  participant fe as Frontend
+  participant nextauth as NextAuth
+  participant api as BackendAPI
+  participant db as Database
+
+  user->>fe: Click Sign In
+  fe->>nextauth: signIn google
+  nextauth-->>fe: Google OAuth redirect
+  fe->>nextauth: Callback with token
+  nextauth-->>fe: Session JWT
+  fe->>api: POST auth sync with email and name
+  api->>db: Create or update user
+  db-->>api: User record
+  api-->>fe: User profile and workspaces
+  alt No workspaces
+    fe->>fe: Redirect to onboarding
+    user->>fe: Enter workspace name
+    fe->>api: POST workspaces
+    api->>db: Create workspace
+    api-->>fe: Workspace created
+  end
+  fe->>fe: Redirect to dashboard
+```
+
 ## Database Schema
 
 | Table | Purpose |
 |-------|---------|
-| **uploads** | Original file records: path/URL, size, MIME type, status, timestamps. |
+| **users** | User accounts synced from Google OAuth: email, name, image, active workspace. |
+| **workspaces** | Isolated containers for user data: name, owner. |
+| **uploads** | Original file records: path/URL, size, MIME type, status, timestamps. Scoped to workspace. |
 | **datasets** | Logical dataset per upload: schema snapshot, column metadata, row counts. |
 | **analyses** | AI analysis runs: prompts, model, structured output, links to dataset. |
 | **dashboards** | Dashboard definitions: layout, widget specs, bindings to analysis/dataset. |
 | **chat_messages** | Chat history: role, content, optional tool/query traces, dataset scope. |
-| **dataset_relations** | Joins or links between datasets (e.g. keys, relationship type). |
-
-*Note: `users`, `workspaces`, and `subscriptions` are introduced in a later auth/billing phase.*
+| **dataset_relations** | Joins or links between datasets (e.g. keys, relationship type). Scoped to workspace. |
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Liveness/readiness for load balancers. |
+| `POST` | `/api/auth/sync` | Sync user from NextAuth session (create or update). |
+| `GET` | `/api/auth/me` | Get current user profile + workspaces. |
+| `POST` | `/api/workspaces` | Create a new workspace. |
+| `GET` | `/api/workspaces` | List workspaces for current user. |
+| `POST` | `/api/workspaces/{id}/activate` | Set active workspace. |
 | `POST` | `/api/uploads` | Create upload; accept file + optional description. |
 | `GET` | `/api/uploads/{id}` | Upload metadata and processing status. |
+| `GET` | `/api/datasets` | List all datasets (workspace-scoped). |
 | `GET` | `/api/datasets/{id}` | Dataset profile and column info. |
 | `GET` | `/api/datasets/{id}/preview` | Paginated sample rows for UI preview. |
 | `POST` | `/api/analysis/run` | Trigger AI analysis for a dataset. |
 | `GET` | `/api/analysis/{id}` | Fetch a completed analysis by id. |
 | `POST` | `/api/chat` | Natural-language Q&A over a dataset. |
 | `GET` | `/api/dashboards/{id}` | Dashboard configuration and data bindings. |
+| `GET` | `/api/relations/detect` | Auto-detect relations across datasets. |
+| `GET` | `/api/relations` | List all detected relations. |
 
 ## Project Structure
 
@@ -118,21 +155,30 @@ frontend/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx
-│   │   ├── page.tsx
+│   │   ├── page.tsx              # Landing page
+│   │   ├── login/page.tsx        # Google OAuth sign-in
+│   │   ├── onboarding/page.tsx   # First-time workspace creation
+│   │   ├── api/auth/[...nextauth]/route.ts
 │   │   └── (dashboard)/
-│   │       ├── layout.tsx
+│   │       ├── layout.tsx        # Auth guard + sidebar + workspace switcher
 │   │       ├── upload/page.tsx
 │   │       ├── datasets/page.tsx
 │   │       ├── datasets/[id]/page.tsx
 │   │       └── chat/page.tsx
 │   ├── components/
-│   │   ├── ui/                 # shadcn primitives
-│   │   ├── charts/             # Recharts wrappers
-│   │   └── upload/             # File upload + context form
+│   │   ├── ui/                   # shadcn primitives
+│   │   ├── charts/               # Recharts wrappers
+│   │   ├── upload/               # File upload + context form
+│   │   ├── auth-guard.tsx        # Route protection
+│   │   ├── user-menu.tsx         # User avatar + sign out
+│   │   └── workspace-switcher.tsx
 │   └── lib/
-│       ├── api.ts              # Backend API client
-│       ├── providers.tsx       # TanStack Query provider
+│       ├── api.ts                # Backend API client (auto-attaches user header)
+│       ├── auth.ts               # NextAuth config
+│       ├── providers.tsx         # Session + Query + Workspace providers
+│       ├── workspace-context.tsx # Workspace state management
 │       └── utils.ts
+├── .env.local.example
 ├── package.json
 └── tailwind.config.ts
 ```
@@ -144,19 +190,26 @@ backend/
 ├── main.py                     # FastAPI entry point
 ├── config.py                   # Settings via pydantic-settings
 ├── database.py                 # SQLAlchemy engine + session
+├── deps.py                     # Auth dependencies (get_current_user, require_user)
 ├── routes/
+│   ├── auth.py                 # User sync + profile
+│   ├── workspaces.py           # Workspace CRUD + activation
 │   ├── uploads.py
+│   ├── datasets.py
 │   ├── analysis.py
 │   ├── dashboards.py
-│   └── chat.py
+│   ├── chat.py
+│   └── relations.py
 ├── services/
 │   ├── file_processor.py       # Parse Excel/CSV
 │   ├── data_cleaner.py         # Clean + normalize
 │   ├── column_detector.py      # Type + name heuristic detection
 │   ├── ai_analyzer.py          # OpenAI analysis
-│   └── query_engine.py         # Chat: question -> pandas -> answer
+│   ├── query_engine.py         # Chat: question -> pandas -> answer
+│   ├── forecaster.py           # Linear regression forecasting
+│   └── relation_detector.py    # Cross-dataset relation detection
 ├── models/
-│   └── models.py               # SQLAlchemy models
+│   └── models.py               # SQLAlchemy models (User, Workspace, Upload, ...)
 ├── schemas/
 │   └── schemas.py              # Pydantic request/response schemas
 ├── data/                       # SQLite DB + uploaded files (dev)

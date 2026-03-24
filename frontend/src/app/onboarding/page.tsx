@@ -1,0 +1,104 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { useWorkspace } from "@/lib/workspace-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+
+export default function OnboardingPage() {
+  const { status } = useSession();
+  const { createWorkspace, profile, loading } = useWorkspace();
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") {
+    router.replace("/login");
+    return null;
+  }
+
+  if (profile && profile.workspaces.length > 0) {
+    router.replace("/upload");
+    return null;
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Workspace name is required");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      await createWorkspace(trimmed);
+      router.push("/upload");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4">
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold tracking-tight">
+          Welcome to Excel Consultant
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          Create your first workspace to get started
+        </p>
+      </div>
+
+      <Card className="w-full max-w-md">
+        <CardContent className="pt-6 pb-6">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label
+                htmlFor="workspace-name"
+                className="text-sm font-medium block mb-1.5"
+              >
+                Workspace name
+              </label>
+              <Input
+                id="workspace-name"
+                placeholder="e.g. My Business, Acme Corp, Side Hustle"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+                disabled={submitting}
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                A workspace holds all your uploads, dashboards, and analysis for
+                one business or project. You can create more later.
+              </p>
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+
+            <Button type="submit" disabled={submitting} className="h-11">
+              {submitting ? "Creating..." : "Create Workspace"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

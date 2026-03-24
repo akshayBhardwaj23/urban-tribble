@@ -103,8 +103,8 @@ export default function LandingPage() {
             >
               Dashboard
             </Link>
-            <Link href="/upload">
-              <Button size="sm">Get Started</Button>
+            <Link href="/login">
+              <Button size="sm">Sign In</Button>
             </Link>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function LandingPage() {
           </Link>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          No signup required. Start analyzing in 30 seconds.
+          Sign in with Google. Start analyzing in 30 seconds.
         </p>
       </section>
 

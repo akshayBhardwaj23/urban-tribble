@@ -28,10 +28,20 @@ Backend runs at http://localhost:8000. Health check: http://localhost:8000/healt
 ```bash
 cd frontend
 npm install
+cp .env.local.example .env.local  # add Google OAuth credentials
 npm run dev
 ```
 
 Frontend runs at http://localhost:3000.
+
+### Google OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new OAuth 2.0 Client ID (Web application)
+3. Add `http://localhost:3000` to Authorized JavaScript origins
+4. Add `http://localhost:3000/api/auth/callback/google` to Authorized redirect URIs
+5. Copy Client ID and Client Secret to `frontend/.env.local`
+6. Generate a NEXTAUTH_SECRET: `openssl rand -base64 32`
 
 ## Project Structure
 

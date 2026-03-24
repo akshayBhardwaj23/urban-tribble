@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
-from routes import analysis, chat, dashboards, datasets, relations, uploads
+from routes import analysis, auth, chat, dashboards, datasets, relations, uploads, workspaces
 from schemas import HealthResponse
 
 
@@ -25,6 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(workspaces.router)
 app.include_router(uploads.router)
 app.include_router(datasets.router)
 app.include_router(analysis.router)

@@ -1,11 +1,23 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+let _userEmail: string | null = null;
+
+export function setApiUserEmail(email: string | null) {
+  _userEmail = email;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  };
+
+  if (_userEmail) {
+    headers["X-User-Email"] = _userEmail;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -42,6 +54,16 @@ export const api = {
       user_description: string | null;
       created_at: string;
     }>(`/api/uploads/${id}`),
+
+  listDatasets: () =>
+    request<
+      {
+        id: string;
+        upload_id: string;
+        name: string;
+        created_at: string;
+      }[]
+    >("/api/datasets"),
 
   getDataset: (id: string) =>
     request<{

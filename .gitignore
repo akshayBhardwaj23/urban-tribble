@@ -9,7 +9,9 @@ frontend/out/
 
 # Environment
 .env
+.env.local
 backend/.env
+frontend/.env.local
 
 # Database & uploads (dev)
 backend/data/app.db
