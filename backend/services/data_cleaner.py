@@ -11,6 +11,12 @@ class DataCleaner:
         """Clean the dataframe and return (cleaned_df, report)."""
         report: dict = {"steps": [], "original_shape": list(df.shape)}
 
+        df, dropped_unnamed = self._drop_unnamed_columns(df)
+        if dropped_unnamed:
+            report["steps"].append(
+                f"Dropped {len(dropped_unnamed)} unnamed index columns: {dropped_unnamed}"
+            )
+
         df, dupes = self._remove_duplicates(df)
         if dupes > 0:
             report["steps"].append(f"Removed {dupes} duplicate rows")
@@ -31,8 +37,18 @@ class DataCleaner:
         if missing_report:
             report["steps"].append(f"Handled missing values: {missing_report}")
 
+        df = self._stabilize_dtypes(df)
+
         report["cleaned_shape"] = list(df.shape)
         return df, report
+
+    def _drop_unnamed_columns(
+        self, df: pd.DataFrame
+    ) -> tuple[pd.DataFrame, list[str]]:
+        unnamed = [c for c in df.columns if str(c).lower().startswith("unnamed")]
+        if unnamed:
+            df = df.drop(columns=unnamed)
+        return df, unnamed
 
     def _remove_duplicates(self, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         before = len(df)
@@ -87,3 +103,10 @@ class DataCleaner:
                 df[col] = df[col].fillna("Unknown")
                 report[col] = f"filled {missing} with 'Unknown'"
         return df, report
+
+    def _stabilize_dtypes(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Ensure object columns have uniform string type for Parquet."""
+        for col in df.columns:
+            if df[col].dtype == "object":
+                df[col] = df[col].astype(str)
+        return df

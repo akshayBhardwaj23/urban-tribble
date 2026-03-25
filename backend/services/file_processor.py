@@ -5,8 +5,8 @@ import pandas as pd
 
 class FileProcessor:
     READERS = {
-        ".csv": lambda p: pd.read_csv(p),
-        ".tsv": lambda p: pd.read_csv(p, sep="\t"),
+        ".csv": lambda p: pd.read_csv(p, index_col=False),
+        ".tsv": lambda p: pd.read_csv(p, sep="\t", index_col=False),
         ".xlsx": lambda p: pd.read_excel(p, engine="openpyxl"),
         ".xls": lambda p: pd.read_excel(p),
     }

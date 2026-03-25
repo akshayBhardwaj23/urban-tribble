@@ -1,0 +1,301 @@
+expense_date,employee_name,department,category,amount,status
+2024-05-01,Neha Gupta,Operations,Training,10399.18,Pending
+2024-11-08,Arjun Mehta,Marketing,Training,2260.68,Approved
+2024-04-15,Rahul Sharma,Finance,Software,8077.76,Approved
+2024-03-27,Sneha Kumar,Operations,Software,4482.13,Approved
+2024-09-20,Priya Patel,Marketing,Client Entertainment,11828.23,Rejected
+2024-05-21,Amit Singh,Operations,Client Entertainment,2163.82,Approved
+2024-06-13,Neha Gupta,Operations,Hardware,7443.99,Approved
+2024-05-17,Arjun Mehta,HR,Hardware,1317.64,Pending
+2024-02-17,Arjun Mehta,Finance,Office Supplies,4317.74,Rejected
+2024-07-07,Pooja Verma,HR,Software,8812.94,Pending
+2024-02-17,Pooja Verma,Operations,Office Supplies,10519.88,Pending
+2024-09-30,Arjun Mehta,Marketing,Hardware,12407.75,Approved
+2024-06-14,Vikram Reddy,Sales,Training,8753.42,Approved
+2024-09-05,Sneha Kumar,Operations,Client Entertainment,916.46,Approved
+2024-08-23,Rahul Sharma,Engineering,Client Entertainment,2538.16,Approved
+2024-08-07,Neha Gupta,Operations,Meals,13255.79,Approved
+2024-05-20,Priya Patel,Operations,Software,3905.76,Approved
+2024-11-28,Amit Singh,Engineering,Hardware,9458.94,Pending
+2024-04-29,Arjun Mehta,Operations,Travel,10614.73,Approved
+2024-09-01,Priya Patel,Marketing,Training,3547.62,Approved
+2024-01-05,Rahul Sharma,Operations,Software,12293.21,Rejected
+2024-08-04,Amit Singh,HR,Travel,3588.41,Approved
+2024-02-22,Priya Patel,Sales,Software,13238.64,Approved
+2024-03-09,Amit Singh,Engineering,Training,8536.71,Approved
+2024-03-25,Pooja Verma,Sales,Office Supplies,3353.22,Pending
+2024-07-29,Divya Shah,Operations,Hardware,12927.45,Approved
+2024-02-21,Amit Singh,Engineering,Training,11004.14,Approved
+2024-08-07,Sneha Kumar,Marketing,Meals,4299.12,Approved
+2024-10-10,Divya Shah,Finance,Office Supplies,9192.38,Pending
+2024-12-19,Rahul Sharma,Operations,Software,3240.6,Approved
+2024-04-06,Arjun Mehta,Sales,Office Supplies,1007.62,Pending
+2024-05-02,Pooja Verma,HR,Travel,3768.01,Approved
+2024-02-06,Karan Joshi,Engineering,Software,14022.08,Approved
+2024-10-18,Arjun Mehta,Sales,Training,10307.54,Pending
+2024-02-07,Rahul Sharma,Finance,Travel,404.14,Approved
+2024-01-31,Arjun Mehta,Finance,Software,9502.85,Approved
+2024-07-31,Arjun Mehta,Operations,Hardware,1419.93,Approved
+2024-11-11,Amit Singh,Sales,Travel,4786.62,Approved
+2024-04-14,Amit Singh,Finance,Software,5982.83,Approved
+2024-11-28,Priya Patel,Sales,Office Supplies,6674.79,Rejected
+2024-05-02,Rahul Sharma,Marketing,Travel,13884.49,Approved
+2024-11-09,Divya Shah,Engineering,Software,10057.98,Approved
+2024-03-30,Priya Patel,Engineering,Office Supplies,2230.73,Approved
+2024-09-11,Sneha Kumar,Finance,Training,11788.21,Pending
+2024-03-26,Sneha Kumar,Marketing,Office Supplies,11760.63,Approved
+2024-03-01,Rahul Sharma,Sales,Client Entertainment,6554.0,Approved
+2024-05-14,Divya Shah,Operations,Travel,7542.98,Approved
+2024-01-29,Pooja Verma,Finance,Meals,5641.78,Approved
+2024-02-22,Divya Shah,Operations,Office Supplies,1906.94,Pending
+2024-01-02,Rahul Sharma,Engineering,Meals,880.53,Approved
+2024-03-17,Amit Singh,Engineering,Training,12086.11,Pending
+2024-12-01,Arjun Mehta,Marketing,Software,3874.3,Rejected
+2024-06-12,Vikram Reddy,Engineering,Training,5717.56,Approved
+2024-01-27,Amit Singh,Marketing,Client Entertainment,7833.46,Approved
+2024-07-24,Priya Patel,HR,Client Entertainment,4378.14,Pending
+2024-06-16,Priya Patel,Finance,Hardware,317.94,Approved
+2024-10-15,Vikram Reddy,Operations,Training,3790.24,Approved
+2024-09-09,Neha Gupta,Operations,Training,11455.14,Approved
+2024-01-04,Arjun Mehta,Engineering,Meals,8214.87,Approved
+2024-12-21,Rahul Sharma,Sales,Travel,11432.15,Approved
+2024-06-06,Priya Patel,Marketing,Training,14750.11,Approved
+2024-01-31,Amit Singh,Operations,Software,1576.79,Rejected
+2024-09-23,Arjun Mehta,Operations,Software,6985.18,Pending
+2024-10-24,Priya Patel,Finance,Meals,9630.79,Approved
+2024-10-30,Divya Shah,Engineering,Hardware,10004.17,Approved
+2024-05-29,Vikram Reddy,Sales,Client Entertainment,6015.7,Pending
+2024-06-16,Sneha Kumar,HR,Software,3657.45,Rejected
+2024-03-10,Divya Shah,Engineering,Meals,1763.73,Approved
+2024-06-09,Arjun Mehta,Engineering,Training,5502.65,Pending
+2024-08-19,Vikram Reddy,HR,Software,12816.74,Approved
+2024-12-17,Vikram Reddy,Operations,Office Supplies,9128.88,Approved
+2024-06-16,Amit Singh,Engineering,Office Supplies,3873.64,Approved
+2024-09-19,Rahul Sharma,Operations,Software,4050.47,Rejected
+2024-01-16,Arjun Mehta,HR,Training,11271.56,Approved
+2024-08-24,Priya Patel,Marketing,Travel,376.96,Pending
+2024-04-23,Amit Singh,Marketing,Client Entertainment,6128.61,Approved
+2024-11-26,Priya Patel,Finance,Training,4030.55,Pending
+2024-01-12,Priya Patel,Marketing,Office Supplies,6762.78,Approved
+2024-06-18,Priya Patel,Engineering,Hardware,949.44,Rejected
+2024-08-09,Arjun Mehta,HR,Travel,5864.4,Approved
+2024-06-30,Neha Gupta,Marketing,Software,4341.85,Pending
+2024-01-18,Divya Shah,Finance,Training,3837.61,Approved
+2024-07-29,Karan Joshi,HR,Travel,1498.28,Approved
+2024-08-02,Neha Gupta,Operations,Client Entertainment,7982.05,Approved
+2024-10-05,Rahul Sharma,HR,Client Entertainment,10757.89,Approved
+2024-09-05,Sneha Kumar,Finance,Training,4959.75,Approved
+2024-01-14,Sneha Kumar,Finance,Meals,633.69,Pending
+2024-05-23,Rahul Sharma,HR,Training,5490.01,Approved
+2024-04-29,Amit Singh,Engineering,Meals,9921.59,Approved
+2024-01-29,Neha Gupta,Finance,Client Entertainment,14743.44,Approved
+2024-03-29,Amit Singh,Marketing,Training,4906.46,Pending
+2024-07-02,Divya Shah,Engineering,Office Supplies,10568.3,Rejected
+2024-10-15,Amit Singh,Finance,Meals,12583.11,Pending
+2024-09-09,Karan Joshi,Sales,Meals,7458.46,Approved
+2024-04-29,Divya Shah,Marketing,Travel,7991.44,Approved
+2024-11-10,Neha Gupta,Marketing,Software,10810.68,Rejected
+2024-06-14,Rahul Sharma,Engineering,Meals,8881.82,Rejected
+2024-02-26,Karan Joshi,Sales,Travel,5729.14,Rejected
+2024-07-21,Divya Shah,Engineering,Software,4666.12,Approved
+2024-03-21,Arjun Mehta,Operations,Hardware,9807.87,Approved
+2024-10-14,Divya Shah,Sales,Meals,10049.87,Pending
+2024-07-12,Vikram Reddy,Operations,Office Supplies,4558.86,Approved
+2024-01-01,Divya Shah,HR,Client Entertainment,14915.39,Rejected
+2024-01-17,Amit Singh,Finance,Software,13831.37,Rejected
+2024-04-23,Divya Shah,Engineering,Hardware,2281.52,Pending
+2024-05-01,Sneha Kumar,Sales,Meals,9615.56,Rejected
+2024-12-28,Sneha Kumar,HR,Travel,4125.14,Approved
+2024-02-04,Sneha Kumar,Sales,Client Entertainment,1798.91,Approved
+2024-07-16,Pooja Verma,Operations,Hardware,14542.71,Pending
+2024-09-09,Arjun Mehta,Sales,Training,5755.14,Pending
+2024-10-22,Neha Gupta,Marketing,Hardware,1290.9,Pending
+2024-05-30,Rahul Sharma,Sales,Software,14284.6,Approved
+2024-03-28,Arjun Mehta,Marketing,Office Supplies,1310.04,Rejected
+2024-02-17,Sneha Kumar,Finance,Training,13419.75,Pending
+2024-08-08,Amit Singh,Finance,Hardware,2525.14,Approved
+2024-04-15,Neha Gupta,HR,Office Supplies,8400.86,Rejected
+2024-10-03,Vikram Reddy,Operations,Software,4601.53,Approved
+2024-07-20,Divya Shah,Finance,Client Entertainment,7466.03,Approved
+2024-01-02,Arjun Mehta,Engineering,Software,12393.68,Approved
+2024-09-02,Neha Gupta,Engineering,Travel,3262.9,Approved
+2024-02-11,Pooja Verma,Engineering,Software,11816.17,Approved
+2024-12-04,Vikram Reddy,Engineering,Office Supplies,8253.07,Approved
+2024-07-14,Sneha Kumar,Marketing,Hardware,860.33,Approved
+2024-05-14,Neha Gupta,Sales,Training,1112.26,Pending
+2024-12-07,Priya Patel,Engineering,Office Supplies,5288.11,Approved
+2024-10-28,Neha Gupta,Finance,Travel,12643.8,Pending
+2024-08-02,Karan Joshi,Operations,Client Entertainment,14058.15,Approved
+2024-04-30,Pooja Verma,Sales,Travel,6043.1,Pending
+2024-01-18,Karan Joshi,Finance,Training,12046.66,Approved
+2024-11-13,Amit Singh,Engineering,Client Entertainment,6845.79,Rejected
+2024-03-26,Neha Gupta,Marketing,Meals,831.6,Approved
+2024-12-15,Arjun Mehta,Marketing,Client Entertainment,9482.95,Pending
+2024-05-12,Sneha Kumar,Operations,Client Entertainment,1191.78,Approved
+2024-07-22,Karan Joshi,Sales,Client Entertainment,4287.77,Approved
+2024-01-07,Divya Shah,Finance,Training,11768.95,Approved
+2024-03-17,Amit Singh,Finance,Training,8823.62,Rejected
+2024-02-21,Priya Patel,Finance,Client Entertainment,1694.66,Approved
+2024-10-01,Sneha Kumar,HR,Software,5869.04,Approved
+2024-11-07,Pooja Verma,Engineering,Meals,4276.13,Approved
+2024-11-07,Arjun Mehta,Engineering,Hardware,13365.7,Approved
+2024-05-01,Rahul Sharma,Operations,Hardware,13828.36,Pending
+2024-01-11,Sneha Kumar,Sales,Software,4349.13,Approved
+2024-12-22,Priya Patel,Marketing,Meals,4647.11,Pending
+2024-06-13,Vikram Reddy,Operations,Hardware,9153.69,Approved
+2024-08-14,Neha Gupta,HR,Office Supplies,7370.01,Approved
+2024-07-10,Rahul Sharma,Finance,Client Entertainment,2552.79,Approved
+2024-09-16,Arjun Mehta,Marketing,Client Entertainment,12799.17,Pending
+2024-01-15,Amit Singh,Marketing,Client Entertainment,3170.76,Approved
+2024-01-17,Pooja Verma,Engineering,Software,10628.58,Approved
+2024-08-25,Karan Joshi,HR,Office Supplies,13861.49,Approved
+2024-05-03,Sneha Kumar,HR,Training,6802.33,Rejected
+2024-08-30,Divya Shah,Finance,Software,5294.89,Pending
+2024-05-12,Priya Patel,Sales,Travel,5921.17,Approved
+2024-10-19,Neha Gupta,Marketing,Office Supplies,3531.66,Approved
+2024-11-29,Arjun Mehta,Finance,Travel,12996.52,Rejected
+2024-12-15,Rahul Sharma,HR,Meals,9781.1,Approved
+2024-01-05,Neha Gupta,Sales,Training,12115.27,Approved
+2024-12-29,Vikram Reddy,HR,Hardware,12803.48,Approved
+2024-04-21,Pooja Verma,Sales,Office Supplies,7905.44,Approved
+2024-10-26,Priya Patel,Engineering,Training,14991.55,Rejected
+2024-07-10,Karan Joshi,Operations,Training,9213.94,Approved
+2024-02-25,Pooja Verma,Engineering,Software,14827.74,Approved
+2024-05-21,Vikram Reddy,Operations,Office Supplies,14292.38,Approved
+2024-04-06,Amit Singh,Finance,Client Entertainment,3756.47,Approved
+2024-11-03,Arjun Mehta,Operations,Software,10275.19,Pending
+2024-12-01,Pooja Verma,Sales,Software,13622.29,Approved
+2024-01-19,Divya Shah,Operations,Training,12277.02,Approved
+2024-04-23,Karan Joshi,Operations,Client Entertainment,7240.88,Rejected
+2024-07-02,Karan Joshi,Sales,Client Entertainment,2715.8,Approved
+2024-10-12,Amit Singh,Sales,Travel,7167.56,Pending
+2024-10-13,Amit Singh,Operations,Software,9885.63,Approved
+2024-04-24,Vikram Reddy,HR,Client Entertainment,13325.28,Approved
+2024-10-26,Vikram Reddy,HR,Client Entertainment,1943.17,Approved
+2024-11-20,Divya Shah,Finance,Training,1253.99,Pending
+2024-09-13,Priya Patel,Operations,Hardware,8041.61,Approved
+2024-03-18,Amit Singh,Marketing,Software,6256.04,Approved
+2024-08-22,Amit Singh,Sales,Client Entertainment,10791.89,Pending
+2024-09-06,Sneha Kumar,Operations,Meals,4838.53,Approved
+2024-08-19,Vikram Reddy,Marketing,Client Entertainment,11648.43,Approved
+2024-03-22,Pooja Verma,Engineering,Meals,9294.3,Approved
+2024-07-25,Arjun Mehta,HR,Hardware,269.1,Approved
+2024-07-10,Rahul Sharma,Sales,Client Entertainment,12531.78,Approved
+2024-12-12,Rahul Sharma,Operations,Office Supplies,3882.58,Approved
+2024-06-25,Vikram Reddy,Marketing,Travel,5876.55,Approved
+2024-03-26,Priya Patel,Engineering,Software,14237.26,Approved
+2024-09-23,Divya Shah,Finance,Software,6618.25,Approved
+2024-03-09,Sneha Kumar,HR,Software,11301.71,Approved
+2024-07-25,Rahul Sharma,Marketing,Meals,10962.1,Approved
+2024-01-12,Divya Shah,Finance,Meals,2022.8,Pending
+2024-01-20,Arjun Mehta,Operations,Software,11614.5,Approved
+2024-10-31,Rahul Sharma,Operations,Travel,9872.8,Approved
+2024-12-19,Priya Patel,HR,Hardware,5827.76,Approved
+2024-08-30,Amit Singh,Marketing,Office Supplies,10348.95,Approved
+2024-08-03,Priya Patel,Operations,Training,4195.66,Approved
+2024-03-11,Arjun Mehta,Engineering,Training,10837.74,Approved
+2024-02-28,Priya Patel,HR,Meals,9213.23,Pending
+2024-09-24,Neha Gupta,Sales,Office Supplies,6264.39,Approved
+2024-10-07,Pooja Verma,Marketing,Office Supplies,14010.24,Approved
+2024-01-02,Rahul Sharma,Operations,Travel,13621.82,Pending
+2024-12-08,Pooja Verma,Marketing,Travel,11736.99,Approved
+2024-02-21,Vikram Reddy,Operations,Meals,6959.92,Rejected
+2024-05-15,Pooja Verma,Engineering,Travel,12235.04,Pending
+2024-05-28,Sneha Kumar,Operations,Software,6504.73,Approved
+2024-01-24,Rahul Sharma,Marketing,Office Supplies,9778.54,Approved
+2024-08-12,Divya Shah,Sales,Office Supplies,1575.68,Pending
+2024-04-03,Priya Patel,HR,Hardware,14442.19,Approved
+2024-07-16,Pooja Verma,HR,Office Supplies,13314.63,Approved
+2024-03-08,Rahul Sharma,Marketing,Travel,6357.21,Approved
+2024-10-18,Pooja Verma,Marketing,Training,5820.31,Approved
+2024-01-15,Amit Singh,HR,Hardware,1871.47,Approved
+2024-01-24,Priya Patel,Sales,Office Supplies,4850.72,Pending
+2024-12-13,Karan Joshi,Operations,Training,10911.85,Approved
+2024-12-08,Sneha Kumar,Finance,Training,10385.98,Approved
+2024-08-09,Neha Gupta,HR,Software,10022.92,Approved
+2024-03-17,Karan Joshi,Finance,Travel,372.34,Rejected
+2024-09-15,Pooja Verma,HR,Client Entertainment,2647.98,Pending
+2024-06-13,Neha Gupta,Sales,Software,945.19,Approved
+2024-11-25,Arjun Mehta,HR,Client Entertainment,3678.0,Approved
+2024-10-20,Pooja Verma,Engineering,Client Entertainment,7577.15,Approved
+2024-09-11,Rahul Sharma,Engineering,Hardware,6302.61,Approved
+2024-01-01,Priya Patel,Finance,Training,9635.56,Pending
+2024-10-14,Neha Gupta,Operations,Office Supplies,6951.88,Approved
+2024-01-28,Neha Gupta,HR,Software,8490.23,Approved
+2024-08-30,Sneha Kumar,Operations,Hardware,1887.55,Pending
+2024-04-23,Rahul Sharma,Sales,Software,12482.28,Rejected
+2024-05-29,Karan Joshi,Finance,Software,10591.02,Approved
+2024-03-25,Pooja Verma,Marketing,Client Entertainment,10809.47,Pending
+2024-02-24,Vikram Reddy,Finance,Meals,2975.64,Rejected
+2024-07-20,Neha Gupta,HR,Client Entertainment,11765.02,Pending
+2024-02-25,Arjun Mehta,Engineering,Office Supplies,12594.5,Approved
+2024-08-18,Pooja Verma,Operations,Training,14351.62,Approved
+2024-09-12,Rahul Sharma,Finance,Office Supplies,918.86,Rejected
+2024-10-26,Pooja Verma,Finance,Client Entertainment,13833.2,Approved
+2024-10-23,Amit Singh,Operations,Client Entertainment,2100.05,Approved
+2024-11-03,Divya Shah,Sales,Training,13244.58,Approved
+2024-11-07,Neha Gupta,Sales,Hardware,14461.18,Rejected
+2024-08-19,Amit Singh,Marketing,Hardware,9117.36,Pending
+2024-09-19,Vikram Reddy,Operations,Training,12938.47,Pending
+2024-10-10,Neha Gupta,Marketing,Meals,9437.68,Approved
+2024-06-25,Amit Singh,Operations,Office Supplies,14632.66,Approved
+2024-10-04,Sneha Kumar,Operations,Travel,11459.47,Approved
+2024-10-25,Divya Shah,Operations,Office Supplies,6378.67,Pending
+2024-09-30,Vikram Reddy,HR,Client Entertainment,389.0,Approved
+2024-07-14,Amit Singh,Engineering,Office Supplies,1037.75,Approved
+2024-03-23,Vikram Reddy,Operations,Software,2367.14,Approved
+2024-05-31,Neha Gupta,Finance,Travel,5508.5,Approved
+2024-11-11,Karan Joshi,Marketing,Office Supplies,9777.37,Approved
+2024-09-18,Vikram Reddy,Operations,Office Supplies,895.3,Approved
+2024-08-01,Sneha Kumar,Finance,Travel,391.89,Approved
+2024-11-13,Pooja Verma,Marketing,Office Supplies,10628.51,Approved
+2024-10-28,Karan Joshi,Operations,Training,3107.74,Pending
+2024-04-09,Vikram Reddy,HR,Meals,14755.11,Approved
+2024-03-29,Karan Joshi,Engineering,Hardware,801.39,Approved
+2024-05-15,Amit Singh,Marketing,Training,12721.01,Approved
+2024-08-26,Amit Singh,Engineering,Meals,13943.7,Approved
+2024-11-16,Divya Shah,Operations,Software,7460.15,Approved
+2024-07-02,Priya Patel,Operations,Software,7975.85,Rejected
+2024-09-23,Priya Patel,Finance,Meals,6355.78,Approved
+2024-02-17,Sneha Kumar,Marketing,Meals,10017.35,Approved
+2024-05-30,Neha Gupta,Finance,Training,7227.89,Approved
+2024-11-28,Rahul Sharma,Engineering,Office Supplies,5320.91,Approved
+2024-11-24,Divya Shah,Finance,Meals,14391.67,Approved
+2024-06-13,Arjun Mehta,Engineering,Hardware,3997.54,Pending
+2024-01-13,Karan Joshi,Sales,Training,12081.69,Approved
+2024-01-23,Vikram Reddy,Operations,Meals,4940.63,Approved
+2024-02-19,Amit Singh,Finance,Training,308.49,Approved
+2024-12-09,Neha Gupta,Operations,Hardware,12567.84,Approved
+2024-12-25,Arjun Mehta,Operations,Client Entertainment,14108.32,Pending
+2024-03-19,Rahul Sharma,HR,Office Supplies,5109.39,Approved
+2024-01-28,Amit Singh,Sales,Training,1242.54,Pending
+2024-05-12,Arjun Mehta,HR,Hardware,9527.22,Approved
+2024-01-09,Arjun Mehta,Operations,Travel,8115.55,Approved
+2024-11-12,Priya Patel,Operations,Training,873.65,Pending
+2024-07-02,Karan Joshi,Engineering,Software,11846.0,Approved
+2024-02-14,Vikram Reddy,HR,Hardware,6047.68,Approved
+2024-08-30,Amit Singh,Finance,Meals,2218.45,Approved
+2024-10-06,Vikram Reddy,Operations,Meals,4611.24,Pending
+2024-11-27,Sneha Kumar,Engineering,Training,13146.55,Approved
+2024-01-22,Rahul Sharma,Finance,Training,6032.41,Approved
+2024-02-13,Vikram Reddy,Marketing,Office Supplies,11173.17,Pending
+2024-04-18,Arjun Mehta,Operations,Client Entertainment,7785.78,Approved
+2024-04-23,Divya Shah,Sales,Meals,1896.41,Approved
+2024-10-17,Rahul Sharma,Finance,Hardware,9741.18,Approved
+2024-12-09,Priya Patel,Sales,Travel,3121.78,Approved
+2024-06-18,Sneha Kumar,Marketing,Office Supplies,9901.0,Approved
+2024-11-13,Priya Patel,Marketing,Software,7390.75,Approved
+2024-12-03,Vikram Reddy,Operations,Training,2455.45,Approved
+2024-06-10,Arjun Mehta,Marketing,Travel,4835.58,Pending
+2024-12-30,Arjun Mehta,Sales,Client Entertainment,5520.39,Approved
+2024-06-18,Pooja Verma,HR,Hardware,5509.38,Approved
+2024-10-09,Priya Patel,Marketing,Office Supplies,9178.09,Pending
+2024-03-12,Karan Joshi,Marketing,Software,11056.46,Approved
+2024-02-08,Rahul Sharma,Finance,Office Supplies,661.67,Approved
+2024-07-26,Divya Shah,Marketing,Travel,8363.59,Approved
+2024-10-03,Pooja Verma,Operations,Client Entertainment,2399.77,Approved
+2024-10-28,Vikram Reddy,Marketing,Hardware,7616.62,Approved
+2024-07-05,Karan Joshi,Engineering,Office Supplies,3735.44,Rejected
+2024-11-10,Amit Singh,Finance,Meals,6804.06,Approved
+2024-10-16,Amit Singh,Operations,Office Supplies,7355.85,Approved
+2024-04-22,Pooja Verma,Marketing,Travel,4112.49,Approved
