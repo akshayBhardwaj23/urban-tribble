@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,18 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    if (!loading && profile && profile.workspaces.length > 0) {
+      router.replace("/upload");
+    }
+  }, [loading, profile, router]);
+
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -25,12 +37,10 @@ export default function OnboardingPage() {
   }
 
   if (status === "unauthenticated") {
-    router.replace("/login");
     return null;
   }
 
   if (profile && profile.workspaces.length > 0) {
-    router.replace("/upload");
     return null;
   }
 
