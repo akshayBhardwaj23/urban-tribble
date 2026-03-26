@@ -10,6 +10,7 @@ from config import settings
 from database import get_db
 from models.models import Dataset, Upload, UploadStatus
 from services.column_detector import ColumnDetector
+from services.dashboard_planner import DashboardPlanner
 from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
 
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 file_processor = FileProcessor()
 data_cleaner = DataCleaner()
 column_detector = ColumnDetector()
+dashboard_planner = DashboardPlanner()
 
 
 @router.post("/")
@@ -54,6 +56,12 @@ def create_upload(
         df, clean_report = data_cleaner.clean(df)
         metadata = column_detector.detect(df)
         stats = column_detector.summary(df, metadata)
+        plan = dashboard_planner.build_plan(
+            df,
+            metadata,
+            stats,
+            user_description=description or None,
+        )
 
         upload.row_count = len(df)
         upload.column_count = len(df.columns)
@@ -65,6 +73,7 @@ def create_upload(
             schema_json=json.dumps(metadata),
             data_summary=json.dumps(stats),
             cleaned_report_json=json.dumps(clean_report),
+            dashboard_plan_json=json.dumps(plan),
         )
         db.add(dataset)
 

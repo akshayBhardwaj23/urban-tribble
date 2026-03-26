@@ -163,38 +163,67 @@ export default function DatasetPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {dashboardData.data?.dataset_brief ? (
+        <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm leading-relaxed">
+          <span className="font-medium text-foreground">About this file</span>
+          {dashboardData.data.dashboard_plan_source === "ai" ? (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              · AI-chosen layout
+            </span>
+          ) : null}
+          <p className="text-muted-foreground mt-1.5">
+            {dashboardData.data.dataset_brief}
+          </p>
+        </div>
+      ) : null}
+
+      {/* KPI Cards — planned KPIs from upload-time dashboard planner when available */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {schema?.revenue_columns.map((col) => {
-          const total = summary?.[`${col}_total`];
-          const mean = summary?.[`${col}_mean`];
-          return (
-            <Card key={col}>
-              <CardHeader className="pb-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Total {col.replace(/_/g, " ")}
-                </p>
-              </CardHeader>
-              <CardContent>
-                {total != null && (
-                  <p className="text-2xl font-semibold">
-                    {Number(total).toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
+        {(dashboardData.data?.kpis?.length ?? 0) > 0
+          ? dashboardData.data!.kpis.map((kpi) => (
+              <Card key={kpi.id}>
+                <CardHeader className="pb-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {kpi.title}
                   </p>
-                )}
-                {mean != null && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Avg:{" "}
-                    {Number(mean).toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-semibold tabular-nums">
+                    {kpi.formatted}
                   </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+                </CardContent>
+              </Card>
+            ))
+          : schema?.revenue_columns.map((col) => {
+              const total = summary?.[`${col}_total`];
+              const mean = summary?.[`${col}_mean`];
+              return (
+                <Card key={col}>
+                  <CardHeader className="pb-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total {col.replace(/_/g, " ")}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {total != null && (
+                      <p className="text-2xl font-semibold">
+                        {Number(total).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    )}
+                    {mean != null && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Avg:{" "}
+                        {Number(mean).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
         <Card>
           <CardHeader className="pb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -237,7 +266,7 @@ export default function DatasetPage() {
                 <Skeleton key={i} className="h-72" />
               ))}
             </div>
-          ) : dashboardData.data?.charts.length === 0 ? (
+          ) : (dashboardData.data?.charts?.length ?? 0) === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 No charts could be auto-generated from this dataset.

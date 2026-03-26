@@ -60,6 +60,7 @@ class Dataset(Base):
     schema_json = Column(Text, nullable=True)
     data_summary = Column(Text, nullable=True)
     cleaned_report_json = Column(Text, nullable=True)
+    dashboard_plan_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

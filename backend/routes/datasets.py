@@ -10,10 +10,13 @@ from config import settings
 from database import get_db
 from models.models import Analysis, ChatMessage, Dataset, DatasetRelation, Upload
 from services.column_detector import ColumnDetector
+from services.dashboard_planner import DashboardPlanner
 from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
+
+dashboard_planner = DashboardPlanner()
 
 
 def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
@@ -177,6 +180,12 @@ def append_to_dataset(
     df_combined, clean_report = data_cleaner.clean(df_combined)
     metadata = column_detector.detect(df_combined)
     stats = column_detector.summary(df_combined, metadata)
+    plan = dashboard_planner.build_plan(
+        df_combined,
+        metadata,
+        stats,
+        user_description=upload.user_description,
+    )
 
     df_combined.to_parquet(str(parquet_path), index=False)
 
@@ -186,6 +195,7 @@ def append_to_dataset(
     dataset.schema_json = json.dumps(metadata)
     dataset.data_summary = json.dumps(stats)
     dataset.cleaned_report_json = json.dumps(clean_report)
+    dataset.dashboard_plan_json = json.dumps(plan)
 
     db.commit()
     db.refresh(dataset)

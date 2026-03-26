@@ -119,6 +119,9 @@ export const api = {
   getDashboardData: (datasetId: string) =>
     request<{
       dataset_id: string;
+      dataset_brief: string | null;
+      dashboard_plan_source?: string | null;
+      kpis: { id: string; title: string; value: number; formatted: string }[];
       charts: {
         id: string;
         title: string;
