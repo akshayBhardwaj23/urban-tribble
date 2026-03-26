@@ -128,3 +128,43 @@
     @apply font-sans;
   }
 }
+
+/* HR-style glass dashboard shell (soft pastel + floating cards) */
+@layer components {
+  .dashboard-canvas {
+    background:
+      radial-gradient(ellipse 120% 80% at 100% -20%, oklch(0.92 0.06 320 / 0.45), transparent 50%),
+      radial-gradient(ellipse 100% 60% at -10% 100%, oklch(0.93 0.05 230 / 0.4), transparent 45%),
+      linear-gradient(165deg, oklch(0.985 0.008 280) 0%, oklch(0.98 0.006 260) 45%, oklch(0.975 0.01 220) 100%);
+    min-height: 100%;
+  }
+
+  .dashboard-glass-panel {
+    @apply rounded-3xl border border-white/70 bg-white/70 shadow-[0_8px_32px_-12px_rgba(99,102,241,0.1),0_4px_20px_-8px_rgba(15,23,42,0.06)] backdrop-blur-xl;
+  }
+
+  .dashboard-pill-tabs {
+    @apply h-auto min-h-10 rounded-2xl border border-white/60 bg-white/55 p-1 shadow-sm backdrop-blur-md;
+  }
+
+  .dashboard-pill-tabs [data-slot="tabs-trigger"] {
+    border-radius: 0.75rem;
+    border-width: 0;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: rgb(100 116 139);
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .dashboard-pill-tabs [data-slot="tabs-trigger"][data-active],
+  .dashboard-pill-tabs [data-slot="tabs-trigger"][aria-selected="true"] {
+    background: white;
+    color: rgb(15 23 42);
+    box-shadow: 0 4px 14px -4px rgba(15, 23, 42, 0.12);
+  }
+
+  .dashboard-pill-tabs [data-slot="tabs-trigger"]::after {
+    display: none !important;
+  }
+}

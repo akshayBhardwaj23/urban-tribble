@@ -13,7 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AutoChart } from "@/components/charts/auto-chart";
+import {
+  AutoChart,
+  type ChartConfig,
+} from "@/components/charts/auto-chart";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
@@ -158,7 +161,7 @@ export default function OverviewPage() {
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="dashboard-glass-panel ring-0">
           <CardHeader className="pb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Datasets
@@ -168,7 +171,7 @@ export default function OverviewPage() {
             <p className="text-2xl font-semibold">{data.total_datasets}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="dashboard-glass-panel ring-0">
           <CardHeader className="pb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Total Rows
@@ -181,7 +184,7 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
         {data.kpis.slice(0, 2).map((kpi: { label: string; value: number; dataset_name: string }, i: number) => (
-          <Card key={i}>
+          <Card key={i} className="dashboard-glass-panel ring-0">
             <CardHeader className="pb-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {kpi.label}
@@ -204,7 +207,7 @@ export default function OverviewPage() {
       {data.kpis.length > 2 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {data.kpis.slice(2).map((kpi: { label: string; value: number; dataset_name: string }, i: number) => (
-            <Card key={i}>
+            <Card key={i} className="dashboard-glass-panel ring-0">
               <CardHeader className="pb-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   {kpi.label}
@@ -227,7 +230,7 @@ export default function OverviewPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="dashboard">
-        <TabsList>
+        <TabsList className="dashboard-pill-tabs">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
@@ -237,17 +240,30 @@ export default function OverviewPage() {
         {/* Dashboard tab - charts */}
         <TabsContent value="dashboard" className="space-y-4 mt-4">
           {data.charts.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {data.charts.map((chart: { id: string; dataset_name?: string; [key: string]: unknown }) => (
+            <div className="grid gap-5 md:grid-cols-2">
+              {data.charts.map(
+                (
+                  chart: {
+                    id: string;
+                    dataset_name?: string;
+                    title: string;
+                    type: ChartConfig["type"];
+                    data: ChartConfig["data"];
+                    x_label?: string;
+                    y_label?: string;
+                  },
+                  i: number
+                ) => (
                 <div key={chart.id}>
-                  <AutoChart chart={chart} />
+                  <AutoChart chart={chart} accentIndex={i} />
                   {chart.dataset_name && (
-                    <p className="text-xs text-muted-foreground mt-1 ml-1">
+                    <p className="mt-2 text-xs font-medium text-slate-500">
                       Source: {chart.dataset_name}
                     </p>
                   )}
                 </div>
-              ))}
+              )
+              )}
             </div>
           ) : (
             <Card>
@@ -358,7 +374,7 @@ export default function OverviewPage() {
         {/* Datasets tab */}
         <TabsContent value="datasets" className="mt-4">
           <div className="grid gap-3">
-            {data.datasets.map((ds: { id: string; name: string; row_count: number; column_count: number; created_at: string }) => (
+            {data.datasets.map((ds) => (
               <Card
                 key={ds.id}
                 className="transition-colors hover:bg-accent/50"

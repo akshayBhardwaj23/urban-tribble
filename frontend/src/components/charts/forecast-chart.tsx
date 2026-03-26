@@ -141,14 +141,14 @@ export function ForecastChart({
                 />
                 <Tooltip
                   labelFormatter={(v) => new Date(v as string).toLocaleDateString()}
-                  formatter={(value: number, name: string) => [
-                    value != null
+                  formatter={(value, name) => [
+                    value != null && value !== ""
                       ? Number(value).toLocaleString(undefined, {
                           notation: "standard",
                           maximumFractionDigits: 2,
                         })
                       : "—",
-                    name,
+                    String(name ?? ""),
                   ]}
                   contentStyle={{
                     borderRadius: "10px",

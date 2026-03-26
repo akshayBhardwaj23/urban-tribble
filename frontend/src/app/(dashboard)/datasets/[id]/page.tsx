@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AutoChart } from "@/components/charts/auto-chart";
+import { DashboardKpiTile } from "@/components/dashboard/kpi-tile";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
 import { api } from "@/lib/api";
@@ -128,8 +129,10 @@ export default function DatasetPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{data.name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            {data.name}
+          </h1>
+          <p className="mt-1 text-sm font-medium text-slate-500">
             {summary?.rows ? `${summary.rows} rows` : ""}{" "}
             {summary?.columns ? `· ${summary.columns} columns` : ""} · Uploaded{" "}
             {new Date(data.created_at).toLocaleDateString()}
@@ -164,94 +167,71 @@ export default function DatasetPage() {
       </div>
 
       {dashboardData.data?.dataset_brief ? (
-        <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm leading-relaxed">
-          <span className="font-medium text-foreground">About this file</span>
+        <div className="dashboard-glass-panel px-5 py-4 text-sm leading-relaxed">
+          <span className="font-bold uppercase tracking-wide text-slate-600">
+            About this file
+          </span>
           {dashboardData.data.dashboard_plan_source === "ai" ? (
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              · AI-chosen layout
+            <span className="ml-2 text-xs font-semibold text-violet-600">
+              · AI layout
             </span>
           ) : null}
-          <p className="text-muted-foreground mt-1.5">
+          <p className="mt-2 text-slate-600">
             {dashboardData.data.dataset_brief}
           </p>
         </div>
       ) : null}
 
-      {/* KPI Cards — planned KPIs from upload-time dashboard planner when available */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* KPI row — HR-style tiles with gradient trend orbs */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {(dashboardData.data?.kpis?.length ?? 0) > 0
-          ? dashboardData.data!.kpis.map((kpi) => (
-              <Card key={kpi.id}>
-                <CardHeader className="pb-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    {kpi.title}
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {kpi.formatted}
-                  </p>
-                </CardContent>
-              </Card>
+          ? dashboardData.data!.kpis.map((kpi, i) => (
+              <DashboardKpiTile
+                key={kpi.id}
+                index={i}
+                title={kpi.title}
+                value={kpi.formatted}
+              />
             ))
-          : schema?.revenue_columns.map((col) => {
+          : schema?.revenue_columns.map((col, i) => {
               const total = summary?.[`${col}_total`];
               const mean = summary?.[`${col}_mean`];
               return (
-                <Card key={col}>
-                  <CardHeader className="pb-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Total {col.replace(/_/g, " ")}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    {total != null && (
-                      <p className="text-2xl font-semibold">
-                        {Number(total).toLocaleString(undefined, {
+                <DashboardKpiTile
+                  key={col}
+                  index={i}
+                  title={`Total ${col.replace(/_/g, " ")}`}
+                  value={
+                    total != null
+                      ? Number(total).toLocaleString(undefined, {
                           maximumFractionDigits: 0,
-                        })}
-                      </p>
-                    )}
-                    {mean != null && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Avg:{" "}
-                        {Number(mean).toLocaleString(undefined, {
+                        })
+                      : "—"
+                  }
+                  subtitle={
+                    mean != null
+                      ? `Avg: ${Number(mean).toLocaleString(undefined, {
                           maximumFractionDigits: 0,
-                        })}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+                        })}`
+                      : undefined
+                  }
+                />
               );
             })}
-        <Card>
-          <CardHeader className="pb-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Rows
-            </p>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
-              {Number(summary?.rows ?? 0).toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Columns
-            </p>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
-              {Number(summary?.columns ?? 0).toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
+        <DashboardKpiTile
+          index={100}
+          title="Rows"
+          value={Number(summary?.rows ?? 0).toLocaleString()}
+        />
+        <DashboardKpiTile
+          index={101}
+          title="Columns"
+          value={Number(summary?.columns ?? 0).toLocaleString()}
+        />
       </div>
 
       <Tabs defaultValue="dashboard">
-        <TabsList>
+        <TabsList className="dashboard-pill-tabs">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
@@ -273,9 +253,9 @@ export default function DatasetPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {dashboardData.data?.charts.map((chart) => (
-                <AutoChart key={chart.id} chart={chart} />
+            <div className="grid gap-5 md:grid-cols-2">
+              {dashboardData.data?.charts.map((chart, i) => (
+                <AutoChart key={chart.id} chart={chart} accentIndex={i} />
               ))}
             </div>
           )}
