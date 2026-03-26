@@ -118,11 +118,15 @@ export const api = {
 
   getDashboardData: (
     datasetId: string,
-    range?: { start?: string; end?: string }
+    range?: { start?: string; end?: string; lastNDays?: number }
   ) => {
     const q = new URLSearchParams();
-    if (range?.start) q.set("start_date", range.start);
-    if (range?.end) q.set("end_date", range.end);
+    if (range?.lastNDays != null) {
+      q.set("last_n_days", String(range.lastNDays));
+    } else {
+      if (range?.start) q.set("start_date", range.start);
+      if (range?.end) q.set("end_date", range.end);
+    }
     const qs = q.toString();
     return request<{
       dataset_id: string;
@@ -155,6 +159,8 @@ export const api = {
         end: string | null;
         date_column: string | null;
       };
+      /** Min/max calendar dates in the primary date column (full file, for preset anchors). */
+      date_bounds?: { min: string | null; max: string | null };
     }>(`/api/dashboards/dataset/${datasetId}${qs ? `?${qs}` : ""}`);
   },
 

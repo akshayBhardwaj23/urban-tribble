@@ -53,9 +53,13 @@ function addCalendarDaysFromYMD(ymd: string, deltaDays: number): string {
   return localYMD(d);
 }
 
-/** Inclusive range: last N calendar days including today (local). */
+/**
+ * Preset ranges end at the latest date in the dataset (not wall-clock “today”),
+ * so historical exports still show data. Falls back to local today if no anchor.
+ */
 export function timeframeToQueryRange(
-  value: TimeframeValue
+  value: TimeframeValue,
+  opts?: { dataEnd?: string | null }
 ): { start?: string; end?: string } {
   if (value.preset === "all") {
     return {};
@@ -64,9 +68,12 @@ export function timeframeToQueryRange(
     return { start: value.start, end: value.end };
   }
   const n = Number(value.preset.replace("d", ""));
-  const end = localYMD(new Date());
-  const start = addCalendarDaysFromYMD(end, -(n - 1));
-  return { start, end };
+  const anchor =
+    opts?.dataEnd && /^\d{4}-\d{2}-\d{2}$/.test(opts.dataEnd)
+      ? opts.dataEnd
+      : localYMD(new Date());
+  const start = addCalendarDaysFromYMD(anchor, -(n - 1));
+  return { start, end: anchor };
 }
 
 function formatRangeLabel(start: string, end: string): string {
@@ -81,10 +88,16 @@ export function TimeframeToolbar({
   onChange,
   hasDateColumn,
   appliedLabel,
+  dataEnd,
+  resolvedRange,
 }: {
   value: TimeframeValue;
   onChange: (next: TimeframeValue) => void;
   hasDateColumn: boolean;
+  /** From API `date_bounds.max` — previews custom / label fallback */
+  dataEnd?: string | null;
+  /** Actual range from API after load (`timeframe.start`/`end`) */
+  resolvedRange?: { start: string; end: string } | null;
   /** From API: human hint when filter could not apply */
   appliedLabel?: string | null;
 }) {
@@ -95,16 +108,18 @@ export function TimeframeToolbar({
 
   const active: TimeframePresetId = value.preset;
   const range =
-    hasDateColumn && active !== "all"
-      ? timeframeToQueryRange(value)
-      : null;
+    resolvedRange ??
+    (hasDateColumn && active !== "all"
+      ? timeframeToQueryRange(value, { dataEnd })
+      : null);
 
   const openCustomDialog = () => {
     if (!hasDateColumn) return;
     const q = timeframeToQueryRange(
       value.preset === "custom"
         ? value
-        : { preset: "30d" }
+        : { preset: "30d" },
+      { dataEnd }
     );
     setDraftStart(q.start ?? "");
     setDraftEnd(q.end ?? "");
@@ -133,6 +148,7 @@ export function TimeframeToolbar({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
           Time range
@@ -180,6 +196,12 @@ export function TimeframeToolbar({
             Custom
           </Button>
         </div>
+        {hasDateColumn ? (
+          <p className="text-[11px] text-slate-400">
+            7d / 14d / 30d / 60d end on the <span className="font-medium text-slate-500">latest date in your data</span>
+            , not today.
+          </p>
+        ) : null}
       </div>
       {hasDateColumn && range?.start && range?.end ? (
         <p className="text-xs font-medium text-slate-500">

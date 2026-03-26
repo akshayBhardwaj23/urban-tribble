@@ -28,10 +28,22 @@ import { ForecastChart } from "@/components/charts/forecast-chart";
 import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
 import {
   TimeframeToolbar,
-  timeframeToQueryRange,
   type TimeframeValue,
 } from "@/components/dashboard/timeframe-toolbar";
 import { api } from "@/lib/api";
+
+type DashboardRequest =
+  | { kind: "all" }
+  | { kind: "preset"; days: number }
+  | { kind: "custom"; start: string; end: string };
+
+function dashboardRequestToApi(
+  r: DashboardRequest
+): { start?: string; end?: string; lastNDays?: number } | undefined {
+  if (r.kind === "all") return undefined;
+  if (r.kind === "preset") return { lastNDays: r.days };
+  return { start: r.start, end: r.end };
+}
 
 export default function DatasetPage() {
   const params = useParams<{ id: string }>();
@@ -55,19 +67,27 @@ export default function DatasetPage() {
 
   const hasDateColumn = (dataset.data?.schema_json?.date_columns?.length ?? 0) > 0;
 
-  const dashboardRange = useMemo(() => {
-    if (!hasDateColumn || timeframe.preset === "all") return undefined;
-    return timeframeToQueryRange(timeframe);
-  }, [hasDateColumn, timeframe]);
+  const dashboardRequest = useMemo((): DashboardRequest => {
+    if (timeframe.preset === "all") return { kind: "all" };
+    if (timeframe.preset === "custom") {
+      return { kind: "custom", start: timeframe.start, end: timeframe.end };
+    }
+    const daysMap = { "7d": 7, "14d": 14, "30d": 30, "60d": 60 } as const;
+    return { kind: "preset", days: daysMap[timeframe.preset] };
+  }, [timeframe]);
 
   const dashboardData = useQuery({
     queryKey: [
       "dashboard-data",
       params.id,
-      dashboardRange?.start ?? "",
-      dashboardRange?.end ?? "",
+      dashboardRequest.kind === "all"
+        ? "all"
+        : dashboardRequest.kind === "preset"
+          ? `n:${dashboardRequest.days}`
+          : `c:${dashboardRequest.start}:${dashboardRequest.end}`,
     ],
-    queryFn: () => api.getDashboardData(params.id, dashboardRange),
+    queryFn: () =>
+      api.getDashboardData(params.id, dashboardRequestToApi(dashboardRequest)),
     enabled: !!params.id,
   });
 
@@ -152,6 +172,18 @@ export default function DatasetPage() {
       ? "Could not apply the date range (check your date column)."
       : null;
 
+  const resolvedTfRange =
+    dashboardData.data?.timeframe?.applied &&
+    dashboardData.data.timeframe.start &&
+    dashboardData.data.timeframe.end
+      ? {
+          start: dashboardData.data.timeframe.start,
+          end: dashboardData.data.timeframe.end,
+        }
+      : null;
+
+  const datasetDateMax = dashboardData.data?.date_bounds?.max ?? null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -199,6 +231,8 @@ export default function DatasetPage() {
           onChange={setTimeframe}
           hasDateColumn={hasDateColumn}
           appliedLabel={timeframeWarn}
+          dataEnd={datasetDateMax}
+          resolvedRange={resolvedTfRange}
         />
       </div>
 
@@ -255,16 +289,20 @@ export default function DatasetPage() {
                 />
               );
             })}
-        <DashboardKpiTile
-          index={100}
-          title="Rows"
-          value={Number(summary?.rows ?? 0).toLocaleString()}
-        />
-        <DashboardKpiTile
-          index={101}
-          title="Columns"
-          value={Number(summary?.columns ?? 0).toLocaleString()}
-        />
+        {(dashboardData.data?.kpis?.length ?? 0) === 0 ? (
+          <>
+            <DashboardKpiTile
+              index={100}
+              title="Rows"
+              value={Number(summary?.rows ?? 0).toLocaleString()}
+            />
+            <DashboardKpiTile
+              index={101}
+              title="Columns"
+              value={Number(summary?.columns ?? 0).toLocaleString()}
+            />
+          </>
+        ) : null}
       </div>
 
       <Tabs defaultValue="dashboard">

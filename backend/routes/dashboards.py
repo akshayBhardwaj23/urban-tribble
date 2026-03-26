@@ -61,6 +61,12 @@ def get_dashboard_data(
     dataset_id: str,
     start_date: Optional[str] = Query(None, description="Inclusive start (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Inclusive end (YYYY-MM-DD)"),
+    last_n_days: Optional[int] = Query(
+        None,
+        ge=1,
+        le=366,
+        description="Rolling window ending on the latest date in the file (overrides start/end)",
+    ),
     db: Session = Depends(get_db),
 ):
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
@@ -74,12 +80,38 @@ def get_dashboard_data(
     df = _load_cleaned_df(upload)
     metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
 
-    start_ts = _parse_query_date(start_date)
-    end_ts = _parse_query_date(end_date)
-    if start_ts is not None and end_ts is not None and start_ts > end_ts:
-        start_ts, end_ts = end_ts, start_ts
+    date_bounds: dict[str, Optional[str]] = {"min": None, "max": None}
+    _bounds_col = resolve_date_column(df, metadata)
+    if _bounds_col and _bounds_col in df.columns:
+        _bts = pd.to_datetime(df[_bounds_col], errors="coerce").dropna()
+        if len(_bts) > 0:
+            date_bounds = {
+                "min": _bts.min().normalize().strftime("%Y-%m-%d"),
+                "max": _bts.max().normalize().strftime("%Y-%m-%d"),
+            }
+
+    start_ts_explicit = _parse_query_date(start_date)
+    end_ts_explicit = _parse_query_date(end_date)
+    if (
+        start_ts_explicit is not None
+        and end_ts_explicit is not None
+        and start_ts_explicit > end_ts_explicit
+    ):
+        start_ts_explicit, end_ts_explicit = end_ts_explicit, start_ts_explicit
 
     date_col = resolve_date_column(df, metadata)
+    start_ts: Optional[pd.Timestamp] = None
+    end_ts: Optional[pd.Timestamp] = None
+
+    if last_n_days is not None and date_col and date_bounds["max"]:
+        end_ts = _parse_query_date(date_bounds["max"])
+        if end_ts is not None:
+            start_ts = (
+                end_ts - pd.Timedelta(days=int(last_n_days) - 1)
+            ).normalize()
+    elif start_ts_explicit is not None or end_ts_explicit is not None:
+        start_ts, end_ts = start_ts_explicit, end_ts_explicit
+
     timeframe_requested = start_ts is not None or end_ts is not None
     timeframe_applied = False
     active_start: Optional[str] = None
@@ -137,6 +169,7 @@ def get_dashboard_data(
             "charts": charts,
             "daily_aggregates": daily_aggregates,
             "timeframe": timeframe_meta,
+            "date_bounds": date_bounds,
         }
 
     charts = legacy_charts(
@@ -155,6 +188,7 @@ def get_dashboard_data(
         "charts": charts,
         "daily_aggregates": daily_aggregates,
         "timeframe": timeframe_meta,
+        "date_bounds": date_bounds,
     }
 
 
