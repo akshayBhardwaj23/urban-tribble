@@ -114,6 +114,45 @@ def compute_kpi_value(df: pd.DataFrame, column: str, agg: str) -> Optional[float
     return None
 
 
+def fallback_ui_kpis(df: pd.DataFrame, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    """KPI tiles aligned with filtered dashboard rows (legacy / no AI plan)."""
+    out: list[dict[str, Any]] = []
+    for col in metadata.get("revenue_columns", []) or []:
+        if col not in df.columns:
+            continue
+        total = compute_kpi_value(df, col, "sum")
+        if total is None or (isinstance(total, float) and pd.isna(total)):
+            continue
+        mean = compute_kpi_value(df, col, "mean")
+        subtitle = None
+        if mean is not None and not pd.isna(mean):
+            subtitle = f"Avg: {_format_kpi_number(float(mean), 'mean', False)}"
+        out.append({
+            "id": f"total_{col}",
+            "title": f"Total {col.replace('_', ' ').title()}",
+            "value": float(total),
+            "formatted": _format_kpi_number(float(total), "sum", False),
+            "subtitle": subtitle,
+        })
+
+    rc = compute_kpi_value(df, "__row_count__", "count")
+    if rc is not None:
+        out.append({
+            "id": "rows",
+            "title": "Rows",
+            "value": rc,
+            "formatted": _format_kpi_number(float(rc), "count", True),
+        })
+
+    out.append({
+        "id": "columns",
+        "title": "Columns",
+        "value": float(len(df.columns)),
+        "formatted": _format_kpi_number(float(len(df.columns)), "count", True),
+    })
+    return out
+
+
 def execute_plan(
     df: pd.DataFrame,
     plan: dict[str, Any],

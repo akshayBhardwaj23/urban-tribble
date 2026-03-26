@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -10,10 +11,12 @@ from models.models import Dataset, Upload
 from services.daily_metrics import (
     compute_daily_metrics_for_dataset,
     daily_metrics_to_records,
+    resolve_date_column,
 )
 from services.dashboard_executor import (
     daily_time_series_charts,
     execute_plan,
+    fallback_ui_kpis,
     legacy_charts,
 )
 
@@ -27,8 +30,39 @@ def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
     return pd.read_parquet(str(parquet_path))
 
 
+def _parse_query_date(value: Optional[str]) -> Optional[pd.Timestamp]:
+    if value is None or not str(value).strip():
+        return None
+    ts = pd.to_datetime(value, errors="coerce")
+    if pd.isna(ts):
+        return None
+    return pd.Timestamp(ts).normalize()
+
+
+def _filter_df_by_date_range(
+    df: pd.DataFrame,
+    date_col: str,
+    start: Optional[pd.Timestamp],
+    end: Optional[pd.Timestamp],
+) -> pd.DataFrame:
+    if start is None and end is None:
+        return df
+    parsed = pd.to_datetime(df[date_col], errors="coerce")
+    mask = parsed.notna()
+    if start is not None:
+        mask &= parsed.dt.normalize() >= start
+    if end is not None:
+        mask &= parsed.dt.normalize() <= end
+    return df.loc[mask].copy()
+
+
 @router.get("/dataset/{dataset_id}")
-def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
+def get_dashboard_data(
+    dataset_id: str,
+    start_date: Optional[str] = Query(None, description="Inclusive start (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Inclusive end (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+):
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(404, "Dataset not found")
@@ -39,6 +73,31 @@ def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
 
     df = _load_cleaned_df(upload)
     metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
+
+    start_ts = _parse_query_date(start_date)
+    end_ts = _parse_query_date(end_date)
+    if start_ts is not None and end_ts is not None and start_ts > end_ts:
+        start_ts, end_ts = end_ts, start_ts
+
+    date_col = resolve_date_column(df, metadata)
+    timeframe_requested = start_ts is not None or end_ts is not None
+    timeframe_applied = False
+    active_start: Optional[str] = None
+    active_end: Optional[str] = None
+    if timeframe_requested and date_col:
+        df = _filter_df_by_date_range(df, date_col, start_ts, end_ts)
+        timeframe_applied = True
+        if start_ts is not None:
+            active_start = start_ts.strftime("%Y-%m-%d")
+        if end_ts is not None:
+            active_end = end_ts.strftime("%Y-%m-%d")
+
+    timeframe_meta = {
+        "applied": timeframe_applied,
+        "start": active_start,
+        "end": active_end,
+        "date_column": date_col if timeframe_applied else None,
+    }
 
     daily_df, daily_date_col, daily_revenue_col = compute_daily_metrics_for_dataset(
         df, metadata
@@ -77,6 +136,7 @@ def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
             "kpis": kpis,
             "charts": charts,
             "daily_aggregates": daily_aggregates,
+            "timeframe": timeframe_meta,
         }
 
     charts = legacy_charts(
@@ -86,13 +146,15 @@ def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
         primary_date=daily_date_col,
         primary_revenue=daily_revenue_col,
     )
+    kpis = fallback_ui_kpis(df, metadata)
     return {
         "dataset_id": dataset_id,
         "dataset_brief": None,
         "dashboard_plan_source": "legacy",
-        "kpis": [],
+        "kpis": kpis,
         "charts": charts,
         "daily_aggregates": daily_aggregates,
+        "timeframe": timeframe_meta,
     }
 
 

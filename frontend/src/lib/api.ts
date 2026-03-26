@@ -116,12 +116,25 @@ export const api = {
       created_at: string;
     } | null>(`/api/analysis/dataset/${datasetId}`),
 
-  getDashboardData: (datasetId: string) =>
-    request<{
+  getDashboardData: (
+    datasetId: string,
+    range?: { start?: string; end?: string }
+  ) => {
+    const q = new URLSearchParams();
+    if (range?.start) q.set("start_date", range.start);
+    if (range?.end) q.set("end_date", range.end);
+    const qs = q.toString();
+    return request<{
       dataset_id: string;
       dataset_brief: string | null;
       dashboard_plan_source?: string | null;
-      kpis: { id: string; title: string; value: number; formatted: string }[];
+      kpis: {
+        id: string;
+        title: string;
+        value: number;
+        formatted: string;
+        subtitle?: string | null;
+      }[];
       charts: {
         id: string;
         title: string;
@@ -136,7 +149,14 @@ export const api = {
         orders: number;
         aov: number;
       }[];
-    }>(`/api/dashboards/dataset/${datasetId}`),
+      timeframe?: {
+        applied: boolean;
+        start: string | null;
+        end: string | null;
+        date_column: string | null;
+      };
+    }>(`/api/dashboards/dataset/${datasetId}${qs ? `?${qs}` : ""}`);
+  },
 
   chat: (datasetId: string, question: string) =>
     request<{ answer: string; chart_data?: Record<string, unknown> }>(

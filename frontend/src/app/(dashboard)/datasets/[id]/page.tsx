@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,11 @@ import { AutoChart } from "@/components/charts/auto-chart";
 import { DashboardKpiTile } from "@/components/dashboard/kpi-tile";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
+import {
+  TimeframeToolbar,
+  timeframeToQueryRange,
+  type TimeframeValue,
+} from "@/components/dashboard/timeframe-toolbar";
 import { api } from "@/lib/api";
 
 export default function DatasetPage() {
@@ -36,6 +41,7 @@ export default function DatasetPage() {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [appendDialogOpen, setAppendDialogOpen] = useState(false);
+  const [timeframe, setTimeframe] = useState<TimeframeValue>({ preset: "all" });
 
   const dataset = useQuery({
     queryKey: ["dataset", params.id],
@@ -47,9 +53,22 @@ export default function DatasetPage() {
     queryFn: () => api.getDatasetPreview(params.id),
   });
 
+  const hasDateColumn = (dataset.data?.schema_json?.date_columns?.length ?? 0) > 0;
+
+  const dashboardRange = useMemo(() => {
+    if (!hasDateColumn || timeframe.preset === "all") return undefined;
+    return timeframeToQueryRange(timeframe);
+  }, [hasDateColumn, timeframe]);
+
   const dashboardData = useQuery({
-    queryKey: ["dashboard-data", params.id],
-    queryFn: () => api.getDashboardData(params.id),
+    queryKey: [
+      "dashboard-data",
+      params.id,
+      dashboardRange?.start ?? "",
+      dashboardRange?.end ?? "",
+    ],
+    queryFn: () => api.getDashboardData(params.id, dashboardRange),
+    enabled: !!params.id,
   });
 
   const analysis = useQuery({
@@ -125,6 +144,14 @@ export default function DatasetPage() {
   const schema = data.schema_json;
   const summary = data.data_summary as Record<string, unknown> | null;
 
+  const timeframeWarn =
+    hasDateColumn &&
+    timeframe.preset !== "all" &&
+    dashboardData.data?.timeframe &&
+    !dashboardData.data.timeframe.applied
+      ? "Could not apply the date range (check your date column)."
+      : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -166,6 +193,15 @@ export default function DatasetPage() {
         </div>
       </div>
 
+      <div className="dashboard-glass-panel px-5 py-4">
+        <TimeframeToolbar
+          value={timeframe}
+          onChange={setTimeframe}
+          hasDateColumn={hasDateColumn}
+          appliedLabel={timeframeWarn}
+        />
+      </div>
+
       {dashboardData.data?.dataset_brief ? (
         <div className="dashboard-glass-panel px-5 py-4 text-sm leading-relaxed">
           <span className="font-bold uppercase tracking-wide text-slate-600">
@@ -191,6 +227,7 @@ export default function DatasetPage() {
                 index={i}
                 title={kpi.title}
                 value={kpi.formatted}
+                subtitle={kpi.subtitle ?? undefined}
               />
             ))
           : schema?.revenue_columns.map((col, i) => {
