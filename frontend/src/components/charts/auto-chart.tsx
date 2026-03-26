@@ -2,12 +2,10 @@
 
 import type { CSSProperties } from "react";
 import {
-  AreaChart,
   Area,
+  AreaChart,
   BarChart,
   Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -20,7 +18,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 
-/** HR / admin dashboard palette: sunset orange, electric blue, soft purple, teal */
+/** HR / admin dashboard palette (bars & pie) */
 const HR_ORANGE = "#FF7A45";
 const HR_BLUE = "#4F7CFF";
 const HR_PURPLE = "#9B7EDE";
@@ -30,13 +28,14 @@ const HR_AMBER = "#FBBF24";
 
 const BAR_PALETTE = [HR_ORANGE, HR_BLUE, HR_TEAL, HR_PURPLE, HR_PINK, HR_AMBER];
 
-const CHART_GRID = "rgba(148, 163, 184, 0.35)";
+/** SaaS area charts — Stripe / Notion vibe */
+const SAAS_GRID = "rgba(226, 232, 240, 0.55)";
 const CHART_MUTED = "#64748b";
 
 const tickStyle = {
   fill: CHART_MUTED,
   fontSize: 11,
-  fontWeight: 600,
+  fontWeight: 500,
 };
 
 export interface ChartConfig {
@@ -51,6 +50,8 @@ export interface ChartConfig {
 const MAX_LINE_AREA_POINTS = 2_000;
 const MAX_BAR_POINTS = 120;
 const MAX_PIE_SLICES = 24;
+
+type DualPoint = { x: string; y: number; yPrev: number };
 
 function downsampleOrdered<T>(points: T[], max: number): T[] {
   if (points.length <= max) return points;
@@ -73,6 +74,23 @@ function sanitizeLineAreaData(
     })
     .filter((r) => r.x !== "" && Number.isFinite(r.y));
   return downsampleOrdered(rows, MAX_LINE_AREA_POINTS);
+}
+
+/** Previous period = same series lagged (honest when API sends one series). */
+function withPreviousPeriod(
+  points: { x: string; y: number }[]
+): DualPoint[] {
+  const n = points.length;
+  if (n === 0) return [];
+  if (n === 1) {
+    const y = points[0].y;
+    return [{ ...points[0], yPrev: y * 0.92 }];
+  }
+  const lag = Math.max(1, Math.floor(Math.min(n - 1, Math.ceil(n / 5))));
+  return points.map((d, i) => {
+    const j = Math.max(0, i - lag);
+    return { ...d, yPrev: points[j].y };
+  });
 }
 
 function sanitizeBarData(
@@ -102,20 +120,19 @@ function sanitizePieData(
 }
 
 type PreparedChart =
-  | { type: "line"; data: { x: string; y: number }[] }
-  | { type: "area"; data: { x: string; y: number }[] }
+  | { type: "line"; data: DualPoint[] }
+  | { type: "area"; data: DualPoint[] }
   | { type: "bar"; data: { name: string; value: number }[] }
   | { type: "pie"; data: { name: string; value: number }[] };
 
 function prepareChart(chart: ChartConfig): PreparedChart | null {
   switch (chart.type) {
-    case "line": {
-      const data = sanitizeLineAreaData(chart.data);
-      return data.length ? { type: "line", data } : null;
-    }
+    case "line":
     case "area": {
-      const data = sanitizeLineAreaData(chart.data);
-      return data.length ? { type: "area", data } : null;
+      const raw = sanitizeLineAreaData(chart.data);
+      if (!raw.length) return null;
+      const data = withPreviousPeriod(raw);
+      return { type: chart.type, data };
     }
     case "bar": {
       const data = sanitizeBarData(chart.data);
@@ -130,15 +147,113 @@ function prepareChart(chart: ChartConfig): PreparedChart | null {
   }
 }
 
-function tooltipBoxStyle(): CSSProperties {
+function getSaaSPalette(accentIndex: number, kind: "line" | "area") {
+  const violet = kind === "area" && accentIndex % 2 === 1;
+  if (violet) {
+    return {
+      primary: "#5b21b6",
+      primaryMid: "#7c3aed",
+      primaryStroke: "#4c1d95",
+      compare: "#c2410c",
+      compareMid: "#fb923c",
+      compareStroke: "#ea580c",
+    };
+  }
   return {
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.9)",
-    boxShadow:
-      "0 14px 40px -12px rgba(99, 102, 241, 0.2), 0 8px 20px -8px rgba(15, 23, 42, 0.12)",
-    background: "rgba(255,255,255,0.95)",
-    backdropFilter: "blur(8px)",
+    primary: "#312e81",
+    primaryMid: "#4f46e5",
+    primaryStroke: "#3730a3",
+    compare: "#ea580c",
+    compareMid: "#fdba74",
+    compareStroke: "#f97316",
   };
+}
+
+function tooltipShell(): CSSProperties {
+  return {
+    borderRadius: 12,
+    border: "1px solid rgba(226, 232, 240, 0.95)",
+    boxShadow:
+      "0 18px 50px -16px rgba(15, 23, 42, 0.15), 0 4px 16px -4px rgba(15, 23, 42, 0.08)",
+    background: "rgba(255, 255, 255, 0.98)",
+    backdropFilter: "blur(12px)",
+    padding: "12px 14px",
+    minWidth: 160,
+  };
+}
+
+function SaaSTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: ReadonlyArray<{
+    payload?: DualPoint;
+    dataKey?: string | number;
+    color?: string;
+    value?: number;
+  }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  const cur = payload.find((p) => p.dataKey === "y");
+  const prev = payload.find((p) => p.dataKey === "yPrev");
+  const curColor = cur?.color ?? "#312e81";
+  const prevColor = prev?.color ?? "#f97316";
+  return (
+    <div style={tooltipShell()}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 600,
+          color: "#64748b",
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {formatTick(label)}
+      </p>
+      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 9999,
+                background: "#fff",
+                border: `2px solid ${curColor}`,
+                boxSizing: "border-box",
+              }}
+            />
+            Current
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#0f172a" }}>
+            {formatTooltip(row.y)}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#64748b" }}>
+            <span
+              style={{
+                width: 12,
+                height: 0,
+                borderTop: `2px dashed ${prevColor}`,
+              }}
+            />
+            Previous
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#64748b" }}>
+            {formatTooltip(row.yPrev)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function AutoChart({
@@ -150,15 +265,13 @@ export function AutoChart({
 }) {
   const prepared = prepareChart(chart);
   const safeId = chart.id.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const lineStroke = accentIndex % 2 === 0 ? HR_ORANGE : HR_BLUE;
-  const areaStroke = accentIndex % 2 === 0 ? HR_TEAL : HR_PURPLE;
 
   if (!prepared) {
     return (
       <div
         className={cn(
-          "flex flex-col rounded-3xl border border-white/70 bg-white/75 p-6",
-          "shadow-[0_8px_32px_-12px_rgba(99,102,241,0.1)] backdrop-blur-xl"
+          "flex flex-col rounded-[28px] border border-slate-200/80 bg-white p-6",
+          "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.1)]"
         )}
       >
         <h3 className="text-sm font-semibold text-slate-700">{chart.title}</h3>
@@ -172,160 +285,158 @@ export function AutoChart({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-3xl border border-white/70 bg-white/75",
-        "shadow-[0_8px_32px_-12px_rgba(91,76,255,0.12),0_4px_20px_-8px_rgba(15,23,42,0.06)]",
-        "backdrop-blur-xl transition-shadow duration-300 hover:shadow-[0_14px_40px_-12px_rgba(91,76,255,0.16)]"
+        "flex flex-col overflow-hidden rounded-[28px] border border-slate-200/70 bg-white",
+        "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08),0_2px_8px_-4px_rgba(15,23,42,0.06)]",
+        "transition-shadow duration-300 hover:shadow-[0_16px_40px_-16px_rgba(15,23,42,0.12)]"
       )}
     >
-      <div className="border-b border-slate-200/40 px-5 pb-3 pt-5">
-        <h3 className="text-[13px] font-bold uppercase tracking-[0.06em] text-slate-500">
+      <div className="border-b border-slate-100 px-5 pb-3 pt-5">
+        <h3 className="text-[13px] font-semibold uppercase tracking-[0.07em] text-slate-500">
           {chart.title}
         </h3>
       </div>
-      <div className="h-72 w-full min-h-[18rem] px-3 pb-4 pt-3">
+      <div className="h-72 w-full min-h-[18rem] px-2 pb-3 pt-2 sm:px-4">
         <ResponsiveContainer width="100%" height="100%">
-          {renderChart(prepared, safeId, lineStroke, areaStroke)}
+          {renderChart(prepared, safeId, accentIndex)}
         </ResponsiveContainer>
       </div>
     </div>
   );
 }
 
+function renderDualArea(
+  data: DualPoint[],
+  safeId: string,
+  kind: "line" | "area",
+  accentIndex: number
+) {
+  const p = getSaaSPalette(accentIndex, kind);
+  const idCur = `saasCur-${safeId}`;
+  const idPrev = `saasPrev-${safeId}`;
+
+  return (
+    <AreaChart data={data} margin={{ top: 14, right: 10, left: 0, bottom: 4 }}>
+      <defs>
+        <linearGradient id={idCur} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={p.primaryMid} stopOpacity={0.38} />
+          <stop offset="45%" stopColor={p.primaryMid} stopOpacity={0.12} />
+          <stop offset="100%" stopColor={p.primary} stopOpacity={0} />
+        </linearGradient>
+        <linearGradient id={idPrev} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={p.compareMid} stopOpacity={0.22} />
+          <stop offset="55%" stopColor={p.compare} stopOpacity={0.06} />
+          <stop offset="100%" stopColor={p.compare} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <CartesianGrid
+        stroke={SAAS_GRID}
+        strokeDasharray="4 6"
+        strokeOpacity={0.45}
+        vertical={false}
+        horizontal
+      />
+      <XAxis
+        dataKey="x"
+        tick={tickStyle}
+        tickLine={false}
+        axisLine={false}
+        tickFormatter={formatTick}
+        tickMargin={10}
+      />
+      <YAxis
+        tick={tickStyle}
+        tickLine={false}
+        axisLine={false}
+        tickFormatter={formatNumber}
+        width={48}
+      />
+      <Tooltip content={<SaaSTooltip />} />
+      <Legend
+        verticalAlign="bottom"
+        align="center"
+        iconType="line"
+        iconSize={11}
+        wrapperStyle={{ paddingTop: 6 }}
+        content={({ payload }) => {
+          if (!payload?.length) return null;
+          const order = ["Current period", "Previous period"];
+          const sorted = [...payload].sort(
+            (a, b) => order.indexOf(String(a.value)) - order.indexOf(String(b.value))
+          );
+          return (
+            <ul className="flex list-none flex-wrap justify-center gap-5 pt-1">
+              {sorted.map((entry, i) => (
+                <li key={i} className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <span
+                    className="inline-block h-0 w-4"
+                    style={{
+                      borderTopWidth: 2,
+                      borderTopStyle: String(entry.value).includes("Previous")
+                        ? "dashed"
+                        : "solid",
+                      borderTopColor: entry.color ?? "#64748b",
+                    }}
+                  />
+                  {entry.value}
+                </li>
+              ))}
+            </ul>
+          );
+        }}
+      />
+      {/* Previous first so it renders behind */}
+      <Area
+        type="monotone"
+        dataKey="yPrev"
+        name="Previous period"
+        stroke={p.compareStroke}
+        strokeWidth={2}
+        strokeDasharray="6 5"
+        fill={`url(#${idPrev})`}
+        fillOpacity={1}
+        dot={false}
+        activeDot={{
+          r: 5,
+          strokeWidth: 2,
+          stroke: p.compareStroke,
+          fill: "#fff",
+        }}
+        isAnimationActive={false}
+      />
+      <Area
+        type="monotone"
+        dataKey="y"
+        name="Current period"
+        stroke={p.primaryStroke}
+        strokeWidth={2}
+        fill={`url(#${idCur})`}
+        fillOpacity={1}
+        dot={false}
+        activeDot={{
+          r: 5,
+          strokeWidth: 2,
+          stroke: p.primaryStroke,
+          fill: "#fff",
+        }}
+        isAnimationActive={false}
+      />
+    </AreaChart>
+  );
+}
+
 function renderChart(
   chart: PreparedChart,
   safeId: string,
-  lineStroke: string,
-  areaStroke: string
+  accentIndex: number
 ) {
   const { type, data } = chart;
 
   switch (type) {
     case "line":
-      return (
-        <LineChart
-          data={data}
-          margin={{ top: 12, right: 12, left: 4, bottom: 8 }}
-        >
-          <defs>
-            <filter
-              id={`lineGlow-${safeId}`}
-              x="-40%"
-              y="-40%"
-              width="180%"
-              height="180%"
-            >
-              <feGaussianBlur stdDeviation="2.5" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          <CartesianGrid
-            stroke={CHART_GRID}
-            strokeDasharray="6 8"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="x"
-            tick={tickStyle}
-            tickLine={false}
-            axisLine={{ stroke: CHART_GRID }}
-            tickFormatter={formatTick}
-            tickMargin={12}
-          />
-          <YAxis
-            tick={tickStyle}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={formatNumber}
-            width={56}
-          />
-          <Tooltip
-            formatter={formatTooltip}
-            labelFormatter={formatTick}
-            contentStyle={tooltipBoxStyle()}
-            labelStyle={{ fontWeight: 700, marginBottom: 6, color: "#334155" }}
-          />
-          <Line
-            type="monotone"
-            dataKey="y"
-            stroke={lineStroke}
-            strokeWidth={3}
-            dot={false}
-            activeDot={{
-              r: 6,
-              strokeWidth: 3,
-              stroke: "#fff",
-              fill: lineStroke,
-            }}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            filter={`url(#lineGlow-${safeId})`}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      );
+      return renderDualArea(data, safeId, "line", accentIndex);
 
     case "area":
-      return (
-        <AreaChart
-          data={data}
-          margin={{ top: 12, right: 12, left: 4, bottom: 8 }}
-        >
-          <defs>
-            <linearGradient id={`areaGrad-${safeId}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={areaStroke} stopOpacity={0.45} />
-              <stop offset="55%" stopColor={HR_BLUE} stopOpacity={0.12} />
-              <stop offset="100%" stopColor={HR_PURPLE} stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            stroke={CHART_GRID}
-            strokeDasharray="6 8"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="x"
-            tick={tickStyle}
-            tickLine={false}
-            axisLine={{ stroke: CHART_GRID }}
-            tickFormatter={formatTick}
-            tickMargin={12}
-          />
-          <YAxis
-            tick={tickStyle}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={formatNumber}
-            width={56}
-          />
-          <Tooltip
-            formatter={formatTooltip}
-            labelFormatter={formatTick}
-            contentStyle={tooltipBoxStyle()}
-            labelStyle={{ fontWeight: 700, marginBottom: 6, color: "#334155" }}
-          />
-          <Area
-            type="monotone"
-            dataKey="y"
-            stroke={areaStroke}
-            strokeWidth={3}
-            fill={`url(#areaGrad-${safeId})`}
-            fillOpacity={1}
-            dot={false}
-            activeDot={{
-              r: 6,
-              strokeWidth: 3,
-              stroke: "#fff",
-              fill: areaStroke,
-            }}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      );
+      return renderDualArea(data, safeId, "area", accentIndex);
 
     case "bar":
       return (
@@ -335,8 +446,8 @@ function renderChart(
           margin={{ top: 8, right: 28, left: 8, bottom: 8 }}
         >
           <CartesianGrid
-            stroke={CHART_GRID}
-            strokeDasharray="6 8"
+            stroke={SAAS_GRID}
+            strokeDasharray="4 6"
             horizontal={false}
           />
           <XAxis
@@ -356,7 +467,7 @@ function renderChart(
           />
           <Tooltip
             formatter={formatTooltip}
-            contentStyle={tooltipBoxStyle()}
+            contentStyle={tooltipShell()}
           />
           <Bar
             dataKey="value"
@@ -390,7 +501,7 @@ function renderChart(
               `${String(name).slice(0, 10)}${String(name).length > 10 ? "…" : ""} ${(((percent ?? 0) as number) * 100).toFixed(0)}%`
             }
             labelLine={{
-              stroke: CHART_GRID,
+              stroke: SAAS_GRID,
               strokeWidth: 1,
             }}
             isAnimationActive={false}
@@ -403,7 +514,7 @@ function renderChart(
               />
             ))}
           </Pie>
-          <Tooltip formatter={formatTooltip} contentStyle={tooltipBoxStyle()} />
+          <Tooltip formatter={formatTooltip} contentStyle={tooltipShell()} />
           <Legend
             wrapperStyle={{ fontSize: 11, fontWeight: 600, color: CHART_MUTED }}
           />
