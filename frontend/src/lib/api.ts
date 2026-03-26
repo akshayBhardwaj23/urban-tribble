@@ -139,6 +139,16 @@ export const api = {
       }
     ),
 
+  chatWorkspace: (question: string) =>
+    request<{ answer: string; chart_data?: Record<string, unknown> }>(
+      "/api/chat/workspace",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      }
+    ),
+
   deleteDataset: (id: string) =>
     request<{ status: string; dataset_id: string }>(`/api/datasets/${id}`, {
       method: "DELETE",

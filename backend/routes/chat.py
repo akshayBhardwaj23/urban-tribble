@@ -22,6 +22,10 @@ class ChatRequest(BaseModel):
     question: str
 
 
+class WorkspaceChatRequest(BaseModel):
+    question: str
+
+
 @router.post("/")
 def chat(req: ChatRequest, db: Session = Depends(get_db)):
     dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
@@ -57,6 +61,57 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
 
     db.add(ChatMessage(
         dataset_id=dataset.id,
+        role="assistant",
+        content=answer,
+    ))
+    db.commit()
+
+    return {
+        "answer": answer,
+        "chart_data": chart_data,
+    }
+
+
+@router.post("/workspace")
+def workspace_chat(req: WorkspaceChatRequest, db: Session = Depends(get_db)):
+    """Chat across all datasets in the workspace."""
+    all_pairs = (
+        db.query(Dataset, Upload)
+        .join(Upload, Dataset.upload_id == Upload.id)
+        .all()
+    )
+
+    if not all_pairs:
+        raise HTTPException(404, "No datasets found in workspace")
+
+    dataframes = []
+    for ds, up in all_pairs:
+        parquet_path = Path(up.file_url).parent / f"{up.id}_cleaned.parquet"
+        if not parquet_path.exists():
+            continue
+        df = pd.read_parquet(str(parquet_path))
+        schema = json.loads(ds.schema_json) if ds.schema_json else {}
+        dataframes.append((ds.name, df, schema, up.user_description))
+
+    if not dataframes:
+        raise HTTPException(404, "No cleaned data files found")
+
+    result = query_engine.ask_multi(
+        question=req.question,
+        dataframes=dataframes,
+    )
+
+    answer = result.get("answer", "I couldn't process that question.")
+    chart_data = result.get("chart_data")
+
+    first_ds = all_pairs[0][0]
+    db.add(ChatMessage(
+        dataset_id=first_ds.id,
+        role="user",
+        content=f"[All Datasets] {req.question}",
+    ))
+    db.add(ChatMessage(
+        dataset_id=first_ds.id,
         role="assistant",
         content=answer,
     ))

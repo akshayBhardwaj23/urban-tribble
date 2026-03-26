@@ -1,0 +1,283 @@
+"use client";
+
+import { useRef, useState, useEffect } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
+
+const ALL_DATASETS_VALUE = "__all__";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+
+interface Dataset {
+  id: string;
+  name: string;
+  row_count?: number | null;
+  column_count?: number | null;
+}
+
+interface ChatPanelProps {
+  datasets: Dataset[];
+}
+
+export function ChatOverlay({ datasets }: ChatPanelProps) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [selectedDataset, setSelectedDataset] =
+    useState<string>(ALL_DATASETS_VALUE);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const isAllDatasets = selectedDataset === ALL_DATASETS_VALUE;
+
+  const chatMutation = useMutation({
+    mutationFn: (question: string) =>
+      isAllDatasets
+        ? api.chatWorkspace(question)
+        : api.chat(selectedDataset, question),
+    onSuccess: (data) => {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.answer },
+      ]);
+    },
+    onError: (err: Error) => {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${err.message}` },
+      ]);
+    },
+  });
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, chatMutation.isPending]);
+
+  useEffect(() => {
+    if (open && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [open]);
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    if (!isAllDatasets && !selectedDataset) return;
+    setMessages((prev) => [...prev, { role: "user", content: input }]);
+    chatMutation.mutate(input);
+    setInput("");
+  };
+
+  const handleDatasetChange = (id: string) => {
+    setSelectedDataset(id);
+    setMessages([]);
+  };
+
+  const sendSuggestion = (text: string) => {
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    chatMutation.mutate(text);
+  };
+
+  if (!datasets.length) return null;
+
+  const totalRows = datasets.reduce(
+    (sum, ds) => sum + (ds.row_count ?? 0),
+    0
+  );
+  const selectedName = isAllDatasets
+    ? "all your datasets"
+    : datasets.find((d) => d.id === selectedDataset)?.name;
+
+  const suggestions = isAllDatasets
+    ? [
+        "Summarize all my business data",
+        "What's the total revenue across all datasets?",
+        "Compare sales vs expenses",
+      ]
+    : [
+        "What was the total revenue?",
+        "Which category had the highest sales?",
+        "Show me the monthly trend",
+      ];
+
+  return (
+    <>
+      {/* Floating trigger */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="fixed bottom-5 right-5 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+        aria-label={open ? "Close chat" : "Open AI chat"}
+      >
+        {open ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Chat panel — anchored to bottom-right, capped to viewport */}
+      {open && (
+        <div
+          className="fixed z-50 flex flex-col rounded-xl border bg-card shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-200"
+          style={{
+            bottom: "4.5rem",
+            right: "1.25rem",
+            width: "min(400px, calc(100vw - 2rem))",
+            maxHeight: "calc(100vh - 6rem)",
+          }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b px-4 py-2.5 shrink-0">
+            <div className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span className="text-sm font-semibold">AI Chat</span>
+              {isAllDatasets && (
+                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
+                  All Data
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Dataset selector */}
+          <div className="border-b px-3 py-2 shrink-0">
+            <select
+              className="w-full rounded-md border px-2 py-1.5 text-xs bg-background"
+              value={selectedDataset}
+              onChange={(e) => handleDatasetChange(e.target.value)}
+            >
+              <option value={ALL_DATASETS_VALUE}>
+                All Datasets ({datasets.length} files,{" "}
+                {totalRows.toLocaleString()} rows)
+              </option>
+              {datasets.map((ds) => (
+                <option key={ds.id} value={ds.id}>
+                  {ds.name}
+                  {ds.row_count
+                    ? ` (${ds.row_count.toLocaleString()} rows)`
+                    : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Messages — this is the only scrollable/flexible section */}
+          <div
+            ref={scrollRef}
+            className="flex-1 min-h-0 overflow-y-auto px-4 py-3"
+          >
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center text-center py-8">
+                <div className="space-y-2 max-w-[280px]">
+                  <p className="text-sm font-medium text-foreground">
+                    Ask anything about {selectedName}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {isAllDatasets
+                      ? "The AI can query across all your datasets at once"
+                      : "The AI will query this specific dataset"}
+                  </p>
+                  <div className="space-y-1.5 pt-1">
+                    {suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => sendSuggestion(suggestion)}
+                        className="block w-full rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground text-left leading-relaxed"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {chatMutation.isPending && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-lg px-3 py-2">
+                      <div className="flex gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:0.2s]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:0.4s]" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="border-t px-3 py-2.5 shrink-0">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend();
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={
+                  isAllDatasets
+                    ? "Ask across all your data..."
+                    : "Ask about this dataset..."
+                }
+                className="flex-1 text-sm h-9"
+                disabled={chatMutation.isPending}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                className="h-9 px-3"
+                disabled={chatMutation.isPending || !input.trim()}
+              >
+                Send
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

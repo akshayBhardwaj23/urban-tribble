@@ -9,7 +9,6 @@ const navItems = [
   { href: "/dashboard", label: "Overview", icon: "◈" },
   { href: "/upload", label: "Upload", icon: "↑" },
   { href: "/datasets", label: "Datasets", icon: "◫" },
-  { href: "/chat", label: "AI Chat", icon: "◉" },
 ];
 
 export default function DashboardLayout({

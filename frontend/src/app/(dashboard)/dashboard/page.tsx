@@ -16,6 +16,7 @@ import {
 import { AutoChart } from "@/components/charts/auto-chart";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
+import { ChatOverlay } from "@/components/chat/chat-panel";
 import { api } from "@/lib/api";
 
 export default function OverviewPage() {
@@ -458,6 +459,9 @@ export default function OverviewPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Floating AI Chat */}
+      <ChatOverlay datasets={data.datasets} />
     </div>
   );
 }
