@@ -6,6 +6,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { UserMenu } from "@/components/user-menu";
 
 const navItems = [
+  { href: "/dashboard", label: "Overview", icon: "◈" },
   { href: "/upload", label: "Upload", icon: "↑" },
   { href: "/datasets", label: "Datasets", icon: "◫" },
   { href: "/chat", label: "AI Chat", icon: "◉" },
@@ -21,7 +22,7 @@ export default function DashboardLayout({
       <div className="flex h-full min-h-screen">
         <aside className="w-56 shrink-0 border-r bg-card p-4 flex flex-col">
           <Link
-            href="/upload"
+            href="/dashboard"
             className="text-lg font-semibold tracking-tight px-3 py-2 mb-2"
           >
             Excel Consultant

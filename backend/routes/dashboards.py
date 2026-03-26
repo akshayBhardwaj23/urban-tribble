@@ -111,3 +111,107 @@ def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
                 })
 
     return {"dataset_id": dataset_id, "charts": charts}
+
+
+@router.get("/overview")
+def get_overview(db: Session = Depends(get_db)):
+    """Workspace-level overview aggregating data from all datasets."""
+    all_datasets = (
+        db.query(Dataset, Upload)
+        .join(Upload, Dataset.upload_id == Upload.id)
+        .order_by(Dataset.created_at.desc())
+        .all()
+    )
+
+    if not all_datasets:
+        return {
+            "total_datasets": 0,
+            "total_rows": 0,
+            "kpis": [],
+            "charts": [],
+            "datasets": [],
+        }
+
+    total_rows = sum(up.row_count or 0 for _, up in all_datasets)
+    kpis = []
+    all_charts = []
+
+    for ds, up in all_datasets:
+        metadata = json.loads(ds.schema_json) if ds.schema_json else {}
+        summary = json.loads(ds.data_summary) if ds.data_summary else {}
+
+        for rev_col in metadata.get("revenue_columns", []):
+            total_key = f"{rev_col}_total"
+            if total_key in summary:
+                kpis.append({
+                    "label": f"{rev_col.replace('_', ' ').title()}",
+                    "value": summary[total_key],
+                    "dataset_name": ds.name,
+                })
+
+        try:
+            df = _load_cleaned_df(up)
+        except Exception:
+            continue
+
+        date_cols = metadata.get("date_columns", [])
+        revenue_cols = metadata.get("revenue_columns", [])
+        category_cols = metadata.get("category_columns", [])
+
+        for date_col in date_cols[:1]:
+            for rev_col in revenue_cols[:1]:
+                if date_col in df.columns and rev_col in df.columns:
+                    grouped = df.groupby(date_col)[rev_col].sum().reset_index()
+                    grouped = grouped.sort_values(date_col)
+                    chart_data = []
+                    for _, row in grouped.iterrows():
+                        val = row[date_col]
+                        if pd.api.types.is_datetime64_any_dtype(type(val)):
+                            val = val.strftime("%Y-%m-%d")
+                        chart_data.append({"x": str(val), "y": float(row[rev_col])})
+
+                    all_charts.append({
+                        "id": f"{ds.id}_{rev_col}_over_{date_col}",
+                        "title": f"{rev_col.replace('_', ' ').title()} Over Time",
+                        "type": "line",
+                        "x_label": date_col,
+                        "y_label": rev_col,
+                        "data": chart_data,
+                        "dataset_name": ds.name,
+                    })
+
+        for cat_col in category_cols[:1]:
+            for rev_col in revenue_cols[:1]:
+                if cat_col in df.columns and rev_col in df.columns:
+                    grouped = df.groupby(cat_col)[rev_col].sum().reset_index()
+                    grouped = grouped.sort_values(rev_col, ascending=False).head(10)
+                    chart_data = [
+                        {"name": str(row[cat_col]), "value": float(row[rev_col])}
+                        for _, row in grouped.iterrows()
+                    ]
+                    all_charts.append({
+                        "id": f"{ds.id}_{rev_col}_by_{cat_col}",
+                        "title": f"{rev_col.replace('_', ' ').title()} by {cat_col.replace('_', ' ').title()}",
+                        "type": "bar",
+                        "data": chart_data,
+                        "dataset_name": ds.name,
+                    })
+
+    datasets_list = [
+        {
+            "id": ds.id,
+            "name": ds.name,
+            "row_count": up.row_count,
+            "column_count": up.column_count,
+            "created_at": ds.created_at.isoformat(),
+        }
+        for ds, up in all_datasets
+    ]
+
+    return {
+        "total_datasets": len(all_datasets),
+        "total_rows": total_rows,
+        "kpis": kpis[:8],
+        "charts": all_charts[:6],
+        "datasets": datasets_list,
+    }

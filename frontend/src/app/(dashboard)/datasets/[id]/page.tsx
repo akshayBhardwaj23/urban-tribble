@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useCallback, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AutoChart } from "@/components/charts/auto-chart";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
@@ -22,7 +29,12 @@ import { api } from "@/lib/api";
 
 export default function DatasetPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [appendDialogOpen, setAppendDialogOpen] = useState(false);
 
   const dataset = useQuery({
     queryKey: ["dataset", params.id],
@@ -54,6 +66,35 @@ export default function DatasetPage() {
   const forecastMutation = useMutation({
     mutationFn: () => api.runForecast(params.id),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteDataset(params.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      router.push("/datasets");
+    },
+  });
+
+  const appendMutation = useMutation({
+    mutationFn: (file: File) => api.appendToDataset(params.id, file),
+    onSuccess: () => {
+      setAppendDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["dataset", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-preview", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-data", params.id] });
+    },
+  });
+
+  const handleAppendFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        appendMutation.mutate(file);
+      }
+      e.target.value = "";
+    },
+    [appendMutation]
+  );
 
   if (dataset.isLoading) {
     return (
@@ -94,14 +135,32 @@ export default function DatasetPage() {
             {new Date(data.created_at).toLocaleDateString()}
           </p>
         </div>
-        {!analysis.data && (
+        <div className="flex items-center gap-2">
           <Button
-            onClick={() => runAnalysis.mutate()}
-            disabled={runAnalysis.isPending}
+            variant="outline"
+            size="sm"
+            onClick={() => setAppendDialogOpen(true)}
           >
-            {runAnalysis.isPending ? "Analyzing..." : "Run AI Analysis"}
+            + Append Data
           </Button>
-        )}
+          {!analysis.data && (
+            <Button
+              size="sm"
+              onClick={() => runAnalysis.mutate()}
+              disabled={runAnalysis.isPending}
+            >
+              {runAnalysis.isPending ? "Analyzing..." : "Run AI Analysis"}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            Delete
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -171,7 +230,6 @@ export default function DatasetPage() {
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
 
-        {/* Dashboard Tab */}
         <TabsContent value="dashboard" className="space-y-4 mt-4">
           {dashboardData.isLoading ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -194,7 +252,6 @@ export default function DatasetPage() {
           )}
         </TabsContent>
 
-        {/* AI Analysis Tab */}
         <TabsContent value="analysis" className="mt-4">
           {analysis.isLoading ? (
             <Skeleton className="h-64" />
@@ -222,7 +279,6 @@ export default function DatasetPage() {
           )}
         </TabsContent>
 
-        {/* Forecast Tab */}
         <TabsContent value="forecast" className="mt-4">
           {schema?.date_columns.length && schema?.revenue_columns.length ? (
             forecastMutation.data ? (
@@ -256,13 +312,13 @@ export default function DatasetPage() {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Forecasting requires at least one date column and one revenue/numeric column.
+                Forecasting requires at least one date column and one
+                revenue/numeric column.
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
-        {/* Data Preview Tab */}
         <TabsContent value="data" className="mt-4">
           <Card>
             <CardHeader>
@@ -319,9 +375,7 @@ export default function DatasetPage() {
           </Card>
         </TabsContent>
 
-        {/* Details Tab */}
         <TabsContent value="details" className="space-y-4 mt-4">
-          {/* Column Types */}
           {schema && (
             <Card>
               <CardHeader>
@@ -380,7 +434,6 @@ export default function DatasetPage() {
             </Card>
           )}
 
-          {/* Cleaning Report */}
           {data.cleaned_report && data.cleaned_report.steps.length > 0 && (
             <Card>
               <CardHeader>
@@ -407,6 +460,86 @@ export default function DatasetPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete dataset</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete <strong>{data.name}</strong> and all
+            its analysis, charts, and chat history. This action cannot be undone.
+          </p>
+          {deleteMutation.isError && (
+            <p className="text-sm text-destructive">
+              {deleteMutation.error.message}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Append Data Dialog */}
+      <Dialog open={appendDialogOpen} onOpenChange={setAppendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Append data to {data.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Upload a file with matching columns to add more rows to this
+            dataset. Duplicate rows will be automatically removed.
+          </p>
+          {appendMutation.isError && (
+            <p className="text-sm text-destructive">
+              {appendMutation.error.message}
+            </p>
+          )}
+          {appendMutation.isSuccess && (
+            <p className="text-sm text-green-600">
+              Data appended successfully. {appendMutation.data.row_count} total
+              rows now.
+            </p>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.tsv,.xlsx,.xls"
+            className="hidden"
+            onChange={handleAppendFile}
+          />
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setAppendDialogOpen(false)}
+              disabled={appendMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={appendMutation.isPending}
+            >
+              {appendMutation.isPending ? "Appending..." : "Choose File"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

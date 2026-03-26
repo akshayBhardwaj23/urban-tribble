@@ -12,7 +12,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/upload");
+      router.replace("/dashboard");
     }
   }, [status, router]);
 
@@ -40,7 +40,7 @@ export default function LoginPage() {
           </p>
           <Button
             className="w-full h-11 gap-2"
-            onClick={() => signIn("google", { callbackUrl: "/upload" })}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24">
               <path

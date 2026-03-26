@@ -138,3 +138,140 @@ def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)):
         "value_column": value_col,
         **result,
     }
+
+
+@router.post("/overview/run")
+def run_overview_analysis(db: Session = Depends(get_db)):
+    """AI analysis across all datasets in the workspace."""
+    all_datasets = (
+        db.query(Dataset, Upload)
+        .join(Upload, Dataset.upload_id == Upload.id)
+        .all()
+    )
+    if not all_datasets:
+        raise HTTPException(404, "No datasets found")
+
+    combined_summary: dict = {"datasets": []}
+    combined_metadata: dict = {
+        "date_columns": [], "revenue_columns": [],
+        "category_columns": [], "numeric_columns": [], "text_columns": [],
+    }
+
+    for ds, up in all_datasets:
+        meta = json.loads(ds.schema_json) if ds.schema_json else {}
+        summ = json.loads(ds.data_summary) if ds.data_summary else {}
+        combined_summary["datasets"].append({
+            "name": ds.name,
+            "description": up.user_description,
+            "rows": up.row_count,
+            "columns": up.column_count,
+            "summary": summ,
+        })
+        for key in combined_metadata:
+            combined_metadata[key].extend(meta.get(key, []))
+
+    combined_summary["total_datasets"] = len(all_datasets)
+    combined_summary["total_rows"] = sum(up.row_count or 0 for _, up in all_datasets)
+
+    result = ai_analyzer.analyze(
+        combined_summary, combined_metadata,
+        f"Workspace with {len(all_datasets)} business datasets",
+    )
+
+    first_ds = all_datasets[0][0]
+    analysis = Analysis(
+        dataset_id=first_ds.id,
+        type="workspace_overview",
+        result_json=json.dumps(result),
+        ai_summary=result.get("executive_summary", ""),
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return {
+        "id": analysis.id,
+        "type": analysis.type,
+        "result_json": result,
+        "ai_summary": analysis.ai_summary,
+        "created_at": analysis.created_at.isoformat(),
+    }
+
+
+@router.get("/overview/latest")
+def get_overview_analysis(db: Session = Depends(get_db)):
+    """Get the most recent workspace-level analysis."""
+    analysis = (
+        db.query(Analysis)
+        .filter(Analysis.type == "workspace_overview")
+        .order_by(Analysis.created_at.desc())
+        .first()
+    )
+    if not analysis:
+        return None
+
+    return {
+        "id": analysis.id,
+        "type": analysis.type,
+        "result_json": json.loads(analysis.result_json) if analysis.result_json else None,
+        "ai_summary": analysis.ai_summary,
+        "created_at": analysis.created_at.isoformat(),
+    }
+
+
+class OverviewForecastRequest(BaseModel):
+    periods: int = 12
+
+
+@router.post("/overview/forecast")
+def run_overview_forecast(
+    req: OverviewForecastRequest,
+    db: Session = Depends(get_db),
+):
+    """Forecast using the best date+revenue pair found across all datasets."""
+    all_datasets = (
+        db.query(Dataset, Upload)
+        .join(Upload, Dataset.upload_id == Upload.id)
+        .all()
+    )
+
+    best_ds = None
+    best_up = None
+    best_date_col = None
+    best_value_col = None
+    best_rows = 0
+
+    for ds, up in all_datasets:
+        schema = json.loads(ds.schema_json) if ds.schema_json else {}
+        date_cols = schema.get("date_columns", [])
+        rev_cols = schema.get("revenue_columns", [])
+        if date_cols and rev_cols and (up.row_count or 0) > best_rows:
+            best_ds = ds
+            best_up = up
+            best_date_col = date_cols[0]
+            best_value_col = rev_cols[0]
+            best_rows = up.row_count or 0
+
+    if not best_ds or not best_up or not best_date_col or not best_value_col:
+        raise HTTPException(
+            400, "No dataset with both date and revenue columns found for forecasting."
+        )
+
+    parquet_path = Path(best_up.file_url).parent / f"{best_up.id}_cleaned.parquet"
+    if not parquet_path.exists():
+        raise HTTPException(404, "Cleaned data file not found")
+
+    df = pd.read_parquet(str(parquet_path))
+
+    try:
+        result = forecaster.forecast(df, best_date_col, best_value_col, req.periods)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    return {
+        "dataset_id": best_ds.id,
+        "dataset_name": best_ds.name,
+        "date_column": best_date_col,
+        "value_column": best_value_col,
+        **result,
+    }

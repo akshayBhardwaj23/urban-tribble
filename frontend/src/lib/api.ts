@@ -139,6 +139,90 @@ export const api = {
       }
     ),
 
+  deleteDataset: (id: string) =>
+    request<{ status: string; dataset_id: string }>(`/api/datasets/${id}`, {
+      method: "DELETE",
+    }),
+
+  appendToDataset: (datasetId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<{
+      dataset_id: string;
+      row_count: number;
+      column_count: number;
+      cleaning_report: { steps: string[]; original_shape: number[]; cleaned_shape: number[] };
+    }>(`/api/datasets/${datasetId}/append`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  getOverview: () =>
+    request<{
+      total_datasets: number;
+      total_rows: number;
+      kpis: { label: string; value: number; dataset_name: string }[];
+      charts: {
+        id: string;
+        title: string;
+        type: "line" | "bar" | "pie" | "area";
+        data: Record<string, unknown>[];
+        x_label?: string;
+        y_label?: string;
+        dataset_name?: string;
+      }[];
+      datasets: {
+        id: string;
+        name: string;
+        row_count: number | null;
+        column_count: number | null;
+        created_at: string;
+      }[];
+    }>("/api/dashboards/overview"),
+
+  runOverviewAnalysis: () =>
+    request<{
+      id: string;
+      type: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result_json: any;
+      ai_summary: string | null;
+      created_at: string;
+    }>("/api/analysis/overview/run", { method: "POST" }),
+
+  getOverviewAnalysis: () =>
+    request<{
+      id: string;
+      type: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result_json: any;
+      ai_summary: string | null;
+      created_at: string;
+    } | null>("/api/analysis/overview/latest"),
+
+  runOverviewForecast: (periods?: number) =>
+    request<{
+      dataset_id: string;
+      dataset_name: string;
+      date_column: string;
+      value_column: string;
+      historical: { date: string; actual: number; predicted: number }[];
+      forecast: { date: string; predicted: number; lower: number; upper: number }[];
+      stats: {
+        trend: string;
+        slope_per_period: number;
+        period_type: string;
+        r_squared: number;
+        std_error: number;
+        forecast_periods: number;
+      };
+    }>("/api/analysis/overview/forecast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ periods: periods || 12 }),
+    }),
+
   runForecast: (
     datasetId: string,
     dateColumn?: string,

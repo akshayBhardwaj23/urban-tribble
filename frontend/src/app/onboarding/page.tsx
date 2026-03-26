@@ -24,7 +24,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (!loading && profile && profile.workspaces.length > 0) {
-      router.replace("/upload");
+      router.replace("/dashboard");
     }
   }, [loading, profile, router]);
 
@@ -56,7 +56,7 @@ export default function OnboardingPage() {
     setError("");
     try {
       await createWorkspace(trimmed);
-      router.push("/upload");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 
 interface DatasetListItem {
@@ -19,12 +27,25 @@ interface DatasetListItem {
 }
 
 export default function DatasetsPage() {
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<DatasetListItem | null>(
+    null
+  );
+
   const { data: datasets, isLoading } = useQuery({
     queryKey: ["datasets"],
     queryFn: () =>
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/datasets`).then(
-        (r) => r.json() as Promise<DatasetListItem[]>
-      ),
+      fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/datasets`
+      ).then((r) => r.json() as Promise<DatasetListItem[]>),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteDataset(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      setDeleteTarget(null);
+    },
   });
 
   return (
@@ -67,22 +88,28 @@ export default function DatasetsPage() {
       ) : (
         <div className="grid gap-3">
           {datasets.map((ds) => (
-            <Link key={ds.id} href={`/datasets/${ds.id}`}>
-              <Card className="transition-colors hover:bg-accent/50 cursor-pointer">
-                <CardContent className="flex items-center justify-between py-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{ds.name}</p>
-                    {ds.user_description && (
-                      <p className="text-xs text-muted-foreground">
-                        {ds.user_description}
-                      </p>
-                    )}
+            <Card
+              key={ds.id}
+              className="transition-colors hover:bg-accent/50"
+            >
+              <CardContent className="flex items-center justify-between py-4">
+                <Link
+                  href={`/datasets/${ds.id}`}
+                  className="flex-1 space-y-1"
+                >
+                  <p className="text-sm font-medium">{ds.name}</p>
+                  {ds.user_description && (
                     <p className="text-xs text-muted-foreground">
-                      {ds.row_count?.toLocaleString()} rows ·{" "}
-                      {ds.column_count} columns ·{" "}
-                      {new Date(ds.created_at).toLocaleDateString()}
+                      {ds.user_description}
                     </p>
-                  </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {ds.row_count?.toLocaleString()} rows ·{" "}
+                    {ds.column_count} columns ·{" "}
+                    {new Date(ds.created_at).toLocaleDateString()}
+                  </p>
+                </Link>
+                <div className="flex items-center gap-2 ml-4">
                   <Badge
                     variant={
                       ds.status === "completed" ? "default" : "secondary"
@@ -91,12 +118,62 @@ export default function DatasetsPage() {
                   >
                     {ds.status}
                   </Badge>
-                </CardContent>
-              </Card>
-            </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setDeleteTarget(ds);
+                    }}
+                  >
+                    <span className="text-base">×</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete dataset</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete{" "}
+            <strong>{deleteTarget?.name}</strong> and all its analysis, charts,
+            and chat history. This action cannot be undone.
+          </p>
+          {deleteMutation.isError && (
+            <p className="text-sm text-destructive">
+              {deleteMutation.error.message}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                deleteTarget && deleteMutation.mutate(deleteTarget.id)
+              }
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
