@@ -18,8 +18,8 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthGuard>
-      <div className="flex h-full min-h-screen">
-        <aside className="w-56 shrink-0 border-r bg-card p-4 flex flex-col">
+      <div className="flex h-screen overflow-hidden">
+        <aside className="w-56 shrink-0 border-r bg-card p-4 flex flex-col h-screen sticky top-0">
           <Link
             href="/dashboard"
             className="text-lg font-semibold tracking-tight px-3 py-2 mb-2"
@@ -31,7 +31,7 @@ export default function DashboardLayout({
             <WorkspaceSwitcher />
           </div>
 
-          <nav className="flex flex-col gap-1 flex-1">
+          <nav className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -44,7 +44,7 @@ export default function DashboardLayout({
             ))}
           </nav>
 
-          <div className="mt-auto pt-4 border-t flex items-center justify-between px-1">
+          <div className="pt-3 border-t shrink-0">
             <UserMenu />
           </div>
         </aside>
