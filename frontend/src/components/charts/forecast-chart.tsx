@@ -3,8 +3,6 @@
 import {
   AreaChart,
   Area,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -31,6 +29,78 @@ interface ForecastData {
     std_error: number;
     forecast_periods: number;
   };
+}
+
+function mean(nums: number[]): number {
+  if (!nums.length) return NaN;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+function formatInsightNum(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString(undefined, {
+    notation: "standard",
+    maximumFractionDigits: 2,
+  });
+}
+
+function forecastPeriodInsight(
+  data: ForecastData,
+  label: string
+): { line1: string; line2?: string } | null {
+  const hist = data.historical;
+  if (hist.length < 2) return null;
+
+  const n = hist.length;
+  const w = Math.max(1, Math.min(14, Math.floor(n / 3)));
+  const recentVals = hist.slice(Math.max(0, n - w)).map((h) => h.actual);
+  const priorVals = hist
+    .slice(Math.max(0, n - 2 * w), Math.max(0, n - w))
+    .map((h) => h.actual);
+  const curAvg = mean(recentVals);
+  const prevAvg =
+    priorVals.length >= 1 ? mean(priorVals) : hist[0]!.actual;
+
+  const eps =
+    1e-9 * Math.max(1, Math.abs(curAvg), Math.abs(prevAvg));
+
+  let line1: string;
+  if (!Number.isFinite(curAvg) || !Number.isFinite(prevAvg)) {
+    line1 = `Could not summarize recent change for ${label}.`;
+  } else if (Math.abs(prevAvg) < eps && Math.abs(curAvg) < eps) {
+    line1 = `${label} was effectively flat in recent history vs the prior window.`;
+  } else if (Math.abs(prevAvg) < eps) {
+    line1 = `${label} rose in the latest historical stretch after a very small prior average.`;
+  } else {
+    const pct = ((curAvg - prevAvg) / Math.abs(prevAvg)) * 100;
+    if (Math.abs(pct) < 0.5) {
+      line1 = `${label} was nearly unchanged in recent history vs the prior comparable window.`;
+    } else if (pct > 0) {
+      line1 = `${label} increased by ${pct.toFixed(0)}% in recent history vs the previous period.`;
+    } else {
+      line1 = `${label} decreased by ${Math.abs(pct).toFixed(0)}% in recent history vs the previous period.`;
+    }
+  }
+
+  const parts: string[] = [
+    `Recent average ${formatInsightNum(curAvg)} vs ${formatInsightNum(prevAvg)} in the prior window.`,
+  ];
+
+  const lastActual = hist[n - 1]!.actual;
+  const firstFc = data.forecast[0]?.predicted;
+  if (
+    data.forecast.length > 0 &&
+    Number.isFinite(lastActual) &&
+    Number.isFinite(firstFc) &&
+    Math.abs(lastActual) > eps
+  ) {
+    const fwd = ((firstFc - lastActual) / Math.abs(lastActual)) * 100;
+    parts.push(
+      `First forecast step is about ${Math.abs(fwd).toFixed(0)}% ${fwd >= 0 ? "above" : "below"} the latest actual.`
+    );
+  }
+
+  return { line1, line2: parts.join(" ") };
 }
 
 export function ForecastChart({
@@ -60,6 +130,14 @@ export function ForecastChart({
   const lastHistorical = data.historical[data.historical.length - 1]?.date;
 
   const trendLabel = data.stats.trend === "increasing" ? "↑" : data.stats.trend === "decreasing" ? "↓" : "→";
+
+  const gradActual = "fcActualGrad";
+  const gradPred = "fcPredGrad";
+
+  const metricLabel = valueColumn
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const chartInsight = forecastPeriodInsight(data, metricLabel);
 
   return (
     <div className="space-y-4">
@@ -103,13 +181,35 @@ export function ForecastChart({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium">
-            {valueColumn.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} — Historical &amp; Forecast
+            {metricLabel} — Historical &amp; Forecast
           </CardTitle>
+          {chartInsight ? (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-[13px] font-medium leading-snug text-foreground">
+                {chartInsight.line1}
+              </p>
+              {chartInsight.line2 ? (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {chartInsight.line2}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </CardHeader>
         <CardContent>
           <div className="h-80 rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={combined} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                <defs>
+                  <linearGradient id={gradActual} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(217, 91%, 59%)" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="hsl(217, 91%, 59%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id={gradPred} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(189, 94%, 43%)" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="hsl(189, 94%, 43%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid
                   stroke="hsl(220, 13%, 91%)"
                   strokeDasharray="4 6"
@@ -183,28 +283,28 @@ export function ForecastChart({
                   name="Lower bound"
                   isAnimationActive={false}
                 />
-                <Line
-                  type="linear"
+                <Area
+                  type="monotone"
                   dataKey="actual"
-                  stroke="hsl(217, 91%, 59%)"
+                  stroke="hsl(217, 91%, 52%)"
                   strokeWidth={2.5}
+                  fill={`url(#${gradActual})`}
+                  fillOpacity={1}
                   dot={false}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
                   name="Actual"
                   connectNulls={false}
                   isAnimationActive={false}
                   activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "hsl(217, 91%, 59%)" }}
                 />
-                <Line
-                  type="linear"
+                <Area
+                  type="monotone"
                   dataKey="predicted"
-                  stroke="hsl(189, 94%, 43%)"
+                  stroke="hsl(189, 94%, 38%)"
                   strokeWidth={2.5}
                   strokeDasharray="6 5"
+                  fill={`url(#${gradPred})`}
+                  fillOpacity={1}
                   dot={false}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
                   name="Forecast"
                   connectNulls={false}
                   isAnimationActive={false}

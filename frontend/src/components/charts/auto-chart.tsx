@@ -47,7 +47,8 @@ export interface ChartConfig {
   y_label?: string;
 }
 
-const MAX_LINE_AREA_POINTS = 2_000;
+/** Cap after daily merge — keeps charts readable; backend also aggregates by day. */
+const MAX_LINE_AREA_POINTS = 480;
 const MAX_BAR_POINTS = 120;
 const MAX_PIE_SLICES = 24;
 
@@ -63,6 +64,49 @@ function downsampleOrdered<T>(points: T[], max: number): T[] {
   return out;
 }
 
+function dayKeyForX(x: string): string {
+  const t = Date.parse(x);
+  if (Number.isFinite(t)) {
+    return new Date(t).toISOString().slice(0, 10);
+  }
+  return x;
+}
+
+/** One point per calendar day — sums y when timestamps fall on the same day. */
+function mergePointsByDay(points: { x: string; y: number }[]): { x: string; y: number }[] {
+  const acc = new Map<string, number>();
+  for (const { x, y } of points) {
+    const key = dayKeyForX(x);
+    acc.set(key, (acc.get(key) ?? 0) + y);
+  }
+  return [...acc.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([kx, v]) => ({ x: kx, y: v }));
+}
+
+function sortByXAsc(points: { x: string; y: number }[]): { x: string; y: number }[] {
+  return [...points].sort((a, b) => {
+    const da = Date.parse(a.x);
+    const db = Date.parse(b.x);
+    if (Number.isFinite(da) && Number.isFinite(db)) return da - db;
+    return a.x.localeCompare(b.x);
+  });
+}
+
+/** 3-point rolling median — dampens single-point spikes (display only). */
+function smoothMedian3(values: number[]): number[] {
+  const n = values.length;
+  if (n < 3) return values.map((v) => v);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i - 1);
+    const hi = Math.min(n, i + 2);
+    const chunk = values.slice(lo, hi).sort((a, b) => a - b);
+    out.push(chunk[Math.floor(chunk.length / 2)]!);
+  }
+  return out;
+}
+
 function sanitizeLineAreaData(
   raw: Record<string, unknown>[]
 ): { x: string; y: number }[] {
@@ -73,7 +117,11 @@ function sanitizeLineAreaData(
       return { x, y };
     })
     .filter((r) => r.x !== "" && Number.isFinite(r.y));
-  return downsampleOrdered(rows, MAX_LINE_AREA_POINTS);
+  const merged = mergePointsByDay(rows);
+  const sorted = sortByXAsc(merged);
+  const ys = smoothMedian3(sorted.map((r) => r.y));
+  const smoothed = sorted.map((r, i) => ({ x: r.x, y: ys[i]! }));
+  return downsampleOrdered(smoothed, MAX_LINE_AREA_POINTS);
 }
 
 /** Previous period = same series lagged (honest when API sends one series). */
@@ -124,6 +172,149 @@ type PreparedChart =
   | { type: "area"; data: DualPoint[] }
   | { type: "bar"; data: { name: string; value: number }[] }
   | { type: "pie"; data: { name: string; value: number }[] };
+
+function titleCaseWords(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/** Display name for insight sentences (prefer Y axis / metric column). */
+function humanizeMetricLabel(chart: ChartConfig): string {
+  if (chart.y_label?.trim()) {
+    return titleCaseWords(chart.y_label.replace(/_/g, " "));
+  }
+  let t = (chart.title || "This metric").replace(/_/g, " ");
+  t = t.replace(/\s+over\s+time\s*$/i, "").trim();
+  return titleCaseWords(t || "This metric");
+}
+
+function mean(nums: number[]): number {
+  if (!nums.length) return NaN;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+function formatInsightMetric(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return value.toLocaleString(undefined, {
+    notation: "standard",
+    maximumFractionDigits: 2,
+  });
+}
+
+type ChartInsightLines = { line1: string; line2?: string };
+
+/** Recent window vs prior window of the same length (time-series). */
+function lineAreaPeriodInsight(
+  data: DualPoint[],
+  chart: ChartConfig
+): ChartInsightLines {
+  const label = humanizeMetricLabel(chart);
+  const n = data.length;
+  if (n < 2) {
+    return {
+      line1: `Not enough history to compare the latest period to an earlier one for ${label}.`,
+    };
+  }
+  const w = Math.max(1, Math.min(14, Math.floor(n / 3)));
+  const recent = data.slice(Math.max(0, n - w));
+  const prior = data.slice(Math.max(0, n - 2 * w), Math.max(0, n - w));
+  const curAvg = mean(recent.map((d) => d.y));
+  const prevAvg =
+    prior.length >= 1
+      ? mean(prior.map((d) => d.y))
+      : data[n - 1]!.yPrev;
+
+  const eps =
+    1e-9 * Math.max(1, Math.abs(curAvg), Math.abs(prevAvg));
+
+  let line1: string;
+  if (!Number.isFinite(curAvg) || !Number.isFinite(prevAvg)) {
+    line1 = `Could not compute a period comparison for ${label}.`;
+  } else if (Math.abs(prevAvg) < eps && Math.abs(curAvg) < eps) {
+    line1 = `${label} is effectively flat compared to the previous period.`;
+  } else if (Math.abs(prevAvg) < eps) {
+    line1 = `${label} rose in the latest stretch after a very small prior average.`;
+  } else {
+    const pct = ((curAvg - prevAvg) / Math.abs(prevAvg)) * 100;
+    if (Math.abs(pct) < 0.5) {
+      line1 = `${label} is nearly unchanged compared to the previous period (under 1% difference).`;
+    } else if (pct > 0) {
+      line1 = `${label} increased by ${pct.toFixed(0)}% compared to the previous period.`;
+    } else {
+      line1 = `${label} decreased by ${Math.abs(pct).toFixed(0)}% compared to the previous period.`;
+    }
+  }
+
+  const line2 = `Recent average ${formatInsightMetric(curAvg)} vs ${formatInsightMetric(prevAvg)} in the prior comparable window.`;
+  return { line1, line2 };
+}
+
+function barOrPieInsight(
+  data: { name: string; value: number }[],
+  chart: ChartConfig,
+  kind: "bar" | "pie"
+): ChartInsightLines {
+  const label = humanizeMetricLabel(chart);
+  if (!data.length) {
+    return { line1: `No categories to summarize for ${label}.` };
+  }
+  const sorted = [...data].sort((a, b) => b.value - a.value);
+  const total = sorted.reduce((s, d) => s + d.value, 0);
+  const top = sorted[0]!;
+  const topShare = total > 0 ? (top.value / total) * 100 : 0;
+  const topName = String(top.name);
+
+  let line1: string;
+  if (kind === "pie") {
+    line1 =
+      total > 0
+        ? `"${topName}" is the largest slice at ${topShare.toFixed(0)}% of ${label}.`
+        : `"${topName}" is the largest slice in this breakdown.`;
+  } else {
+    line1 =
+      total > 0
+        ? `"${topName}" leads with ${topShare.toFixed(0)}% of total ${label.toLowerCase()}.`
+        : `"${topName}" is the top category in this view.`;
+  }
+
+  let line2: string | undefined;
+  if (sorted.length >= 2) {
+    const second = sorted[1]!;
+    const secondName = String(second.name);
+    if (second.value > 0) {
+      const vsPrev = ((top.value - second.value) / second.value) * 100;
+      if (Math.abs(vsPrev) < 0.5) {
+        line2 = `Nearly tied with "${secondName}" — less than 1% apart.`;
+      } else {
+        line2 = `${vsPrev.toFixed(0)}% ahead of "${secondName}".`;
+      }
+    } else {
+      line2 = `Next listed category is "${secondName}".`;
+    }
+  }
+
+  return { line1, line2 };
+}
+
+function insightForPrepared(
+  prepared: PreparedChart,
+  chart: ChartConfig
+): ChartInsightLines {
+  switch (prepared.type) {
+    case "line":
+    case "area":
+      return lineAreaPeriodInsight(prepared.data, chart);
+    case "bar":
+      return barOrPieInsight(prepared.data, chart, "bar");
+    case "pie":
+      return barOrPieInsight(prepared.data, chart, "pie");
+    default:
+      return { line1: "" };
+  }
+}
 
 function prepareChart(chart: ChartConfig): PreparedChart | null {
   switch (chart.type) {
@@ -282,6 +473,8 @@ export function AutoChart({
     );
   }
 
+  const insight = insightForPrepared(prepared, chart);
+
   return (
     <div
       className={cn(
@@ -294,6 +487,16 @@ export function AutoChart({
         <h3 className="text-[13px] font-semibold uppercase tracking-[0.07em] text-slate-500">
           {chart.title}
         </h3>
+        {insight.line1 ? (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-[13px] font-medium leading-snug text-slate-800">
+              {insight.line1}
+            </p>
+            {insight.line2 ? (
+              <p className="text-xs leading-relaxed text-slate-500">{insight.line2}</p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="h-72 w-full min-h-[18rem] px-2 pb-3 pt-2 sm:px-4">
         <ResponsiveContainer width="100%" height="100%">

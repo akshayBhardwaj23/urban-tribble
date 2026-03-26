@@ -7,7 +7,15 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import Dataset, Upload
-from services.dashboard_executor import execute_plan, legacy_charts
+from services.daily_metrics import (
+    compute_daily_metrics_for_dataset,
+    daily_metrics_to_records,
+)
+from services.dashboard_executor import (
+    daily_time_series_charts,
+    execute_plan,
+    legacy_charts,
+)
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
@@ -32,6 +40,13 @@ def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
     df = _load_cleaned_df(upload)
     metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
 
+    daily_df, daily_date_col, daily_revenue_col = compute_daily_metrics_for_dataset(
+        df, metadata
+    )
+    daily_aggregates = (
+        daily_metrics_to_records(daily_df) if daily_df is not None else []
+    )
+
     plan = None
     if dataset.dashboard_plan_json:
         try:
@@ -40,24 +55,44 @@ def get_dashboard_data(dataset_id: str, db: Session = Depends(get_db)):
             plan = None
 
     if plan and isinstance(plan.get("charts"), list) and len(plan["charts"]) > 0:
-        kpis, charts = execute_plan(df, plan)
+        kpis, charts = execute_plan(
+            df,
+            plan,
+            daily_metrics=daily_df,
+            date_col=daily_date_col,
+            revenue_col=daily_revenue_col,
+        )
         if not charts:
-            charts = legacy_charts(df, metadata)
+            charts = legacy_charts(
+                df,
+                metadata,
+                daily_metrics=daily_df,
+                primary_date=daily_date_col,
+                primary_revenue=daily_revenue_col,
+            )
         return {
             "dataset_id": dataset_id,
             "dataset_brief": plan.get("dataset_brief"),
             "dashboard_plan_source": plan.get("source"),
             "kpis": kpis,
             "charts": charts,
+            "daily_aggregates": daily_aggregates,
         }
 
-    charts = legacy_charts(df, metadata)
+    charts = legacy_charts(
+        df,
+        metadata,
+        daily_metrics=daily_df,
+        primary_date=daily_date_col,
+        primary_revenue=daily_revenue_col,
+    )
     return {
         "dataset_id": dataset_id,
         "dataset_brief": None,
         "dashboard_plan_source": "legacy",
         "kpis": [],
         "charts": charts,
+        "daily_aggregates": daily_aggregates,
     }
 
 
@@ -106,27 +141,42 @@ def get_overview(db: Session = Depends(get_db)):
         revenue_cols = metadata.get("revenue_columns", [])
         category_cols = metadata.get("category_columns", [])
 
-        for date_col in date_cols[:1]:
-            for rev_col in revenue_cols[:1]:
-                if date_col in df.columns and rev_col in df.columns:
-                    grouped = df.groupby(date_col)[rev_col].sum().reset_index()
-                    grouped = grouped.sort_values(date_col)
-                    chart_data = []
-                    for _, row in grouped.iterrows():
-                        val = row[date_col]
-                        if pd.api.types.is_datetime64_any_dtype(type(val)):
-                            val = val.strftime("%Y-%m-%d")
-                        chart_data.append({"x": str(val), "y": float(row[rev_col])})
+        daily_df, _dcol, rcol = compute_daily_metrics_for_dataset(df, metadata)
+        if daily_df is not None and rcol:
+            dcharts = daily_time_series_charts(daily_df, rcol)
+            if dcharts:
+                ch = dcharts[0]
+                all_charts.append({
+                    "id": f"{ds.id}_{ch['id']}",
+                    "title": ch["title"],
+                    "type": ch["type"],
+                    "x_label": ch.get("x_label"),
+                    "y_label": ch.get("y_label"),
+                    "data": ch["data"],
+                    "dataset_name": ds.name,
+                })
+        else:
+            for date_col in date_cols[:1]:
+                for rev_col in revenue_cols[:1]:
+                    if date_col in df.columns and rev_col in df.columns:
+                        grouped = df.groupby(date_col)[rev_col].sum().reset_index()
+                        grouped = grouped.sort_values(date_col)
+                        chart_data = []
+                        for _, row in grouped.iterrows():
+                            val = row[date_col]
+                            if pd.api.types.is_datetime64_any_dtype(type(val)):
+                                val = val.strftime("%Y-%m-%d")
+                            chart_data.append({"x": str(val), "y": float(row[rev_col])})
 
-                    all_charts.append({
-                        "id": f"{ds.id}_{rev_col}_over_{date_col}",
-                        "title": f"{rev_col.replace('_', ' ').title()} Over Time",
-                        "type": "line",
-                        "x_label": date_col,
-                        "y_label": rev_col,
-                        "data": chart_data,
-                        "dataset_name": ds.name,
-                    })
+                        all_charts.append({
+                            "id": f"{ds.id}_{rev_col}_over_{date_col}",
+                            "title": f"{rev_col.replace('_', ' ').title()} Over Time",
+                            "type": "line",
+                            "x_label": date_col,
+                            "y_label": rev_col,
+                            "data": chart_data,
+                            "dataset_name": ds.name,
+                        })
 
         for cat_col in category_cols[:1]:
             for rev_col in revenue_cols[:1]:

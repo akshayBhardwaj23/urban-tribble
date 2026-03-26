@@ -130,6 +130,12 @@ export const api = {
         x_label?: string;
         y_label?: string;
       }[];
+      daily_aggregates: {
+        date: string;
+        revenue: number;
+        orders: number;
+        aov: number;
+      }[];
     }>(`/api/dashboards/dataset/${datasetId}`),
 
   chat: (datasetId: string, question: string) =>
