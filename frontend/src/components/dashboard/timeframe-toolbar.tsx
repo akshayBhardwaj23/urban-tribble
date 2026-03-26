@@ -149,56 +149,60 @@ export function TimeframeToolbar({
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-          Time range
-        </span>
-        <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200/90 bg-white/80 p-1 shadow-sm">
-          {PRESETS.map((p) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            Time range
+          </span>
+          <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200/90 bg-white/80 p-1 shadow-sm">
+            {PRESETS.map((p) => (
+              <Button
+                key={p.id}
+                type="button"
+                variant={active === p.id ? "default" : "ghost"}
+                size="sm"
+                disabled={!hasDateColumn && p.id !== "all"}
+                className={cn(
+                  "h-8 rounded-xl px-3 text-xs font-semibold",
+                  active === p.id ? "" : "text-slate-600"
+                )}
+                title={
+                  !hasDateColumn && p.id !== "all"
+                    ? "No date column detected for this file"
+                    : undefined
+                }
+                onClick={() => {
+                  if (p.id === "all") onChange({ preset: "all" });
+                  else if (hasDateColumn) onChange({ preset: p.id });
+                }}
+              >
+                {p.label}
+              </Button>
+            ))}
             <Button
-              key={p.id}
               type="button"
-              variant={active === p.id ? "default" : "ghost"}
+              variant={active === "custom" ? "default" : "ghost"}
               size="sm"
-              disabled={!hasDateColumn && p.id !== "all"}
+              disabled={!hasDateColumn}
               className={cn(
-                "h-8 rounded-xl px-3 text-xs font-semibold",
-                active === p.id ? "" : "text-slate-600"
+                "h-8 gap-1 rounded-xl px-3 text-xs font-semibold",
+                active === "custom" ? "" : "text-slate-600"
               )}
               title={
-                !hasDateColumn && p.id !== "all"
-                  ? "No date column detected for this file"
-                  : undefined
+                !hasDateColumn ? "No date column detected for this file" : undefined
               }
-              onClick={() => {
-                if (p.id === "all") onChange({ preset: "all" });
-                else if (hasDateColumn) onChange({ preset: p.id });
-              }}
+              onClick={openCustomDialog}
             >
-              {p.label}
+              <CalendarRange className="h-3.5 w-3.5 opacity-80" />
+              Custom
             </Button>
-          ))}
-          <Button
-            type="button"
-            variant={active === "custom" ? "default" : "ghost"}
-            size="sm"
-            disabled={!hasDateColumn}
-            className={cn(
-              "h-8 gap-1 rounded-xl px-3 text-xs font-semibold",
-              active === "custom" ? "" : "text-slate-600"
-            )}
-            title={
-              !hasDateColumn ? "No date column detected for this file" : undefined
-            }
-            onClick={openCustomDialog}
-          >
-            <CalendarRange className="h-3.5 w-3.5 opacity-80" />
-            Custom
-          </Button>
+          </div>
         </div>
         {hasDateColumn ? (
           <p className="text-[11px] text-slate-400">
-            7d / 14d / 30d / 60d end on the <span className="font-medium text-slate-500">latest date in your data</span>
+            7d / 14d / 30d / 60d end on the{" "}
+            <span className="font-medium text-slate-500">
+              latest date in your data
+            </span>
             , not today.
           </p>
         ) : null}
