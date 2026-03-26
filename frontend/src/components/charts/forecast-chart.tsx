@@ -12,6 +12,10 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  formatChartAxisDate,
+  formatChartTooltipDate,
+} from "@/lib/chart-dates";
 
 interface ForecastData {
   historical: { date: string; actual: number; predicted: number }[];
@@ -138,6 +142,7 @@ export function ForecastChart({
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
   const chartInsight = forecastPeriodInsight(data, metricLabel);
+  const denseForecastTicks = combined.length > 0 && combined.length <= 45;
 
   return (
     <div className="space-y-4">
@@ -199,7 +204,15 @@ export function ForecastChart({
         <CardContent>
           <div className="h-80 rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={combined} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+              <AreaChart
+                data={combined}
+                margin={{
+                  top: 8,
+                  right: 8,
+                  left: 0,
+                  bottom: denseForecastTicks ? 10 : 4,
+                }}
+              >
                 <defs>
                   <linearGradient id={gradActual} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(217, 91%, 59%)" stopOpacity={0.35} />
@@ -222,10 +235,9 @@ export function ForecastChart({
                   tickLine={false}
                   axisLine={{ stroke: "hsl(220, 13%, 91%)", strokeWidth: 1 }}
                   tickMargin={10}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-                  }}
+                  tickFormatter={(v) => formatChartAxisDate(v)}
+                  interval={denseForecastTicks ? 0 : undefined}
+                  minTickGap={denseForecastTicks ? 2 : 20}
                 />
                 <YAxis
                   tick={{ fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }}
@@ -240,7 +252,7 @@ export function ForecastChart({
                   }
                 />
                 <Tooltip
-                  labelFormatter={(v) => new Date(v as string).toLocaleDateString()}
+                  labelFormatter={(v) => formatChartTooltipDate(v)}
                   formatter={(value, name) => [
                     value != null && value !== ""
                       ? Number(value).toLocaleString(undefined, {

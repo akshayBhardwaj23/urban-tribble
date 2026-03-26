@@ -17,6 +17,10 @@ import {
   Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import {
+  formatChartAxisDate,
+  formatChartTooltipDate,
+} from "@/lib/chart-dates";
 
 /** HR / admin dashboard palette (bars & pie) */
 const HR_ORANGE = "#FF7A45";
@@ -406,7 +410,7 @@ function SaaSTooltip({
           letterSpacing: "0.04em",
         }}
       >
-        {formatTick(label)}
+        {formatChartTooltipDate(label)}
       </p>
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
@@ -516,9 +520,13 @@ function renderDualArea(
   const p = getSaaSPalette(accentIndex, kind);
   const idCur = `saasCur-${safeId}`;
   const idPrev = `saasPrev-${safeId}`;
+  const showEveryDayTick = data.length > 0 && data.length <= 45;
 
   return (
-    <AreaChart data={data} margin={{ top: 14, right: 10, left: 0, bottom: 4 }}>
+    <AreaChart
+      data={data}
+      margin={{ top: 14, right: 10, left: 0, bottom: showEveryDayTick ? 10 : 4 }}
+    >
       <defs>
         <linearGradient id={idCur} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={p.primaryMid} stopOpacity={0.38} />
@@ -543,8 +551,10 @@ function renderDualArea(
         tick={tickStyle}
         tickLine={false}
         axisLine={false}
-        tickFormatter={formatTick}
+        tickFormatter={formatChartAxisDate}
         tickMargin={10}
+        interval={showEveryDayTick ? 0 : undefined}
+        minTickGap={showEveryDayTick ? 2 : 20}
       />
       <YAxis
         tick={tickStyle}
@@ -736,17 +746,6 @@ function renderChart(
         </BarChart>
       );
   }
-}
-
-function formatTick(value: unknown) {
-  const s = String(value ?? "");
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    return new Date(s).toLocaleDateString("en-US", {
-      month: "short",
-      year: "2-digit",
-    });
-  }
-  return s.length > 12 ? s.slice(0, 12) + "..." : s;
 }
 
 function formatNumber(value: unknown) {
