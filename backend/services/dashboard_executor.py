@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Optional
 
 import pandas as pd
+
+
+def _format_kpi_number(val: float, agg: str, is_row_count: bool) -> str:
+    """Human-readable KPI string with comma grouping — never scientific notation."""
+    if not math.isfinite(val):
+        return "—"
+    if is_row_count or agg == "count":
+        return f"{int(round(val)):,}"
+    s = f"{val:,.2f}"
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s
 
 
 def _fmt_x(val: Any) -> str:
@@ -64,12 +77,11 @@ def execute_plan(df: pd.DataFrame, plan: dict[str, Any]) -> tuple[list[dict[str,
         val = compute_kpi_value(df, col, agg)
         if val is None or (isinstance(val, float) and pd.isna(val)):
             continue
-        if col == "__row_count__" or agg == "count":
-            formatted = f"{int(round(val)):,}"
-        elif abs(val) >= 1_000_000 or (abs(val) < 0.01 and val != 0):
-            formatted = f"{val:,.4g}"
-        else:
-            formatted = f"{val:,.2f}".rstrip("0").rstrip(".")
+        formatted = _format_kpi_number(
+            float(val),
+            agg,
+            col == "__row_count__",
+        )
         kpis_out.append({
             "id": kid,
             "title": title,

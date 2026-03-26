@@ -19,16 +19,24 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+const CHART_LINE = "hsl(217, 91%, 59%)";
+const CHART_LINE_SECONDARY = "hsl(189, 94%, 43%)";
+const CHART_GRID = "hsl(220, 13%, 91%)";
+const CHART_MUTED = "hsl(220, 9%, 46%)";
+
 const COLORS = [
-  "hsl(220, 70%, 50%)",
-  "hsl(160, 60%, 45%)",
-  "hsl(30, 80%, 55%)",
-  "hsl(280, 60%, 50%)",
-  "hsl(0, 70%, 50%)",
-  "hsl(190, 70%, 45%)",
-  "hsl(45, 90%, 50%)",
-  "hsl(330, 60%, 50%)",
+  CHART_LINE,
+  CHART_LINE_SECONDARY,
+  "hsl(291, 64%, 58%)",
+  "hsl(24, 95%, 53%)",
+  "hsl(142, 71%, 45%)",
+  "hsl(330, 81%, 60%)",
+  "hsl(43, 96%, 56%)",
+  "hsl(199, 89%, 48%)",
 ];
+
+const tickStyle = { fill: CHART_MUTED, fontSize: 11, fontWeight: 500 };
+const axisLine = { stroke: CHART_GRID, strokeWidth: 1 };
 
 interface ChartConfig {
   id: string;
@@ -145,8 +153,8 @@ export function AutoChart({ chart }: { chart: ChartConfig }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{chart.title}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="h-64">
+      <CardContent className="pt-0">
+        <div className="h-72 w-full min-h-[18rem] rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
           <ResponsiveContainer width="100%" height="100%">
             {renderChart(prepared)}
           </ResponsiveContainer>
@@ -162,21 +170,55 @@ function renderChart(chart: PreparedChart) {
   switch (type) {
     case "line":
       return (
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 8, left: 0, bottom: 4 }}
+        >
+          <CartesianGrid
+            stroke={CHART_GRID}
+            strokeDasharray="4 6"
+            vertical={false}
+            opacity={0.9}
+          />
           <XAxis
             dataKey="x"
-            tick={{ fontSize: 11 }}
+            tick={tickStyle}
+            tickLine={false}
+            axisLine={axisLine}
             tickFormatter={formatTick}
+            tickMargin={10}
           />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={formatNumber} />
-          <Tooltip formatter={formatTooltip} labelFormatter={formatTick} />
+          <YAxis
+            tick={tickStyle}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={formatNumber}
+            width={52}
+          />
+          <Tooltip
+            formatter={formatTooltip}
+            labelFormatter={formatTick}
+            contentStyle={{
+              borderRadius: "10px",
+              border: `1px solid ${CHART_GRID}`,
+              boxShadow: "0 10px 40px -12px rgba(15, 23, 42, 0.2)",
+            }}
+            labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+          />
           <Line
-            type="monotone"
+            type="linear"
             dataKey="y"
-            stroke={COLORS[0]}
-            strokeWidth={2}
-            dot={{ r: 3 }}
+            stroke={CHART_LINE}
+            strokeWidth={2.5}
+            dot={false}
+            activeDot={{
+              r: 5,
+              strokeWidth: 2,
+              stroke: "hsl(0, 0%, 100%)",
+              fill: CHART_LINE,
+            }}
+            strokeLinecap="round"
+            strokeLinejoin="round"
             isAnimationActive={false}
           />
         </LineChart>
@@ -184,22 +226,63 @@ function renderChart(chart: PreparedChart) {
 
     case "area":
       return (
-        <AreaChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <AreaChart
+          data={data}
+          margin={{ top: 8, right: 8, left: 0, bottom: 4 }}
+        >
+          <defs>
+            <linearGradient id="areaFillPrimary" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={CHART_LINE_SECONDARY} stopOpacity={0.35} />
+              <stop offset="95%" stopColor={CHART_LINE_SECONDARY} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid
+            stroke={CHART_GRID}
+            strokeDasharray="4 6"
+            vertical={false}
+            opacity={0.9}
+          />
           <XAxis
             dataKey="x"
-            tick={{ fontSize: 11 }}
+            tick={tickStyle}
+            tickLine={false}
+            axisLine={axisLine}
             tickFormatter={formatTick}
+            tickMargin={10}
           />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={formatNumber} />
-          <Tooltip formatter={formatTooltip} labelFormatter={formatTick} />
+          <YAxis
+            tick={tickStyle}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={formatNumber}
+            width={52}
+          />
+          <Tooltip
+            formatter={formatTooltip}
+            labelFormatter={formatTick}
+            contentStyle={{
+              borderRadius: "10px",
+              border: `1px solid ${CHART_GRID}`,
+              boxShadow: "0 10px 40px -12px rgba(15, 23, 42, 0.2)",
+            }}
+            labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+          />
           <Area
-            type="monotone"
+            type="linear"
             dataKey="y"
-            stroke={COLORS[1]}
-            fill={COLORS[1]}
-            fillOpacity={0.15}
-            strokeWidth={2}
+            stroke={CHART_LINE_SECONDARY}
+            strokeWidth={2.5}
+            fill="url(#areaFillPrimary)"
+            fillOpacity={1}
+            dot={false}
+            activeDot={{
+              r: 5,
+              strokeWidth: 2,
+              stroke: "hsl(0, 0%, 100%)",
+              fill: CHART_LINE_SECONDARY,
+            }}
+            strokeLinecap="round"
+            strokeLinejoin="round"
             isAnimationActive={false}
           />
         </AreaChart>
@@ -207,12 +290,36 @@ function renderChart(chart: PreparedChart) {
 
     case "bar":
       return (
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={formatNumber} />
-          <Tooltip formatter={formatTooltip} />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+          <CartesianGrid
+            stroke={CHART_GRID}
+            strokeDasharray="4 6"
+            vertical={false}
+            opacity={0.9}
+          />
+          <XAxis
+            dataKey="name"
+            tick={tickStyle}
+            tickLine={false}
+            axisLine={axisLine}
+            tickMargin={10}
+          />
+          <YAxis
+            tick={tickStyle}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={formatNumber}
+            width={52}
+          />
+          <Tooltip
+            formatter={formatTooltip}
+            contentStyle={{
+              borderRadius: "10px",
+              border: `1px solid ${CHART_GRID}`,
+              boxShadow: "0 10px 40px -12px rgba(15, 23, 42, 0.2)",
+            }}
+          />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false}>
             {data.map((_, i) => (
               <Cell key={i} fill={COLORS[i % COLORS.length]} />
             ))}
@@ -222,18 +329,22 @@ function renderChart(chart: PreparedChart) {
 
     case "pie":
       return (
-        <PieChart>
+        <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
           <Pie
             data={data}
             dataKey="value"
             nameKey="name"
             cx="50%"
             cy="50%"
-            outerRadius={80}
+            innerRadius={44}
+            outerRadius={88}
+            paddingAngle={2}
+            stroke="hsl(0, 0%, 100%)"
+            strokeWidth={2}
             label={({ name, percent }) =>
               `${name} (${(percent * 100).toFixed(0)}%)`
             }
-            labelLine={true}
+            labelLine={{ stroke: CHART_GRID, strokeWidth: 1 }}
             isAnimationActive={false}
           >
             {data.map((_, i) => (
@@ -268,13 +379,17 @@ function formatTick(value: unknown) {
 function formatNumber(value: unknown) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toFixed(0);
+  return n.toLocaleString(undefined, {
+    notation: "standard",
+    maximumFractionDigits: n >= 100 && Number.isInteger(n) ? 0 : 2,
+  });
 }
 
 function formatTooltip(value: unknown) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, {
+    notation: "standard",
+    maximumFractionDigits: 2,
+  });
 }

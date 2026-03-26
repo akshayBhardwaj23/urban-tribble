@@ -107,69 +107,108 @@ export function ForecastChart({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-80">
+          <div className="h-80 rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={combined}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <AreaChart data={combined} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                <CartesianGrid
+                  stroke="hsl(220, 13%, 91%)"
+                  strokeDasharray="4 6"
+                  vertical={false}
+                  opacity={0.9}
+                />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "hsl(220, 13%, 91%)", strokeWidth: 1 }}
+                  tickMargin={10}
                   tickFormatter={(v) => {
                     const d = new Date(v);
                     return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
                   }}
                 />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis
+                  tick={{ fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={52}
+                  tickFormatter={(v) =>
+                    Number(v).toLocaleString(undefined, {
+                      notation: "standard",
+                      maximumFractionDigits: Number(v) >= 100 ? 0 : 2,
+                    })
+                  }
+                />
                 <Tooltip
                   labelFormatter={(v) => new Date(v as string).toLocaleDateString()}
                   formatter={(value: number, name: string) => [
-                    value?.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                    value != null
+                      ? Number(value).toLocaleString(undefined, {
+                          notation: "standard",
+                          maximumFractionDigits: 2,
+                        })
+                      : "—",
                     name,
                   ]}
+                  contentStyle={{
+                    borderRadius: "10px",
+                    border: "1px solid hsl(220, 13%, 91%)",
+                    boxShadow: "0 10px 40px -12px rgba(15, 23, 42, 0.2)",
+                  }}
                 />
                 <Legend />
                 {lastHistorical && (
                   <ReferenceLine
                     x={lastHistorical}
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeDasharray="3 3"
+                    stroke="hsl(220, 13%, 71%)"
+                    strokeDasharray="4 4"
                     label={{ value: "Now", position: "top", fontSize: 11 }}
                   />
                 )}
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="upper"
                   stroke="none"
-                  fill="hsl(220, 70%, 50%)"
-                  fillOpacity={0.08}
+                  fill="hsl(217, 91%, 59%)"
+                  fillOpacity={0.1}
                   name="Upper bound"
+                  isAnimationActive={false}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="lower"
                   stroke="none"
-                  fill="white"
+                  fill="hsl(0, 0%, 100%)"
                   fillOpacity={1}
                   name="Lower bound"
+                  isAnimationActive={false}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="actual"
-                  stroke="hsl(220, 70%, 50%)"
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
+                  stroke="hsl(217, 91%, 59%)"
+                  strokeWidth={2.5}
+                  dot={false}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   name="Actual"
                   connectNulls={false}
+                  isAnimationActive={false}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "hsl(217, 91%, 59%)" }}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="predicted"
-                  stroke="hsl(160, 60%, 45%)"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={{ r: 3 }}
+                  stroke="hsl(189, 94%, 43%)"
+                  strokeWidth={2.5}
+                  strokeDasharray="6 5"
+                  dot={false}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   name="Forecast"
                   connectNulls={false}
+                  isAnimationActive={false}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "hsl(189, 94%, 43%)" }}
                 />
               </AreaChart>
             </ResponsiveContainer>
