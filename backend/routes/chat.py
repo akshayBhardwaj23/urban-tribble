@@ -9,7 +9,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.models import ChatMessage, Dataset, Upload
+from deps import require_active_workspace
+from models.models import ChatMessage, Dataset, Upload, User
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+)
 from services.query_engine import QueryEngine
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -27,14 +32,16 @@ class WorkspaceChatRequest(BaseModel):
 
 
 @router.post("/")
-def chat(req: ChatRequest, db: Session = Depends(get_db)):
-    dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
-    if not dataset:
+def chat(
+    req: ChatRequest,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, req.dataset_id, workspace_id)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
-    if not upload:
-        raise HTTPException(404, "Upload not found")
+    dataset, upload = row
 
     parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
     if not parquet_path.exists():
@@ -73,13 +80,14 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/workspace")
-def workspace_chat(req: WorkspaceChatRequest, db: Session = Depends(get_db)):
+def workspace_chat(
+    req: WorkspaceChatRequest,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
     """Chat across all datasets in the workspace."""
-    all_pairs = (
-        db.query(Dataset, Upload)
-        .join(Upload, Dataset.upload_id == Upload.id)
-        .all()
-    )
+    _, workspace_id = ws
+    all_pairs = dataset_upload_pairs_for_workspace(db, workspace_id).all()
 
     if not all_pairs:
         raise HTTPException(404, "No datasets found in workspace")

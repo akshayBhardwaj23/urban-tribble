@@ -1,14 +1,22 @@
 import json
 import shutil
 from pathlib import Path
+from typing import List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
-from models.models import Analysis, ChatMessage, Dataset, DatasetRelation, Upload
+from deps import require_active_workspace
+from models.models import Analysis, ChatMessage, Dataset, DatasetRelation, Upload, User
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+)
+from services.ingestion_classifier import ALLOWED_CLASSIFICATION_IDS, CLASSIFICATIONS
 from services.column_detector import ColumnDetector
 from services.dashboard_planner import DashboardPlanner
 from services.data_cleaner import DataCleaner
@@ -17,6 +25,14 @@ from services.file_processor import FileProcessor
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
 dashboard_planner = DashboardPlanner()
+column_detector = ColumnDetector()
+
+
+class DatasetPatchBody(BaseModel):
+    business_classification: Optional[str] = None
+    primary_date_column: Optional[str] = None
+    primary_amount_column: Optional[str] = None
+    segment_columns: Optional[List[str]] = None
 
 
 def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
@@ -27,13 +43,12 @@ def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
 
 
 @router.get("/")
-def list_datasets(db: Session = Depends(get_db)):
-    datasets = (
-        db.query(Dataset, Upload)
-        .join(Upload, Dataset.upload_id == Upload.id)
-        .order_by(Dataset.created_at.desc())
-        .all()
-    )
+def list_datasets(
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     return [
         {
             "id": ds.id,
@@ -43,6 +58,7 @@ def list_datasets(db: Session = Depends(get_db)):
             "column_count": up.column_count,
             "status": up.status.value,
             "user_description": up.user_description,
+            "business_classification": ds.business_classification,
             "created_at": ds.created_at.isoformat(),
         }
         for ds, up in datasets
@@ -50,10 +66,16 @@ def list_datasets(db: Session = Depends(get_db)):
 
 
 @router.get("/{dataset_id}")
-def get_dataset(dataset_id: str, db: Session = Depends(get_db)):
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
+def get_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
+    if not row:
         raise HTTPException(404, "Dataset not found")
+    dataset, _upload = row
 
     return {
         "id": dataset.id,
@@ -62,7 +84,100 @@ def get_dataset(dataset_id: str, db: Session = Depends(get_db)):
         "schema_json": json.loads(dataset.schema_json) if dataset.schema_json else None,
         "data_summary": json.loads(dataset.data_summary) if dataset.data_summary else None,
         "cleaned_report": json.loads(dataset.cleaned_report_json) if dataset.cleaned_report_json else None,
+        "business_classification": dataset.business_classification,
         "created_at": dataset.created_at.isoformat(),
+    }
+
+
+def _rebuild_after_schema_edit(
+    dataset: Dataset,
+    upload: Upload,
+    metadata: dict,
+) -> None:
+    df = _load_cleaned_df(upload)
+    stats = column_detector.summary(df, metadata)
+    plan = dashboard_planner.build_plan(
+        df,
+        metadata,
+        stats,
+        user_description=upload.user_description,
+    )
+    dataset.schema_json = json.dumps(metadata)
+    dataset.data_summary = json.dumps(stats)
+    dataset.dashboard_plan_json = json.dumps(plan)
+
+
+@router.patch("/{dataset_id}")
+def patch_dataset(
+    dataset_id: str,
+    body: DatasetPatchBody,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
+    if not row:
+        raise HTTPException(404, "Dataset not found")
+    dataset, upload = row
+
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+
+    schema_keys = {"primary_date_column", "primary_amount_column", "segment_columns"}
+    touch_schema = bool(schema_keys & set(updates.keys()))
+
+    if touch_schema:
+        metadata = json.loads(dataset.schema_json or "{}")
+        df = _load_cleaned_df(upload)
+        actual = set(df.columns)
+
+        if "primary_date_column" in updates:
+            col = updates["primary_date_column"]
+            if col:
+                if col not in actual:
+                    raise HTTPException(400, f"Unknown column: {col}")
+                metadata["date_columns"] = [col]
+            else:
+                metadata["date_columns"] = []
+
+        if "primary_amount_column" in updates:
+            col = updates["primary_amount_column"]
+            if col:
+                if col not in actual:
+                    raise HTTPException(400, f"Unknown column: {col}")
+                metadata["revenue_columns"] = [col]
+                nums = [n for n in (metadata.get("numeric_columns") or []) if n != col]
+                metadata["numeric_columns"] = nums
+            else:
+                metadata["revenue_columns"] = []
+
+        if "segment_columns" in updates:
+            segs = updates["segment_columns"] or []
+            for s in segs:
+                if s not in actual:
+                    raise HTTPException(400, f"Unknown segment column: {s}")
+            metadata["category_columns"] = list(segs)
+
+        _rebuild_after_schema_edit(dataset, upload, metadata)
+
+    if "business_classification" in updates:
+        cid = updates["business_classification"]
+        if cid is not None:
+            if cid not in ALLOWED_CLASSIFICATION_IDS:
+                raise HTTPException(400, "Invalid business classification")
+            dataset.business_classification = cid
+
+    db.commit()
+    db.refresh(dataset)
+
+    return {
+        "id": dataset.id,
+        "business_classification": dataset.business_classification,
+        "business_classification_label": CLASSIFICATIONS.get(
+            dataset.business_classification or "", "General dataset"
+        ),
+        "schema_updated": touch_schema,
     }
 
 
@@ -71,14 +186,13 @@ def get_preview(
     dataset_id: str,
     n: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
-    if not upload:
-        raise HTTPException(404, "Upload not found")
+    dataset, upload = row
 
     df = _load_cleaned_df(upload)
 
@@ -96,12 +210,16 @@ def get_preview(
 
 
 @router.delete("/{dataset_id}")
-def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
+def delete_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
+    dataset, upload = row
 
     db.query(ChatMessage).filter(ChatMessage.dataset_id == dataset_id).delete()
     db.query(Analysis).filter(Analysis.dataset_id == dataset_id).delete()
@@ -127,7 +245,6 @@ def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
 
 file_processor = FileProcessor()
 data_cleaner = DataCleaner()
-column_detector = ColumnDetector()
 
 
 @router.post("/{dataset_id}/append")
@@ -135,14 +252,13 @@ def append_to_dataset(
     dataset_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
-    if not upload:
-        raise HTTPException(404, "Upload not found")
+    dataset, upload = row
 
     ext = Path(file.filename or "").suffix.lower()
     if ext not in settings.ALLOWED_EXTENSIONS:

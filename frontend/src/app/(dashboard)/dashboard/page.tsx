@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 } from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
 import { api } from "@/lib/api";
+import { useWorkspace } from "@/lib/workspace-context";
 import {
   parseWorkspaceAnalysis,
   buildMetricSlots,
@@ -35,6 +36,9 @@ import {
   primaryRecommendation,
   type WorkspaceAnalysis,
 } from "@/lib/overview-briefing";
+import { buildWorkspaceAiTraceContext } from "@/lib/traceability";
+import { buildWorkspaceMetricSlotDetails } from "@/lib/kpi-drill-down";
+import { KpiDetailsSheet } from "@/components/dashboard/kpi-details-sheet";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -102,6 +106,7 @@ function TrendBadge({ trend }: { trend: "up" | "down" | "stable" | null }) {
 }
 
 export default function OverviewPage() {
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [appendTarget, setAppendTarget] = useState<{
@@ -111,14 +116,29 @@ export default function OverviewPage() {
   /** Steps forward at inferred frequency (day / week / month); max 366 on API. */
   const [outlookPeriods, setOutlookPeriods] = useState(90);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["overview"],
+  const overviewEnabled =
+    !workspaceLoading && Boolean(activeWorkspace?.id);
+
+  const {
+    data,
+    isPending,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["overview", activeWorkspace?.id ?? "none"],
     queryFn: () => api.getOverview(),
+    enabled: overviewEnabled,
   });
 
+  /** True while the overview request is actively in flight (not when the query is disabled). */
+  const overviewLoading = overviewEnabled && isPending && isFetching;
+
   const overviewAnalysis = useQuery({
-    queryKey: ["overview-analysis"],
+    queryKey: ["overview-analysis", activeWorkspace?.id ?? "none"],
     queryFn: () => api.getOverviewAnalysis(),
+    enabled: overviewEnabled,
   });
 
   const runOverviewAnalysis = useMutation({
@@ -131,6 +151,10 @@ export default function OverviewPage() {
   const forecastMutation = useMutation({
     mutationFn: () => api.runOverviewForecast(outlookPeriods),
   });
+
+  useEffect(() => {
+    forecastMutation.reset();
+  }, [activeWorkspace?.id, forecastMutation.reset]);
 
   const appendMutation = useMutation({
     mutationFn: ({ datasetId, file }: { datasetId: string; file: File }) =>
@@ -160,7 +184,56 @@ export default function OverviewPage() {
     return buildMetricSlots(data.kpis, analysis);
   }, [data?.kpis, analysis]);
 
-  if (isLoading) {
+  const workspaceAiTraceContext = useMemo(
+    () =>
+      buildWorkspaceAiTraceContext({
+        datasets: data?.datasets ?? [],
+        totalRows: data?.total_rows ?? 0,
+      }),
+    [data?.datasets, data?.total_rows]
+  );
+
+  if (workspaceLoading) {
+    return (
+      <div className="space-y-10 max-w-6xl">
+        <Skeleton className="h-9 w-64" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-48 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!activeWorkspace?.id) {
+    return (
+      <div className="space-y-6 max-w-6xl">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Business Health
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Choose a workspace in the sidebar to load your overview.
+          </p>
+        </div>
+        <Card className="border-slate-200/80 shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
+            <p className="text-sm text-muted-foreground mb-4 max-w-md">
+              No active workspace is set. Select one from the workspace menu above,
+              or create a new workspace if you have not yet.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              If you just signed in, try refreshing the page after a moment.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (overviewLoading) {
     return (
       <div className="space-y-10 max-w-6xl">
         <Skeleton className="h-9 w-64" />
@@ -180,6 +253,35 @@ export default function OverviewPage() {
             <Skeleton key={i} className="h-72 rounded-xl" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6 max-w-6xl">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Business Health
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            We could not load the workspace overview.
+          </p>
+        </div>
+        <Card className="border-destructive/30 shadow-sm">
+          <CardContent className="py-8 space-y-4">
+            <p className="text-sm text-destructive">
+              {error instanceof Error ? error.message : "Request failed"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Check that the API is running and your session is valid. If you recently changed
+              workspaces, try again.
+            </p>
+            <Button type="button" size="sm" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -225,7 +327,7 @@ export default function OverviewPage() {
     overviewAnalysis.isLoading || runOverviewAnalysis.isPending;
 
   const noInsightCopy =
-    "Run Generate insights to synthesize this from your sources.";
+    "Run workspace AI analysis to turn your sources into a decision-ready read.";
 
   return (
     <div className="space-y-10 max-w-6xl pb-10">
@@ -267,10 +369,10 @@ export default function OverviewPage() {
             disabled={analysisBusy}
           >
             {runOverviewAnalysis.isPending
-              ? "Generating insights..."
+              ? "Analyzing workspace…"
               : analysisReady
-                ? "Refresh insights"
-                : "Generate insights"}
+                ? "Re-run analysis"
+                : "Run workspace analysis"}
           </Button>
         </div>
       </header>
@@ -357,6 +459,18 @@ export default function OverviewPage() {
                   Source · {slot.sourceName}
                 </p>
               )}
+              <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <KpiDetailsSheet
+                  metricLabel={slot.label}
+                  details={buildWorkspaceMetricSlotDetails({
+                    label: slot.label,
+                    sourceName: slot.sourceName,
+                    note: slot.note,
+                    totalRowsWorkspace: data.total_rows,
+                    totalDatasets: data.total_datasets,
+                  })}
+                />
+              </div>
             </div>
           ))}
           <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40">
@@ -376,6 +490,18 @@ export default function OverviewPage() {
             <p className="mt-2 text-[11px] text-slate-400">
               Rows ingested across the workspace
             </p>
+            <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
+              <KpiDetailsSheet
+                metricLabel="Record volume"
+                details={buildWorkspaceMetricSlotDetails({
+                  label: "Record volume",
+                  sourceName: null,
+                  note: "Sum of row_count from all datasets in this workspace.",
+                  totalRowsWorkspace: data.total_rows,
+                  totalDatasets: data.total_datasets,
+                })}
+              />
+            </div>
           </div>
         </div>
         <p className="text-xs text-slate-400 max-w-2xl">
@@ -399,8 +525,8 @@ export default function OverviewPage() {
                 ) : (
                   <span className="text-slate-400">
                     {analysisBusy
-                      ? "Synthesizing a concise read of your workspace…"
-                      : `Generate insights for a plain-language summary of performance across your ${data.total_datasets} source${data.total_datasets !== 1 ? "s" : ""}.`}
+                      ? "Building a concise workspace read…"
+                      : `Run workspace analysis for a concise performance read across your ${data.total_datasets} source${data.total_datasets !== 1 ? "s" : ""}.`}
                   </span>
                 )}
               </p>
@@ -415,8 +541,8 @@ export default function OverviewPage() {
                 ) : (
                   <span className="text-slate-400">
                     {analysisBusy
-                      ? "Prioritizing the signal that should drive your next decision…"
-                      : "Context for impact and tradeoffs will appear here after the first insights run."}
+                      ? "Prioritizing what should drive the next decision…"
+                      : "Commercial impact and tradeoffs land here after the first workspace analysis run."}
                   </span>
                 )}
               </p>
@@ -432,7 +558,7 @@ export default function OverviewPage() {
                   <span className="text-slate-400 font-normal">
                     {analysisBusy
                       ? "Selecting the highest-leverage next step…"
-                      : "Your top recommended move will show here once insights are generated."}
+                      : "Your highest-leverage move will show here after analysis runs."}
                   </span>
                 )}
               </p>
@@ -650,7 +776,7 @@ export default function OverviewPage() {
       {analysisReady && overviewAnalysis.data?.result_json && (
         <details className="group rounded-2xl border border-slate-200/60 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/20">
           <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
-            <span>Full analysis detail</span>
+            <span>Full AI analysis</span>
             <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">
               ▾
             </span>
@@ -665,12 +791,13 @@ export default function OverviewPage() {
                 disabled={runOverviewAnalysis.isPending}
               >
                 {runOverviewAnalysis.isPending
-                  ? "Refreshing..."
-                  : "Refresh insights"}
+                  ? "Re-running…"
+                  : "Re-run analysis"}
               </Button>
             </div>
             <AnalysisPanel
               result={overviewAnalysis.data!.result_json as AnalysisResult}
+              traceContext={workspaceAiTraceContext}
             />
           </div>
         </details>

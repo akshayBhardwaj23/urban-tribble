@@ -92,6 +92,92 @@ def _finalize_xy_chart_data(
     return [{"x": merged[i]["x"], "y": ys[i]} for i in range(len(merged))]
 
 
+def build_kpi_context_dict(
+    *,
+    source_file: str,
+    row_count: int,
+    timeframe_meta: dict[str, Any],
+) -> dict[str, Any]:
+    """Shared context attached to every KPI for UI drill-down."""
+    applied = bool(timeframe_meta.get("applied"))
+    start = timeframe_meta.get("start")
+    end = timeframe_meta.get("end")
+    date_col = timeframe_meta.get("date_column")
+    if applied and (start or end):
+        dr = f"{start or '…'} → {end or '…'}"
+    else:
+        dr = "Full ingested range (no date filter on this view)"
+    return {
+        "source_file": source_file,
+        "row_count": row_count,
+        "date_column": date_col,
+        "date_range_label": dr,
+    }
+
+
+def _build_kpi_drill_down(
+    title: str,
+    column: str,
+    agg: str,
+    ctx: dict[str, Any],
+) -> dict[str, Any]:
+    source_file = str(ctx.get("source_file") or "Dataset")
+    row_count = int(ctx.get("row_count") or 0)
+    date_column = ctx.get("date_column")
+    date_range_label = str(ctx.get("date_range_label") or "")
+
+    if column == "__row_count__":
+        return {
+            "metric_title": title,
+            "definition": (
+                f'"{title}" is the row count of the filtered dataframe used for KPIs and charts.'
+            ),
+            "formula_summary": "pandas: len(df) after the date window filter (if any).",
+            "source_file": source_file,
+            "columns_used": [],
+            "aggregation": "count",
+            "source_column": None,
+            "date_column": date_column,
+            "date_range_label": date_range_label,
+            "row_count": row_count,
+        }
+
+    if column == "__column_count__":
+        return {
+            "metric_title": title,
+            "definition": (
+                f'"{title}" is the number of columns in the cleaned parquet for this source.'
+            ),
+            "formula_summary": "pandas: len(df.columns) on the filtered frame.",
+            "source_file": source_file,
+            "columns_used": [],
+            "aggregation": "count",
+            "source_column": None,
+            "date_column": date_column,
+            "date_range_label": date_range_label,
+            "row_count": row_count,
+        }
+
+    agg_l = str(agg or "sum").lower()
+    return {
+        "metric_title": title,
+        "definition": (
+            f'"{title}" is the {agg_l} of `{column}` across {row_count:,} rows '
+            "in the filtered dataframe."
+        ),
+        "formula_summary": (
+            f"pandas: df['{column}'].{agg_l}() with numeric coercion; nulls excluded per aggregation."
+        ),
+        "source_file": source_file,
+        "columns_used": [column],
+        "aggregation": agg_l,
+        "source_column": column,
+        "date_column": date_column,
+        "date_range_label": date_range_label,
+        "row_count": row_count,
+    }
+
+
 def compute_kpi_value(df: pd.DataFrame, column: str, agg: str) -> Optional[float]:
     if column == "__row_count__":
         return float(len(df))
@@ -114,8 +200,19 @@ def compute_kpi_value(df: pd.DataFrame, column: str, agg: str) -> Optional[float
     return None
 
 
-def fallback_ui_kpis(df: pd.DataFrame, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+def fallback_ui_kpis(
+    df: pd.DataFrame,
+    metadata: dict[str, Any],
+    *,
+    kpi_context: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
     """KPI tiles aligned with filtered dashboard rows (legacy / no AI plan)."""
+    ctx = kpi_context or {
+        "source_file": "Dataset",
+        "row_count": len(df),
+        "date_column": None,
+        "date_range_label": "Full ingested range (no date filter on this view)",
+    }
     out: list[dict[str, Any]] = []
     for col in metadata.get("revenue_columns", []) or []:
         if col not in df.columns:
@@ -127,28 +224,40 @@ def fallback_ui_kpis(df: pd.DataFrame, metadata: dict[str, Any]) -> list[dict[st
         subtitle = None
         if mean is not None and not pd.isna(mean):
             subtitle = f"Avg: {_format_kpi_number(float(mean), 'mean', False)}"
+        title = f"Total {col.replace('_', ' ').title()}"
         out.append({
             "id": f"total_{col}",
-            "title": f"Total {col.replace('_', ' ').title()}",
+            "title": title,
             "value": float(total),
             "formatted": _format_kpi_number(float(total), "sum", False),
             "subtitle": subtitle,
+            "column": col,
+            "aggregation": "sum",
+            "details": _build_kpi_drill_down(title, col, "sum", ctx),
         })
 
     rc = compute_kpi_value(df, "__row_count__", "count")
     if rc is not None:
+        title = "Rows"
         out.append({
             "id": "rows",
-            "title": "Rows",
+            "title": title,
             "value": rc,
             "formatted": _format_kpi_number(float(rc), "count", True),
+            "column": "__row_count__",
+            "aggregation": "count",
+            "details": _build_kpi_drill_down(title, "__row_count__", "count", ctx),
         })
 
+    title = "Columns"
     out.append({
         "id": "columns",
-        "title": "Columns",
+        "title": title,
         "value": float(len(df.columns)),
         "formatted": _format_kpi_number(float(len(df.columns)), "count", True),
+        "column": "__column_count__",
+        "aggregation": "count",
+        "details": _build_kpi_drill_down(title, "__column_count__", "count", ctx),
     })
     return out
 
@@ -160,10 +269,18 @@ def execute_plan(
     daily_metrics: Optional[pd.DataFrame] = None,
     date_col: Optional[str] = None,
     revenue_col: Optional[str] = None,
+    kpi_context: Optional[dict[str, Any]] = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Turn a stored dashboard plan into KPI payloads and Recharts-ready chart payloads."""
     kpi_specs = plan.get("kpis") or []
     chart_specs = plan.get("charts") or []
+
+    ctx = kpi_context or {
+        "source_file": "Dataset",
+        "row_count": len(df),
+        "date_column": None,
+        "date_range_label": "Full ingested range (no date filter on this view)",
+    }
 
     kpis_out: list[dict[str, Any]] = []
     for k in kpi_specs:
@@ -181,11 +298,15 @@ def execute_plan(
             agg,
             col == "__row_count__",
         )
+        col_s = str(col)
         kpis_out.append({
             "id": kid,
             "title": title,
             "value": val,
             "formatted": formatted,
+            "column": col_s,
+            "aggregation": agg,
+            "details": _build_kpi_drill_down(title, col_s, agg, ctx),
         })
 
     charts_out: list[dict[str, Any]] = []

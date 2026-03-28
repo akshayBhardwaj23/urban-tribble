@@ -56,20 +56,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const syncUser = useCallback(async () => {
     if (!session?.user?.email) return null;
 
-    const res = await fetch(`${API_BASE}/api/auth/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: session.user.email,
-        name: session.user.name,
-        image: session.user.image,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: session.user.email,
+          name: session.user.name,
+          image: session.user.image,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!res.ok) return null;
-    const data: UserProfile = await res.json();
-    setProfile(data);
-    return data;
+      if (!res.ok) return null;
+      const data: UserProfile = await res.json();
+      setProfile(data);
+      return data;
+    } catch {
+      /* Timeout (AbortError), offline, or bad JSON — avoid unhandled rejections */
+      return null;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   }, [session?.user?.email, session?.user?.name, session?.user?.image]);
 
   const switchWorkspace = useCallback(
@@ -115,7 +125,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (status === "loading") return;
 
     if (status === "authenticated" && session?.user?.email) {
-      syncUser().finally(() => setLoading(false));
+      void syncUser().finally(() => setLoading(false));
     } else {
       setLoading(false);
     }

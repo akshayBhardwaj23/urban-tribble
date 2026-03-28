@@ -17,10 +17,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ChevronDown } from "lucide-react";
 
 export function WorkspaceSwitcher() {
   const { activeWorkspace, workspaces, switchWorkspace, createWorkspace } =
     useWorkspace();
+  const showChevron = workspaces.length > 1;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -43,14 +45,22 @@ export function WorkspaceSwitcher() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="w-full text-left rounded-md px-3 py-2 hover:bg-accent transition-colors outline-none focus:ring-2 focus:ring-ring">
-          <div className="flex flex-col items-start gap-0.5 overflow-hidden">
-            <span className="text-xs text-muted-foreground font-normal">
-              Workspace
-            </span>
-            <span className="text-sm font-medium truncate w-full">
-              {activeWorkspace?.name ?? "Select workspace"}
-            </span>
+        <DropdownMenuTrigger className="w-full text-left rounded-md px-3 py-2 hover:bg-accent transition-colors outline-none focus:ring-2 focus:ring-ring data-[state=open]:[&_.workspace-chevron]:rotate-180">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-col items-start gap-0.5 overflow-hidden flex-1 min-w-0">
+              <span className="text-xs text-muted-foreground font-normal">
+                Workspace
+              </span>
+              <span className="text-sm font-medium truncate w-full">
+                {activeWorkspace?.name ?? "Select workspace"}
+              </span>
+            </div>
+            {showChevron ? (
+              <ChevronDown
+                className="workspace-chevron h-4 w-4 shrink-0 text-muted-foreground opacity-70 transition-transform duration-200"
+                aria-hidden
+              />
+            ) : null}
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-52">

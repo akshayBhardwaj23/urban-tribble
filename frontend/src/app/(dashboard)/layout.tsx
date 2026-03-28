@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
+import { WorkspaceQueryInvalidator } from "@/components/workspace-query-invalidator";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ export default function DashboardLayout({
 
   return (
     <AuthGuard>
+      <WorkspaceQueryInvalidator />
       <div className="flex h-screen overflow-hidden">
         <aside
           className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-white/50 bg-white/65 p-4 shadow-[4px_0_32px_-12px_rgba(99,102,241,0.08)] backdrop-blur-xl"

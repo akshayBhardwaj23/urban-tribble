@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,6 @@ interface DatasetListItem {
   column_count: number | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -30,11 +28,16 @@ export default function ChatPage() {
 
   const { data: datasets, isLoading: loadingDatasets } = useQuery({
     queryKey: ["datasets-list"],
-    queryFn: () =>
-      fetch(`${API_BASE}/api/datasets`).then(
-        (r) => r.json() as Promise<DatasetListItem[]>
-      ),
+    queryFn: () => api.listDatasets() as Promise<DatasetListItem[]>,
   });
+
+  useEffect(() => {
+    if (!datasets?.length || !selectedDataset) return;
+    if (!datasets.some((d) => d.id === selectedDataset)) {
+      setSelectedDataset(null);
+      setMessages([]);
+    }
+  }, [datasets, selectedDataset]);
 
   const chatMutation = useMutation({
     mutationFn: (question: string) => api.chat(selectedDataset!, question),

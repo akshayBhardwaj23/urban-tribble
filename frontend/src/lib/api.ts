@@ -1,3 +1,5 @@
+import type { IngestionProfile } from "@/lib/ingestion";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 let _userEmail: string | null = null;
@@ -22,7 +24,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(error.detail || "Request failed");
+    const detail = error.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail
+              .map((d: { msg?: string; loc?: unknown }) =>
+                typeof d === "string" ? d : d?.msg ?? JSON.stringify(d)
+              )
+              .join("; ")
+          : detail != null
+            ? String(detail)
+            : res.statusText;
+    throw new Error(message || "Request failed");
   }
 
   return res.json();
@@ -38,13 +53,40 @@ export const api = {
     return request<{
       id: string;
       filename: string;
+      file_type: string;
       status: string;
       dataset_id: string;
       row_count: number;
       column_count: number;
-      cleaning_report: { steps: string[]; original_shape: number[]; cleaned_shape: number[] };
+      cleaning_report: {
+        steps: string[];
+        original_shape: number[];
+        cleaned_shape: number[];
+      };
+      ingestion: IngestionProfile;
+      all_columns: string[];
     }>("/api/uploads", { method: "POST", body: formData });
   },
+
+  patchDataset: (
+    datasetId: string,
+    body: {
+      business_classification?: string;
+      primary_date_column?: string | null;
+      primary_amount_column?: string | null;
+      segment_columns?: string[];
+    }
+  ) =>
+    request<{
+      id: string;
+      business_classification: string | null;
+      business_classification_label: string;
+      schema_updated?: boolean;
+    }>(`/api/datasets/${datasetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   getUpload: (id: string) =>
     request<{
@@ -61,6 +103,11 @@ export const api = {
         id: string;
         upload_id: string;
         name: string;
+        row_count: number | null;
+        column_count: number | null;
+        status: string;
+        user_description: string | null;
+        business_classification: string | null;
         created_at: string;
       }[]
     >("/api/datasets"),
@@ -79,6 +126,7 @@ export const api = {
       } | null;
       data_summary: Record<string, unknown> | null;
       cleaned_report: { steps: string[]; original_shape: number[]; cleaned_shape: number[] } | null;
+      business_classification: string | null;
       created_at: string;
     }>(`/api/datasets/${id}`),
 
@@ -138,7 +186,11 @@ export const api = {
         value: number;
         formatted: string;
         subtitle?: string | null;
+        column?: string;
+        aggregation?: string;
+        details?: Record<string, unknown>;
       }[];
+      filtered_row_count?: number;
       charts: {
         id: string;
         title: string;

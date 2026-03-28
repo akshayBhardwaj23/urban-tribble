@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,12 +25,26 @@ import {
 import { AutoChart } from "@/components/charts/auto-chart";
 import { DashboardKpiTile } from "@/components/dashboard/kpi-tile";
 import { ForecastChart } from "@/components/charts/forecast-chart";
-import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
+import {
+  AnalysisPanel,
+  type AnalysisResult,
+} from "@/components/dashboard/analysis-panel";
 import {
   TimeframeToolbar,
   type TimeframeValue,
 } from "@/components/dashboard/timeframe-toolbar";
 import { api } from "@/lib/api";
+import { useWorkspace } from "@/lib/workspace-context";
+import {
+  buildDatasetAiTraceContext,
+  buildDatasetDashboardTraceContext,
+} from "@/lib/traceability";
+import { TraceCollapsible } from "@/components/trust/analysis-trace";
+import {
+  buildHeuristicKpiDetails,
+  buildStaticSummaryKpiDetails,
+  parseKpiDrillDown,
+} from "@/lib/kpi-drill-down";
 
 type DashboardRequest =
   | { kind: "all" }
@@ -48,6 +62,7 @@ function dashboardRequestToApi(
 export default function DatasetPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { activeWorkspace } = useWorkspace();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,6 +121,10 @@ export default function DatasetPage() {
   const forecastMutation = useMutation({
     mutationFn: () => api.runForecast(params.id),
   });
+
+  useEffect(() => {
+    forecastMutation.reset();
+  }, [activeWorkspace?.id, params.id, forecastMutation.reset]);
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteDataset(params.id),
@@ -184,6 +203,67 @@ export default function DatasetPage() {
 
   const datasetDateMax = dashboardData.data?.date_bounds?.max ?? null;
 
+  const dashboardTraceContext = useMemo(
+    () =>
+      buildDatasetDashboardTraceContext({
+        datasetName: data.name,
+        datasetId: data.id,
+        rowCount: typeof summary?.rows === "number" ? summary.rows : null,
+        columnCount: typeof summary?.columns === "number" ? summary.columns : null,
+        schema,
+        dateRangeLabel: resolvedTfRange
+          ? `${resolvedTfRange.start} → ${resolvedTfRange.end}`
+          : null,
+        timeframeWarning: timeframeWarn,
+      }),
+    [
+      data.name,
+      data.id,
+      summary?.rows,
+      summary?.columns,
+      schema,
+      resolvedTfRange,
+      timeframeWarn,
+    ]
+  );
+
+  const kpiDrillContext = useMemo(() => {
+    const tf = dashboardData.data?.timeframe;
+    const dateRangeLabel =
+      tf?.applied && (tf?.start || tf?.end)
+        ? `${tf.start ?? "…"} → ${tf.end ?? "…"}`
+        : "Full ingested range (no date filter on this view)";
+    const dateColumn = tf?.date_column ?? null;
+    const filteredRowCount =
+      dashboardData.data?.filtered_row_count ??
+      (typeof summary?.rows === "number" ? summary.rows : 0);
+    return { dateRangeLabel, dateColumn, filteredRowCount };
+  }, [
+    dashboardData.data?.timeframe,
+    dashboardData.data?.filtered_row_count,
+    summary?.rows,
+  ]);
+
+  const aiTraceContext = useMemo(
+    () =>
+      buildDatasetAiTraceContext({
+        datasetName: data.name,
+        datasetId: data.id,
+        rowCount: typeof summary?.rows === "number" ? summary.rows : null,
+        columnCount: typeof summary?.columns === "number" ? summary.columns : null,
+        schema,
+        cleaningStepSummaries: data.cleaned_report?.steps?.slice(0, 4),
+      }),
+    [
+      data.name,
+      data.id,
+      summary?.rows,
+      summary?.columns,
+      schema,
+      data.cleaned_report?.steps,
+    ]
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -212,8 +292,8 @@ export default function DatasetPage() {
               disabled={runAnalysis.isPending}
             >
               {runAnalysis.isPending
-                ? "Generating insights..."
-                : "Generate insights"}
+                ? "Analyzing…"
+                : "Run AI analysis"}
             </Button>
           )}
           <Button
@@ -257,23 +337,38 @@ export default function DatasetPage() {
       {/* KPI row — HR-style tiles with gradient trend orbs */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {(dashboardData.data?.kpis?.length ?? 0) > 0
-          ? dashboardData.data!.kpis.map((kpi, i) => (
-              <DashboardKpiTile
-                key={kpi.id}
-                index={i}
-                title={kpi.title}
-                value={kpi.formatted}
-                subtitle={kpi.subtitle ?? undefined}
-              />
-            ))
+          ? dashboardData.data!.kpis.map((kpi, i) => {
+              const details =
+                parseKpiDrillDown(kpi.details) ??
+                buildHeuristicKpiDetails({
+                  title: kpi.title,
+                  datasetName: data.name,
+                  column: kpi.column ?? null,
+                  aggregation: kpi.aggregation ?? null,
+                  filteredRowCount: kpiDrillContext.filteredRowCount,
+                  dateRangeLabel: kpiDrillContext.dateRangeLabel,
+                  dateColumn: kpiDrillContext.dateColumn,
+                });
+              return (
+                <DashboardKpiTile
+                  key={kpi.id}
+                  index={i}
+                  title={kpi.title}
+                  value={kpi.formatted}
+                  subtitle={kpi.subtitle ?? undefined}
+                  details={details}
+                />
+              );
+            })
           : schema?.revenue_columns.map((col, i) => {
               const total = summary?.[`${col}_total`];
               const mean = summary?.[`${col}_mean`];
+              const title = `Total ${col.replace(/_/g, " ")}`;
               return (
                 <DashboardKpiTile
                   key={col}
                   index={i}
-                  title={`Total ${col.replace(/_/g, " ")}`}
+                  title={title}
                   value={
                     total != null
                       ? Number(total).toLocaleString(undefined, {
@@ -288,6 +383,15 @@ export default function DatasetPage() {
                         })}`
                       : undefined
                   }
+                  details={buildStaticSummaryKpiDetails({
+                    title,
+                    datasetName: data.name,
+                    column: col,
+                    aggregationLabel: "SUM (ingest summary)",
+                    formula_summary: `Stored aggregate data_summary['${col}_total'] on the full cleaned file.`,
+                    scopeNote:
+                      "Uses the saved summary from import, not the live filtered dataframe. Change the date range above once dashboard KPIs load, or re-open after refresh.",
+                  })}
                 />
               );
             })}
@@ -297,20 +401,42 @@ export default function DatasetPage() {
               index={100}
               title="Rows"
               value={Number(summary?.rows ?? 0).toLocaleString()}
+              details={buildStaticSummaryKpiDetails({
+                title: "Rows",
+                datasetName: data.name,
+                aggregationLabel: "count",
+                formula_summary: "data_summary.rows (or equivalent) from dataset ingest.",
+                scopeNote:
+                  "Row count reflects the full cleaned file at ingest—not the filtered slice used for charts.",
+              })}
             />
             <DashboardKpiTile
               index={101}
               title="Columns"
               value={Number(summary?.columns ?? 0).toLocaleString()}
+              details={buildStaticSummaryKpiDetails({
+                title: "Columns",
+                datasetName: data.name,
+                aggregationLabel: "count",
+                formula_summary: "data_summary.columns from dataset ingest.",
+                scopeNote:
+                  "Column count is schema-wide at ingest; independent of the dashboard date filter.",
+              })}
             />
           </>
         ) : null}
       </div>
 
+      <TraceCollapsible
+        context={dashboardTraceContext}
+        summaryHint={`${data.name} · ${resolvedTfRange ? `${resolvedTfRange.start} → ${resolvedTfRange.end}` : "all periods"}`}
+        className="mt-1"
+      />
+
       <Tabs defaultValue="dashboard">
         <TabsList className="dashboard-pill-tabs">
           <TabsTrigger value="dashboard">Business Health</TabsTrigger>
-          <TabsTrigger value="analysis">Insights</TabsTrigger>
+          <TabsTrigger value="analysis">AI analysis</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
           <TabsTrigger value="data">Preview</TabsTrigger>
           <TabsTrigger value="details">Schema</TabsTrigger>
@@ -343,21 +469,24 @@ export default function DatasetPage() {
           {analysis.isLoading ? (
             <Skeleton className="h-64" />
           ) : analysis.data?.result_json ? (
-            <AnalysisPanel result={analysis.data.result_json} />
+            <AnalysisPanel
+              result={analysis.data.result_json as AnalysisResult}
+              traceContext={aiTraceContext}
+            />
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Generate a structured briefing—drivers, risks, and anomalies—for
-                  this source.
+                <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+                  Run AI analysis for takeaways tied to revenue, cost, and risk—plus
+                  a clear next move—not a narration of what’s in each column.
                 </p>
                 <Button
                   onClick={() => runAnalysis.mutate()}
                   disabled={runAnalysis.isPending}
                 >
                   {runAnalysis.isPending
-                    ? "Generating insights..."
-                    : "Generate insights"}
+                    ? "Analyzing…"
+                    : "Run AI analysis"}
                 </Button>
                 {runAnalysis.isError && (
                   <p className="text-sm text-destructive mt-2">

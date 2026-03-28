@@ -34,10 +34,7 @@ export default function DatasetsPage() {
 
   const { data: datasets, isLoading } = useQuery({
     queryKey: ["datasets"],
-    queryFn: () =>
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/datasets`
-      ).then((r) => r.json() as Promise<DatasetListItem[]>),
+    queryFn: () => api.listDatasets() as Promise<DatasetListItem[]>,
   });
 
   const deleteMutation = useMutation({

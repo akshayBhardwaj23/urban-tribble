@@ -1,3 +1,8 @@
+import {
+  normalizeInsightsList,
+  type NormalizedInsight,
+} from "@/lib/analysis-normalize";
+
 /** Shape returned from workspace overview analysis (AI). */
 export interface WorkspaceAnalysis {
   executive_summary: string;
@@ -7,11 +12,7 @@ export interface WorkspaceAnalysis {
     trend: "up" | "down" | "stable";
     note: string;
   }[];
-  insights: {
-    title: string;
-    description: string;
-    type: "positive" | "negative" | "neutral";
-  }[];
+  insights: NormalizedInsight[];
   anomalies: { description: string; severity: "high" | "medium" | "low" }[];
   recommendations: string[];
 }
@@ -32,7 +33,7 @@ export function parseWorkspaceAnalysis(raw: unknown): WorkspaceAnalysis | null {
   const summary = o.executive_summary;
   if (typeof summary !== "string") return null;
   const key_metrics = Array.isArray(o.key_metrics) ? o.key_metrics : [];
-  const insights = Array.isArray(o.insights) ? o.insights : [];
+  const insights = normalizeInsightsList(o.insights);
   const anomalies = Array.isArray(o.anomalies) ? o.anomalies : [];
   const recommendations = Array.isArray(o.recommendations)
     ? o.recommendations.filter((x): x is string => typeof x === "string")
@@ -40,7 +41,7 @@ export function parseWorkspaceAnalysis(raw: unknown): WorkspaceAnalysis | null {
   return {
     executive_summary: summary,
     key_metrics: key_metrics.filter(isKeyMetric),
-    insights: insights.filter(isInsight),
+    insights,
     anomalies: anomalies.filter(isAnomaly),
     recommendations,
   };
@@ -53,16 +54,6 @@ function isKeyMetric(x: unknown): x is WorkspaceAnalysis["key_metrics"][0] {
     typeof m.label === "string" &&
     typeof m.value === "string" &&
     (m.trend === "up" || m.trend === "down" || m.trend === "stable")
-  );
-}
-
-function isInsight(x: unknown): x is WorkspaceAnalysis["insights"][0] {
-  if (!x || typeof x !== "object") return false;
-  const i = x as Record<string, unknown>;
-  return (
-    typeof i.title === "string" &&
-    typeof i.description === "string" &&
-    (i.type === "positive" || i.type === "negative" || i.type === "neutral")
   );
 }
 
@@ -204,12 +195,12 @@ export function keyChangeLine(analysis: WorkspaceAnalysis | null): string {
   }
   const neutral = analysis.insights.find((i) => i.type === "neutral");
   if (neutral) {
-    const bit = `${neutral.title} — ${neutral.description}`;
+    const bit = `${neutral.finding} — ${neutral.why_it_matters}`;
     return bit.length > 240 ? `${bit.slice(0, 237)}…` : bit;
   }
   const any = analysis.insights[0];
   if (any) {
-    const bit = `${any.title} — ${any.description}`;
+    const bit = `${any.finding} — ${any.why_it_matters}`;
     return bit.length > 240 ? `${bit.slice(0, 237)}…` : bit;
   }
   return "";
@@ -219,7 +210,7 @@ export function biggestRiskLine(analysis: WorkspaceAnalysis | null): string {
   if (!analysis) return "";
   const neg = analysis.insights.find((i) => i.type === "negative");
   if (neg) {
-    const bit = `${neg.title}: ${neg.description}`;
+    const bit = `${neg.finding}: ${neg.why_it_matters}`;
     return bit.length > 240 ? `${bit.slice(0, 237)}…` : bit;
   }
   const hi = analysis.anomalies.find((a) => a.severity === "high");
@@ -236,7 +227,7 @@ export function biggestOpportunityLine(
   if (!analysis) return "";
   const pos = analysis.insights.find((i) => i.type === "positive");
   if (pos) {
-    const bit = `${pos.title}: ${pos.description}`;
+    const bit = `${pos.finding}: ${pos.why_it_matters}`;
     return bit.length > 240 ? `${bit.slice(0, 237)}…` : bit;
   }
   const rec = analysis.recommendations[0];
@@ -251,7 +242,7 @@ export function whyItMattersLine(analysis: WorkspaceAnalysis | null): string {
   );
   const pick = priority ?? analysis.insights[0];
   if (!pick) return "";
-  return pick.description.trim();
+  return pick.why_it_matters.trim();
 }
 
 export function whatHappenedSummary(analysis: WorkspaceAnalysis | null): string {
@@ -263,6 +254,9 @@ export function primaryRecommendation(
   analysis: WorkspaceAnalysis | null
 ): string {
   if (!analysis) return "";
+  for (const ins of analysis.insights) {
+    if (ins.recommended_action?.trim()) return ins.recommended_action.trim();
+  }
   const r = analysis.recommendations[0];
   return r?.trim() ?? "";
 }

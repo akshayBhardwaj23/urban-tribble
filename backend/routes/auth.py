@@ -38,8 +38,16 @@ def sync_user(req: SyncUserRequest, db: Session = Depends(get_db)):
         db.refresh(user)
 
     workspaces = (
-        db.query(Workspace).filter(Workspace.owner_id == user.id).all()
+        db.query(Workspace)
+        .filter(Workspace.owner_id == user.id)
+        .order_by(Workspace.created_at.asc())
+        .all()
     )
+
+    if not user.active_workspace_id and workspaces:
+        user.active_workspace_id = workspaces[0].id
+        db.commit()
+        db.refresh(user)
 
     return {
         "id": user.id,

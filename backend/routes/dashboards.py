@@ -7,13 +7,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.models import Dataset, Upload
+from deps import require_active_workspace
+from models.models import Dataset, Upload, User
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+)
 from services.daily_metrics import (
     compute_daily_metrics_for_dataset,
     daily_metrics_to_records,
     resolve_date_column,
 )
 from services.dashboard_executor import (
+    build_kpi_context_dict,
     daily_time_series_charts,
     execute_plan,
     fallback_ui_kpis,
@@ -68,14 +74,13 @@ def get_dashboard_data(
         description="Rolling window ending on the latest date in the file (overrides start/end)",
     ),
     db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
+    _, workspace_id = ws
+    row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
-    if not upload:
-        raise HTTPException(404, "Upload not found")
+    dataset, upload = row
 
     df = _load_cleaned_df(upload)
     metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
@@ -131,6 +136,12 @@ def get_dashboard_data(
         "date_column": date_col if timeframe_applied else None,
     }
 
+    kpi_ctx = build_kpi_context_dict(
+        source_file=dataset.name,
+        row_count=len(df),
+        timeframe_meta=timeframe_meta,
+    )
+
     daily_df, daily_date_col, daily_revenue_col = compute_daily_metrics_for_dataset(
         df, metadata
     )
@@ -152,6 +163,7 @@ def get_dashboard_data(
             daily_metrics=daily_df,
             date_col=daily_date_col,
             revenue_col=daily_revenue_col,
+            kpi_context=kpi_ctx,
         )
         if not charts:
             charts = legacy_charts(
@@ -170,6 +182,7 @@ def get_dashboard_data(
             "daily_aggregates": daily_aggregates,
             "timeframe": timeframe_meta,
             "date_bounds": date_bounds,
+            "filtered_row_count": len(df),
         }
 
     charts = legacy_charts(
@@ -179,7 +192,7 @@ def get_dashboard_data(
         primary_date=daily_date_col,
         primary_revenue=daily_revenue_col,
     )
-    kpis = fallback_ui_kpis(df, metadata)
+    kpis = fallback_ui_kpis(df, metadata, kpi_context=kpi_ctx)
     return {
         "dataset_id": dataset_id,
         "dataset_brief": None,
@@ -189,18 +202,18 @@ def get_dashboard_data(
         "daily_aggregates": daily_aggregates,
         "timeframe": timeframe_meta,
         "date_bounds": date_bounds,
+        "filtered_row_count": len(df),
     }
 
 
 @router.get("/overview")
-def get_overview(db: Session = Depends(get_db)):
+def get_overview(
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
     """Workspace-level overview aggregating data from all datasets."""
-    all_datasets = (
-        db.query(Dataset, Upload)
-        .join(Upload, Dataset.upload_id == Upload.id)
-        .order_by(Dataset.created_at.desc())
-        .all()
-    )
+    _, workspace_id = ws
+    all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
 
     if not all_datasets:
         return {

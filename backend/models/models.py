@@ -61,6 +61,7 @@ class Dataset(Base):
     data_summary = Column(Text, nullable=True)
     cleaned_report_json = Column(Text, nullable=True)
     dashboard_plan_json = Column(Text, nullable=True)
+    business_classification = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

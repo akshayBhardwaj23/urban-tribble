@@ -10,7 +10,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.models import Analysis, Dataset, Upload
+from deps import require_active_workspace
+from models.models import Analysis, Dataset, Upload, User
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+    latest_workspace_overview_analysis,
+)
 from services.ai_analyzer import AIAnalyzer
 from services.forecaster import Forecaster
 
@@ -32,12 +38,16 @@ class ForecastRequest(BaseModel):
 
 
 @router.post("/run")
-def run_analysis(req: RunAnalysisRequest, db: Session = Depends(get_db)):
-    dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
-    if not dataset:
+def run_analysis(
+    req: RunAnalysisRequest,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, wid = ws
+    row = get_dataset_upload_in_workspace(db, req.dataset_id, wid)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
+    dataset, upload = row
 
     data_summary = json.loads(dataset.data_summary) if dataset.data_summary else {}
     column_metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
@@ -82,7 +92,14 @@ def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/dataset/{dataset_id}")
-def get_analysis_by_dataset(dataset_id: str, db: Session = Depends(get_db)):
+def get_analysis_by_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    if not get_dataset_upload_in_workspace(db, dataset_id, workspace_id):
+        raise HTTPException(404, "Dataset not found")
     analysis = (
         db.query(Analysis)
         .filter(Analysis.dataset_id == dataset_id)
@@ -103,14 +120,16 @@ def get_analysis_by_dataset(dataset_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/forecast")
-def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)):
-    dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
-    if not dataset:
+def run_forecast(
+    req: ForecastRequest,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, wid = ws
+    row = get_dataset_upload_in_workspace(db, req.dataset_id, wid)
+    if not row:
         raise HTTPException(404, "Dataset not found")
-
-    upload = db.query(Upload).filter(Upload.id == dataset.upload_id).first()
-    if not upload:
-        raise HTTPException(404, "Upload not found")
+    dataset, upload = row
 
     parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
     if not parquet_path.exists():
@@ -141,13 +160,13 @@ def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/overview/run")
-def run_overview_analysis(db: Session = Depends(get_db)):
+def run_overview_analysis(
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
     """AI analysis across all datasets in the workspace."""
-    all_datasets = (
-        db.query(Dataset, Upload)
-        .join(Upload, Dataset.upload_id == Upload.id)
-        .all()
-    )
+    _, workspace_id = ws
+    all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     if not all_datasets:
         raise HTTPException(404, "No datasets found")
 
@@ -199,14 +218,13 @@ def run_overview_analysis(db: Session = Depends(get_db)):
 
 
 @router.get("/overview/latest")
-def get_overview_analysis(db: Session = Depends(get_db)):
+def get_overview_analysis(
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
     """Get the most recent workspace-level analysis."""
-    analysis = (
-        db.query(Analysis)
-        .filter(Analysis.type == "workspace_overview")
-        .order_by(Analysis.created_at.desc())
-        .first()
-    )
+    _, workspace_id = ws
+    analysis = latest_workspace_overview_analysis(db, workspace_id)
     if not analysis:
         return None
 
@@ -228,6 +246,7 @@ class OverviewForecastRequest(BaseModel):
 def run_overview_forecast(
     req: OverviewForecastRequest,
     db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     """Forecast using the best date+revenue pair found across all datasets.
 
@@ -235,11 +254,8 @@ def run_overview_forecast(
     one revenue/numeric column, then uses the *first* date column and *first*
     revenue column from that file's schema.
     """
-    all_datasets = (
-        db.query(Dataset, Upload)
-        .join(Upload, Dataset.upload_id == Upload.id)
-        .all()
-    )
+    _, workspace_id = ws
+    all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
 
     best_ds = None
     best_up = None

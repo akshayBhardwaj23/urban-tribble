@@ -1,6 +1,8 @@
 "use client";
 
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { KpiDetailsSheet } from "@/components/dashboard/kpi-details-sheet";
+import type { KpiDrillDownDetails } from "@/lib/kpi-drill-down";
 import { cn } from "@/lib/utils";
 
 const ACCENT_RINGS = [
@@ -17,6 +19,7 @@ export function DashboardKpiTile({
   subtitle,
   index = 0,
   trend: trendProp,
+  details,
 }: {
   title: string;
   value: string;
@@ -24,6 +27,8 @@ export function DashboardKpiTile({
   index?: number;
   /** "up" | "down" — if omitted, alternates by index for visual variety */
   trend?: "up" | "down";
+  /** Drill-down provenance (from API or client-built) */
+  details?: KpiDrillDownDetails | null;
 }) {
   const trend =
     trendProp ?? (index % 3 === 1 ? "down" : "up");
@@ -54,6 +59,11 @@ export function DashboardKpiTile({
         </p>
         {subtitle ? (
           <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+        ) : null}
+        {details ? (
+          <div className="mt-3 border-t border-slate-200/60 pt-2 dark:border-slate-600/40">
+            <KpiDetailsSheet details={details} metricLabel={title} />
+          </div>
         ) : null}
       </div>
     </div>
