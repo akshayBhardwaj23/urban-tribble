@@ -154,7 +154,7 @@ export default function DatasetPage() {
     return (
       <Card>
         <CardContent className="py-8 text-center text-sm text-destructive">
-          Failed to load dataset: {dataset.error.message}
+          Could not load this data source: {dataset.error.message}
         </CardContent>
       </Card>
     );
@@ -169,7 +169,7 @@ export default function DatasetPage() {
     timeframe.preset !== "all" &&
     dashboardData.data?.timeframe &&
     !dashboardData.data.timeframe.applied
-      ? "Could not apply the date range (check your date column)."
+      ? "This period could not be applied—verify the date field format in the source."
       : null;
 
   const resolvedTfRange =
@@ -193,7 +193,7 @@ export default function DatasetPage() {
           </h1>
           <p className="mt-1 text-sm font-medium text-slate-500">
             {summary?.rows ? `${summary.rows} rows` : ""}{" "}
-            {summary?.columns ? `· ${summary.columns} columns` : ""} · Uploaded{" "}
+            {summary?.columns ? `· ${summary.columns} columns` : ""} · Imported{" "}
             {new Date(data.created_at).toLocaleDateString()}
           </p>
         </div>
@@ -203,7 +203,7 @@ export default function DatasetPage() {
             size="sm"
             onClick={() => setAppendDialogOpen(true)}
           >
-            + Append Data
+            + Extend source
           </Button>
           {!analysis.data && (
             <Button
@@ -211,7 +211,9 @@ export default function DatasetPage() {
               onClick={() => runAnalysis.mutate()}
               disabled={runAnalysis.isPending}
             >
-              {runAnalysis.isPending ? "Analyzing..." : "Run AI Analysis"}
+              {runAnalysis.isPending
+                ? "Generating insights..."
+                : "Generate insights"}
             </Button>
           )}
           <Button
@@ -239,11 +241,11 @@ export default function DatasetPage() {
       {dashboardData.data?.dataset_brief ? (
         <div className="dashboard-glass-panel px-5 py-4 text-sm leading-relaxed">
           <span className="font-bold uppercase tracking-wide text-slate-600">
-            About this file
+            Source summary
           </span>
           {dashboardData.data.dashboard_plan_source === "ai" ? (
             <span className="ml-2 text-xs font-semibold text-violet-600">
-              · AI layout
+              · AI-curated layout
             </span>
           ) : null}
           <p className="mt-2 text-slate-600">
@@ -307,11 +309,11 @@ export default function DatasetPage() {
 
       <Tabs defaultValue="dashboard">
         <TabsList className="dashboard-pill-tabs">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
+          <TabsTrigger value="dashboard">Business Health</TabsTrigger>
+          <TabsTrigger value="analysis">Insights</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
-          <TabsTrigger value="data">Data</TabsTrigger>
-          <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="data">Preview</TabsTrigger>
+          <TabsTrigger value="details">Schema</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-4 mt-4">
@@ -324,7 +326,8 @@ export default function DatasetPage() {
           ) : (dashboardData.data?.charts?.length ?? 0) === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No charts could be auto-generated from this dataset.
+                No charts could be produced from this source with the current
+                schema and filters.
               </CardContent>
             </Card>
           ) : (
@@ -345,13 +348,16 @@ export default function DatasetPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm text-muted-foreground mb-4">
-                  No AI analysis yet. Click the button to analyze this dataset.
+                  Generate a structured briefing—drivers, risks, and anomalies—for
+                  this source.
                 </p>
                 <Button
                   onClick={() => runAnalysis.mutate()}
                   disabled={runAnalysis.isPending}
                 >
-                  {runAnalysis.isPending ? "Analyzing..." : "Run AI Analysis"}
+                  {runAnalysis.isPending
+                    ? "Generating insights..."
+                    : "Generate insights"}
                 </Button>
                 {runAnalysis.isError && (
                   <p className="text-sm text-destructive mt-2">
@@ -374,8 +380,8 @@ export default function DatasetPage() {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <p className="text-sm text-muted-foreground mb-4">
-                    Generate a forecast based on your historical data using
-                    linear regression.
+                    Model the next period from your historical series using linear
+                    regression—useful for planning, not as a sole forecast of record.
                   </p>
                   <Button
                     onClick={() => forecastMutation.mutate()}
@@ -396,8 +402,8 @@ export default function DatasetPage() {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Forecasting requires at least one date column and one
-                revenue/numeric column.
+                Forecasting needs at least one date field and one revenue or
+                numeric measure.
               </CardContent>
             </Card>
           )}
@@ -407,7 +413,7 @@ export default function DatasetPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                Data Preview{" "}
+                Row preview{" "}
                 {preview.data && (
                   <span className="text-muted-foreground font-normal">
                     (showing {preview.data.rows.length} of{" "}
@@ -463,7 +469,7 @@ export default function DatasetPage() {
           {schema && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Detected Columns</CardTitle>
+                <CardTitle className="text-base">Detected schema</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
@@ -521,7 +527,7 @@ export default function DatasetPage() {
           {data.cleaned_report && data.cleaned_report.steps.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Cleaning Report</CardTitle>
+                <CardTitle className="text-base">Preparation log</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-1">
@@ -549,11 +555,11 @@ export default function DatasetPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete dataset</DialogTitle>
+            <DialogTitle>Remove data source</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This will permanently delete <strong>{data.name}</strong> and all
-            its analysis, charts, and chat history. This action cannot be undone.
+            This permanently removes <strong>{data.name}</strong> and all
+            associated insights, views, and conversation history. This cannot be undone.
           </p>
           {deleteMutation.isError && (
             <p className="text-sm text-destructive">
@@ -583,11 +589,11 @@ export default function DatasetPage() {
       <Dialog open={appendDialogOpen} onOpenChange={setAppendDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Append data to {data.name}</DialogTitle>
+            <DialogTitle>Extend {data.name}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Upload a file with matching columns to add more rows to this
-            dataset. Duplicate rows will be automatically removed.
+            Import a file with matching columns to append rows to this source.
+            Duplicate records are removed automatically.
           </p>
           {appendMutation.isError && (
             <p className="text-sm text-destructive">

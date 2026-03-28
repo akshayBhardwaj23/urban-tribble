@@ -47,7 +47,7 @@ export function AnalysisPanel({ result }: { result: AnalysisResult }) {
       {/* Executive Summary */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Executive Summary</CardTitle>
+          <CardTitle className="text-base">Executive read</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm leading-relaxed">{result.executive_summary}</p>
@@ -92,7 +92,7 @@ export function AnalysisPanel({ result }: { result: AnalysisResult }) {
       {result.insights.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Key Insights</CardTitle>
+            <CardTitle className="text-base">Signal & narrative</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {result.insights.map((insight, i) => (
@@ -114,7 +114,7 @@ export function AnalysisPanel({ result }: { result: AnalysisResult }) {
       {result.anomalies.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Anomalies Detected</CardTitle>
+            <CardTitle className="text-base">Exceptions & outliers</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {result.anomalies.map((anomaly, i) => (
@@ -133,7 +133,7 @@ export function AnalysisPanel({ result }: { result: AnalysisResult }) {
       {result.recommendations.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Recommendations</CardTitle>
+            <CardTitle className="text-base">Recommended next steps</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">

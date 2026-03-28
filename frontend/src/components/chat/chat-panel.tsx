@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 const ALL_DATASETS_VALUE = "__all__";
 
@@ -91,13 +92,13 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
     0
   );
   const selectedName = isAllDatasets
-    ? "all your datasets"
+    ? "all connected sources"
     : datasets.find((d) => d.id === selectedDataset)?.name;
 
   const suggestions = isAllDatasets
     ? [
-        "Summarize all my business data",
-        "What's the total revenue across all datasets?",
+        "Summarize performance across my sources",
+        "What's total revenue across all sources?",
         "Compare sales vs expenses",
       ]
     : [
@@ -108,11 +109,16 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
 
   return (
     <>
-      {/* Floating trigger */}
+      {/* Floating trigger — pill with label when closed; compact close when open */}
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
-        aria-label={open ? "Close chat" : "Open AI chat"}
+        className={
+          open
+            ? "fixed bottom-5 right-5 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+            : "fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-primary pl-3 pr-4 py-2.5 text-primary-foreground shadow-lg transition-transform hover:scale-[1.02] active:scale-95"
+        }
+        aria-label={open ? "Close assistant" : `Ask ${PRODUCT_NAME}`}
       >
         {open ? (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -120,9 +126,14 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         ) : (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span className="text-sm font-semibold tracking-tight whitespace-nowrap">
+              Ask {PRODUCT_NAME}
+            </span>
+          </>
         )}
       </button>
 
@@ -138,21 +149,27 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
           }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b px-4 py-2.5 shrink-0">
-            <div className="flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <span className="text-sm font-semibold">AI Chat</span>
-              {isAllDatasets && (
-                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
-                  All Data
-                </span>
-              )}
+          <div className="flex items-start justify-between gap-2 border-b px-4 py-2.5 shrink-0">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span className="text-sm font-semibold">Insights assistant</span>
+                {isAllDatasets && (
+                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
+                    Workspace
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground pl-6 leading-tight">
+                Grounded answers from your imported sources
+              </p>
             </div>
             <button
+              type="button"
               onClick={() => setOpen(false)}
-              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -169,7 +186,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
               onChange={(e) => handleDatasetChange(e.target.value)}
             >
               <option value={ALL_DATASETS_VALUE}>
-                All Datasets ({datasets.length} files,{" "}
+                All sources ({datasets.length} files,{" "}
                 {totalRows.toLocaleString()} rows)
               </option>
               {datasets.map((ds) => (
@@ -196,8 +213,8 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
                   </p>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {isAllDatasets
-                      ? "The AI can query across all your datasets at once"
-                      : "The AI will query this specific dataset"}
+                      ? "Grounded answers across every connected source"
+                      : "Answers are scoped to this source only"}
                   </p>
                   <div className="space-y-1.5 pt-1">
                     {suggestions.map((suggestion) => (
@@ -260,8 +277,8 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={
                   isAllDatasets
-                    ? "Ask across all your data..."
-                    : "Ask about this dataset..."
+                    ? "Ask across the workspace..."
+                    : "Ask about this source..."
                 }
                 className="flex-1 text-sm h-9"
                 disabled={chatMutation.isPending}

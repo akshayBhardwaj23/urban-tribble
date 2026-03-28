@@ -91,22 +91,22 @@ export default function OverviewPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Business Health</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Your workspace at a glance.
+            A single view of performance signals across your workspace.
           </p>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-sm text-muted-foreground mb-4">
-              No datasets yet. Upload your first file to see your overview
-              dashboard.
+              Import your first file to unlock KPIs, views, and executive-ready
+              summaries.
             </p>
             <Link
               href="/upload"
               className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Upload File
+              Import Data
             </Link>
           </CardContent>
         </Card>
@@ -121,11 +121,11 @@ export default function OverviewPage() {
       {/* Header with actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Business Health</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Aggregated view across {data.total_datasets} dataset
+            Consolidated signals across {data.total_datasets} data source
             {data.total_datasets !== 1 ? "s" : ""} &middot;{" "}
-            {data.total_rows.toLocaleString()} total rows
+            {data.total_rows.toLocaleString()} records
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -138,11 +138,11 @@ export default function OverviewPage() {
                 setAppendTarget({ id: ds.id, name: ds.name });
               }}
             >
-              + Append Data
+              + Extend source
             </Button>
           )}
           <Link href="/upload">
-            <Button size="sm">Upload New File</Button>
+            <Button size="sm">Import Data</Button>
           </Link>
           {!analysisResult && !overviewAnalysis.isLoading && (
             <Button
@@ -152,8 +152,8 @@ export default function OverviewPage() {
               disabled={runOverviewAnalysis.isPending}
             >
               {runOverviewAnalysis.isPending
-                ? "Analyzing..."
-                : "Run AI Analysis"}
+                ? "Generating insights..."
+                : "Generate insights"}
             </Button>
           )}
         </div>
@@ -164,7 +164,7 @@ export default function OverviewPage() {
         <Card className="dashboard-glass-panel ring-0">
           <CardHeader className="pb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Datasets
+              Data sources
             </p>
           </CardHeader>
           <CardContent>
@@ -174,7 +174,7 @@ export default function OverviewPage() {
         <Card className="dashboard-glass-panel ring-0">
           <CardHeader className="pb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Total Rows
+              Total records
             </p>
           </CardHeader>
           <CardContent>
@@ -197,7 +197,7 @@ export default function OverviewPage() {
                 })}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                from {kpi.dataset_name}
+                Source · {kpi.dataset_name}
               </p>
             </CardContent>
           </Card>
@@ -220,7 +220,7 @@ export default function OverviewPage() {
                   })}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  from {kpi.dataset_name}
+                  Source · {kpi.dataset_name}
                 </p>
               </CardContent>
             </Card>
@@ -231,13 +231,13 @@ export default function OverviewPage() {
       {/* Tabs */}
       <Tabs defaultValue="dashboard">
         <TabsList className="dashboard-pill-tabs">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
+          <TabsTrigger value="dashboard">Business Health</TabsTrigger>
+          <TabsTrigger value="analysis">Insights</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
-          <TabsTrigger value="datasets">Datasets</TabsTrigger>
+          <TabsTrigger value="datasets">Data Sources</TabsTrigger>
         </TabsList>
 
-        {/* Dashboard tab - charts */}
+        {/* Business Health tab - charts */}
         <TabsContent value="dashboard" className="space-y-4 mt-4">
           {data.charts.length > 0 ? (
             <div className="grid gap-5 md:grid-cols-2">
@@ -258,7 +258,7 @@ export default function OverviewPage() {
                   <AutoChart chart={chart} accentIndex={i} />
                   {chart.dataset_name && (
                     <p className="mt-2 text-xs font-medium text-slate-500">
-                      Source: {chart.dataset_name}
+                      Source · {chart.dataset_name}
                     </p>
                   )}
                 </div>
@@ -268,13 +268,13 @@ export default function OverviewPage() {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No charts could be auto-generated from your datasets yet.
+                No charts are available yet from your connected sources.
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
-        {/* AI Analysis tab */}
+        {/* Insights tab */}
         <TabsContent value="analysis" className="mt-4">
           {overviewAnalysis.isLoading ? (
             <Skeleton className="h-64" />
@@ -282,7 +282,7 @@ export default function OverviewPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  Last analyzed:{" "}
+                  Last refreshed:{" "}
                   {new Date(
                     overviewAnalysis.data!.created_at
                   ).toLocaleString()}
@@ -294,8 +294,8 @@ export default function OverviewPage() {
                   disabled={runOverviewAnalysis.isPending}
                 >
                   {runOverviewAnalysis.isPending
-                    ? "Re-analyzing..."
-                    : "Re-run Analysis"}
+                    ? "Refreshing..."
+                    : "Refresh insights"}
                 </Button>
               </div>
               <AnalysisPanel result={analysisResult} />
@@ -304,21 +304,21 @@ export default function OverviewPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm text-muted-foreground mb-2">
-                  Run an AI-powered analysis across all your datasets to get
-                  combined insights, anomalies, and recommendations.
+                  Synthesize narrative insights, variance, and recommended next
+                  steps across every connected source—built for leadership review.
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  The AI will examine {data.total_datasets} dataset
-                  {data.total_datasets !== 1 ? "s" : ""} with{" "}
-                  {data.total_rows.toLocaleString()} total rows.
+                  Covers {data.total_datasets} source
+                  {data.total_datasets !== 1 ? "s" : ""} and{" "}
+                  {data.total_rows.toLocaleString()} records.
                 </p>
                 <Button
                   onClick={() => runOverviewAnalysis.mutate()}
                   disabled={runOverviewAnalysis.isPending}
                 >
                   {runOverviewAnalysis.isPending
-                    ? "Analyzing..."
-                    : "Run AI Analysis"}
+                    ? "Generating insights..."
+                    : "Generate insights"}
                 </Button>
                 {runOverviewAnalysis.isError && (
                   <p className="text-sm text-destructive mt-2">
@@ -335,8 +335,9 @@ export default function OverviewPage() {
           {forecastMutation.data ? (
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Forecasting <strong>{forecastMutation.data.value_column.replace(/_/g, " ")}</strong>{" "}
-                from <strong>{forecastMutation.data.dataset_name}</strong>
+                Outlook for{" "}
+                <strong>{forecastMutation.data.value_column.replace(/_/g, " ")}</strong>{" "}
+                · <strong>{forecastMutation.data.dataset_name}</strong>
               </p>
               <ForecastChart
                 data={forecastMutation.data}
@@ -347,11 +348,12 @@ export default function OverviewPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm text-muted-foreground mb-2">
-                  Generate a forecast using the best date and revenue data found
-                  across all your datasets.
+                  Project forward from the strongest time-series signal across your
+                  sources—ideal for planning and board-ready narratives.
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Uses linear regression to predict future trends.
+                  Uses linear regression on your historical series; results are
+                  directional, not guarantees.
                 </p>
                 <Button
                   onClick={() => forecastMutation.mutate()}
@@ -371,7 +373,7 @@ export default function OverviewPage() {
           )}
         </TabsContent>
 
-        {/* Datasets tab */}
+        {/* Data Sources tab */}
         <TabsContent value="datasets" className="mt-4">
           <div className="grid gap-3">
             {data.datasets.map((ds) => (
@@ -397,7 +399,7 @@ export default function OverviewPage() {
                       setAppendTarget({ id: ds.id, name: ds.name });
                     }}
                   >
-                    + Append Data
+                    + Extend source
                   </Button>
                 </CardContent>
               </Card>
@@ -413,11 +415,11 @@ export default function OverviewPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Append data to {appendTarget?.name}</DialogTitle>
+            <DialogTitle>Extend {appendTarget?.name}</DialogTitle>
           </DialogHeader>
           {data.datasets.length > 1 && (
             <div className="space-y-1">
-              <label className="text-sm font-medium">Target dataset</label>
+              <label className="text-sm font-medium">Target source</label>
               <select
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 value={appendTarget?.id ?? ""}
@@ -437,8 +439,8 @@ export default function OverviewPage() {
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            Upload a file with matching columns to add more rows. Duplicate rows
-            will be automatically removed.
+            Import a file with matching columns to append rows to this source.
+            Duplicate records are removed automatically.
           </p>
           {appendMutation.isError && (
             <p className="text-sm text-destructive">

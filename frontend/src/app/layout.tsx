@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/lib/providers";
+import { META_DESCRIPTION, PRODUCT_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,9 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Excel Consultant - AI Business Analytics",
-  description:
-    "Upload your business data and get AI-powered insights, dashboards, and forecasting.",
+  title: `${PRODUCT_NAME} — AI business analyst`,
+  description: META_DESCRIPTION,
 };
 
 export default function RootLayout({

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LOGIN_HEADLINE, PRODUCT_NAME } from "@/lib/brand";
 
 export default function LoginPage() {
   const { status } = useSession();
@@ -27,10 +28,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold tracking-tight">Excel Consultant</h1>
-        <p className="mt-2 text-muted-foreground">
-          AI-powered business analytics for your spreadsheets
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">{PRODUCT_NAME}</h1>
+        <p className="mt-2 text-muted-foreground">{LOGIN_HEADLINE}</p>
       </div>
 
       <Card className="w-full max-w-sm">

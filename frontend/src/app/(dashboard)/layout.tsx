@@ -6,11 +6,12 @@ import { AuthGuard } from "@/components/auth-guard";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 const navItems = [
-  { href: "/dashboard", label: "Overview", icon: "◈" },
-  { href: "/upload", label: "Upload", icon: "↑" },
-  { href: "/datasets", label: "Datasets", icon: "◫" },
+  { href: "/dashboard", label: "Business Health", icon: "◈" },
+  { href: "/upload", label: "Import Data", icon: "↑" },
+  { href: "/datasets", label: "Data Sources", icon: "◫" },
 ];
 
 export default function DashboardLayout({
@@ -30,7 +31,7 @@ export default function DashboardLayout({
             href="/dashboard"
             className="mb-2 px-3 py-2 text-lg font-bold tracking-tight text-slate-800"
           >
-            Excel Consultant
+            {PRODUCT_NAME}
           </Link>
 
           <div className="mb-4">

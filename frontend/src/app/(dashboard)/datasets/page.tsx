@@ -52,16 +52,17 @@ export default function DatasetsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Datasets</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Data Sources</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Your uploaded files and their analyses.
+            Every imported file your workspace uses for reporting, insights, and
+            forecasts.
           </p>
         </div>
         <Link
           href="/upload"
           className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          Upload File
+          Import Data
         </Link>
       </div>
 
@@ -75,13 +76,14 @@ export default function DatasetsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-sm text-muted-foreground mb-4">
-              No datasets yet. Upload a file to get started.
+              No data sources yet. Import a spreadsheet to anchor your first
+              metrics.
             </p>
             <Link
               href="/upload"
               className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Upload File
+              Import Data
             </Link>
           </CardContent>
         </Card>
@@ -142,12 +144,12 @@ export default function DatasetsPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete dataset</DialogTitle>
+            <DialogTitle>Remove data source</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This will permanently delete{" "}
-            <strong>{deleteTarget?.name}</strong> and all its analysis, charts,
-            and chat history. This action cannot be undone.
+            This permanently removes{" "}
+            <strong>{deleteTarget?.name}</strong> and all associated insights,
+            views, and conversation history. This cannot be undone.
           </p>
           {deleteMutation.isError && (
             <p className="text-sm text-destructive">

@@ -62,9 +62,10 @@ export default function ChatPage() {
   return (
     <div className="mx-auto flex h-[calc(100vh-6rem)] max-w-3xl flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">AI Chat</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Insights assistant</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Ask questions about your data in plain English.
+          Natural-language Q&A over a selected source—grounded in what you
+          imported.
         </p>
       </div>
 
@@ -72,7 +73,7 @@ export default function ChatPage() {
       {!selectedDataset ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Select a dataset to chat with</CardTitle>
+            <CardTitle className="text-base">Choose a data source</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingDatasets ? (
@@ -83,7 +84,7 @@ export default function ChatPage() {
               </div>
             ) : !datasets || datasets.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No datasets available. Upload a file first.
+                No sources available. Import data first.
               </p>
             ) : (
               <div className="space-y-2">
@@ -108,7 +109,7 @@ export default function ChatPage() {
         <>
           <div className="mb-3 flex items-center gap-2">
             <p className="text-sm text-muted-foreground">
-              Chatting with:{" "}
+              Scoped to:{" "}
               <span className="font-medium text-foreground">
                 {datasets?.find((d) => d.id === selectedDataset)?.name}
               </span>
@@ -180,7 +181,7 @@ export default function ChatPage() {
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask a question about your data..."
+                  placeholder="Ask a question about this source..."
                   className="flex-1"
                   disabled={chatMutation.isPending}
                 />

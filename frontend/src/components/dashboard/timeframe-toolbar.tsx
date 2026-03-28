@@ -151,7 +151,7 @@ export function TimeframeToolbar({
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-            Time range
+            Analysis period
           </span>
           <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200/90 bg-white/80 p-1 shadow-sm">
             {PRESETS.map((p) => (
@@ -167,7 +167,7 @@ export function TimeframeToolbar({
                 )}
                 title={
                   !hasDateColumn && p.id !== "all"
-                    ? "No date column detected for this file"
+                    ? "No date field detected in this source"
                     : undefined
                 }
                 onClick={() => {
@@ -188,7 +188,7 @@ export function TimeframeToolbar({
                 active === "custom" ? "" : "text-slate-600"
               )}
               title={
-                !hasDateColumn ? "No date column detected for this file" : undefined
+                !hasDateColumn ? "No date field detected in this source" : undefined
               }
               onClick={openCustomDialog}
             >
@@ -199,11 +199,11 @@ export function TimeframeToolbar({
         </div>
         {hasDateColumn ? (
           <p className="text-[11px] text-slate-400">
-            7d / 14d / 30d / 60d end on the{" "}
+            Rolling windows (7d–60d) anchor to the{" "}
             <span className="font-medium text-slate-500">
-              latest date in your data
+              latest observation in the source
             </span>
-            , not today.
+            , not today’s calendar date.
           </p>
         ) : null}
       </div>
@@ -219,7 +219,7 @@ export function TimeframeToolbar({
       <Dialog open={customOpen} onOpenChange={setCustomOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Custom date range</DialogTitle>
+            <DialogTitle>Custom period</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">

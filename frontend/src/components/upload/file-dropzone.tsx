@@ -80,7 +80,7 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
       } catch (err) {
         updateEntry(i, {
           status: "error",
-          error: err instanceof Error ? err.message : "Upload failed",
+          error: err instanceof Error ? err.message : "Import failed",
         });
       }
     }
@@ -107,10 +107,10 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
         </div>
         <div className="text-center space-y-1">
           <p className="text-sm font-medium">
-            Processing {currentlyUploading.file.name}...
+            Ingesting {currentlyUploading.file.name}...
           </p>
           <p className="text-xs text-muted-foreground">
-            Cleaning data, detecting columns, building metadata
+            Validating structure, profiling columns, preparing the source
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             {doneCount} of {total} files completed
@@ -149,7 +149,7 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
                   <p className="text-sm font-medium">{entry.file.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {(entry.file.size / 1024).toFixed(1)} KB
-                    {entry.status === "done" && " -- Uploaded"}
+                    {entry.status === "done" && " — Imported"}
                     {entry.status === "error" && ` -- ${entry.error}`}
                   </p>
                 </div>
@@ -168,10 +168,10 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
             {entry.status !== "done" && (
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">
-                  What does this file represent?
+                  Business context (optional)
                 </label>
                 <Textarea
-                  placeholder='e.g., "Monthly revenue data", "Customer purchase history"'
+                  placeholder='e.g. "Q3 revenue by region", "Vendor spend register"'
                   value={entry.description}
                   onChange={(e) =>
                     updateEntry(index, { description: e.target.value })
@@ -190,7 +190,7 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
         >
           <input {...getInputProps()} />
           <p className="text-xs text-muted-foreground">
-            + Drop more files here or click to add
+            + Add more files (drop or click)
           </p>
         </div>
 
@@ -214,7 +214,7 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
               onClick={handleUploadAll}
               disabled={pendingCount === 0}
             >
-              Upload & Analyze{pendingCount > 0 ? ` (${pendingCount})` : ""}
+              Import & prepare{pendingCount > 0 ? ` (${pendingCount})` : ""}
             </Button>
           </div>
         </div>
@@ -239,12 +239,11 @@ export function FileDropzone({ onUpload, onAllComplete }: FileDropzoneProps) {
         <div>
           <p className="text-sm font-medium">
             {isDragActive
-              ? "Drop your files here"
-              : "Drag & drop your files here, or click to browse"}
+              ? "Release to import"
+              : "Drag spreadsheets here, or click to browse"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Supports .xlsx, .xls, .csv, .tsv (max 50MB each) -- multiple files
-            allowed
+            .xlsx, .xls, .csv, .tsv — up to 50MB per file. Multiple files supported.
           </p>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 export default function OnboardingPage() {
   const { status } = useSession();
@@ -68,10 +69,10 @@ export default function OnboardingPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4">
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight">
-          Welcome to Excel Consultant
+          Welcome to {PRODUCT_NAME}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Create your first workspace to get started
+          Create your first workspace to centralize sources and decisions
         </p>
       </div>
 
@@ -94,8 +95,8 @@ export default function OnboardingPage() {
                 disabled={submitting}
               />
               <p className="mt-1.5 text-xs text-muted-foreground">
-                A workspace holds all your uploads, dashboards, and analysis for
-                one business or project. You can create more later.
+                A workspace isolates data sources, business health views, and
+                insights for one business or initiative. Add more workspaces anytime.
               </p>
             </div>
 

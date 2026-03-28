@@ -31,16 +31,17 @@ export default function UploadPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Upload Data</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Import Data</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload your business data and let AI analyze it for you. You can
-          upload multiple files at once.
+          Bring revenue, expense, and operational files into your workspace.
+          Import multiple spreadsheets at once—each becomes a trusted source for
+          metrics and decisions.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Select Files</CardTitle>
+          <CardTitle className="text-base">Files to import</CardTitle>
         </CardHeader>
         <CardContent>
           <FileDropzone
