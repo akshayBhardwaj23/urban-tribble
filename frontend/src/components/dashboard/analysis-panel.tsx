@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-interface AnalysisResult {
+export interface AnalysisResult {
   executive_summary: string;
   key_metrics: {
     label: string;

@@ -6,7 +6,7 @@ from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -28,7 +28,7 @@ class ForecastRequest(BaseModel):
     dataset_id: str
     date_column: Optional[str] = None
     value_column: Optional[str] = None
-    periods: int = 12
+    periods: int = Field(default=90, ge=1, le=366)
 
 
 @router.post("/run")
@@ -220,7 +220,8 @@ def get_overview_analysis(db: Session = Depends(get_db)):
 
 
 class OverviewForecastRequest(BaseModel):
-    periods: int = 12
+    """Forward steps at the inferred data frequency (day / week / month)."""
+    periods: int = Field(default=90, ge=1, le=366)
 
 
 @router.post("/overview/forecast")
@@ -228,7 +229,12 @@ def run_overview_forecast(
     req: OverviewForecastRequest,
     db: Session = Depends(get_db),
 ):
-    """Forecast using the best date+revenue pair found across all datasets."""
+    """Forecast using the best date+revenue pair found across all datasets.
+
+    Chooses the dataset with the most rows that has at least one date column and
+    one revenue/numeric column, then uses the *first* date column and *first*
+    revenue column from that file's schema.
+    """
     all_datasets = (
         db.query(Dataset, Upload)
         .join(Upload, Dataset.upload_id == Upload.id)

@@ -265,7 +265,7 @@ export const api = {
     }>("/api/analysis/overview/forecast", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ periods: periods || 12 }),
+      body: JSON.stringify({ periods: periods ?? 90 }),
     }),
 
   runForecast: (
@@ -295,7 +295,7 @@ export const api = {
         dataset_id: datasetId,
         date_column: dateColumn,
         value_column: valueColumn,
-        periods: periods || 12,
+        periods: periods ?? 90,
       }),
     }),
 };

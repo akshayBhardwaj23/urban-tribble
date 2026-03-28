@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +17,89 @@ import {
   type ChartConfig,
 } from "@/components/charts/auto-chart";
 import { ForecastChart } from "@/components/charts/forecast-chart";
-import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
+import {
+  AnalysisPanel,
+  type AnalysisResult,
+} from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
 import { api } from "@/lib/api";
+import {
+  parseWorkspaceAnalysis,
+  buildMetricSlots,
+  healthHeadline,
+  keyChangeLine,
+  biggestRiskLine,
+  biggestOpportunityLine,
+  whatHappenedSummary,
+  whyItMattersLine,
+  primaryRecommendation,
+  type WorkspaceAnalysis,
+} from "@/lib/overview-briefing";
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+      {children}
+    </h2>
+  );
+}
+
+function BriefTile({
+  title,
+  body,
+  variant = "default",
+  emptyHint,
+}: {
+  title: string;
+  body: string;
+  variant?: "default" | "risk" | "opportunity";
+  emptyHint?: string;
+}) {
+  const border =
+    variant === "risk"
+      ? "border-amber-200/80 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-950/20"
+      : variant === "opportunity"
+        ? "border-emerald-200/80 bg-emerald-50/35 dark:border-emerald-900/40 dark:bg-emerald-950/20"
+        : "border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/30";
+  const showEmpty = !body.trim();
+
+  return (
+    <div
+      className={`rounded-2xl border px-5 py-4 shadow-sm backdrop-blur-sm ${border}`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+        {title}
+      </p>
+      <p
+        className={`mt-2 text-sm leading-relaxed ${
+          showEmpty ? "text-slate-400" : "text-slate-800 dark:text-slate-100"
+        }`}
+      >
+        {showEmpty ? emptyHint ?? "—" : body}
+      </p>
+    </div>
+  );
+}
+
+function TrendBadge({ trend }: { trend: "up" | "down" | "stable" | null }) {
+  if (trend === "up") {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <span aria-hidden>↑</span> Up
+      </span>
+    );
+  }
+  if (trend === "down") {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600 dark:text-red-400">
+        <span aria-hidden>↓</span> Down
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs font-medium text-slate-400">Steady</span>
+  );
+}
 
 export default function OverviewPage() {
   const queryClient = useQueryClient();
@@ -29,6 +108,8 @@ export default function OverviewPage() {
     id: string;
     name: string;
   } | null>(null);
+  /** Steps forward at inferred frequency (day / week / month); max 366 on API. */
+  const [outlookPeriods, setOutlookPeriods] = useState(90);
 
   const { data, isLoading } = useQuery({
     queryKey: ["overview"],
@@ -48,7 +129,7 @@ export default function OverviewPage() {
   });
 
   const forecastMutation = useMutation({
-    mutationFn: () => api.runOverviewForecast(),
+    mutationFn: () => api.runOverviewForecast(outlookPeriods),
   });
 
   const appendMutation = useMutation({
@@ -69,18 +150,34 @@ export default function OverviewPage() {
     e.target.value = "";
   };
 
+  const analysis = useMemo((): WorkspaceAnalysis | null => {
+    const raw = overviewAnalysis.data?.result_json;
+    return parseWorkspaceAnalysis(raw);
+  }, [overviewAnalysis.data?.result_json]);
+
+  const metricSlots = useMemo(() => {
+    if (!data?.kpis) return buildMetricSlots([], analysis);
+    return buildMetricSlots(data.kpis, analysis);
+  }, [data?.kpis, analysis]);
+
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid gap-4 md:grid-cols-4">
+      <div className="space-y-10 max-w-6xl">
+        <Skeleton className="h-9 w-64" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-28 rounded-2xl" />
           ))}
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-72" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-48 rounded-2xl" />
+        <div className="grid gap-5 md:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-72 rounded-xl" />
           ))}
         </div>
       </div>
@@ -89,18 +186,20 @@ export default function OverviewPage() {
 
   if (!data || data.total_datasets === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-6xl">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Business Health</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Business Health
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            A single view of performance signals across your workspace.
+            A single view of what changed, what matters, and what to do next.
           </p>
         </div>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-sm text-muted-foreground mb-4">
-              Import your first file to unlock KPIs, views, and executive-ready
-              summaries.
+        <Card className="border-slate-200/80 shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
+            <p className="text-sm text-muted-foreground mb-4 max-w-md">
+              Import data to unlock a decision-first briefing: health read, key
+              shifts, risks, opportunities, and charts that support the story.
             </p>
             <Link
               href="/upload"
@@ -114,301 +213,469 @@ export default function OverviewPage() {
     );
   }
 
-  const analysisResult = overviewAnalysis.data?.result_json;
+  const health = healthHeadline(analysis);
+  const keyChange = keyChangeLine(analysis);
+  const risk = biggestRiskLine(analysis);
+  const opportunity = biggestOpportunityLine(analysis);
+  const happened = whatHappenedSummary(analysis);
+  const matters = whyItMattersLine(analysis);
+  const action = primaryRecommendation(analysis);
+  const analysisReady = !!analysis;
+  const analysisBusy =
+    overviewAnalysis.isLoading || runOverviewAnalysis.isPending;
+
+  const noInsightCopy =
+    "Run Generate insights to synthesize this from your sources.";
 
   return (
-    <div className="space-y-6">
-      {/* Header with actions */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-10 max-w-6xl pb-10">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Business Health</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Consolidated signals across {data.total_datasets} data source
-            {data.total_datasets !== 1 ? "s" : ""} &middot;{" "}
-            {data.total_rows.toLocaleString()} records
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Business Health
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+            {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
+            · {data.total_rows.toLocaleString()} records · Decisions first,
+            charts second
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {data.datasets.length > 0 && (
             <Button
               variant="outline"
               size="sm"
+              className="rounded-lg"
               onClick={() => {
                 const ds = data.datasets[0];
                 setAppendTarget({ id: ds.id, name: ds.name });
               }}
             >
-              + Extend source
+              Extend source
             </Button>
           )}
           <Link href="/upload">
-            <Button size="sm">Import Data</Button>
-          </Link>
-          {!analysisResult && !overviewAnalysis.isLoading && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => runOverviewAnalysis.mutate()}
-              disabled={runOverviewAnalysis.isPending}
-            >
-              {runOverviewAnalysis.isPending
-                ? "Generating insights..."
-                : "Generate insights"}
+            <Button size="sm" className="rounded-lg">
+              Import Data
             </Button>
-          )}
+          </Link>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="rounded-lg"
+            onClick={() => runOverviewAnalysis.mutate()}
+            disabled={analysisBusy}
+          >
+            {runOverviewAnalysis.isPending
+              ? "Generating insights..."
+              : analysisReady
+                ? "Refresh insights"
+                : "Generate insights"}
+          </Button>
         </div>
-      </div>
+      </header>
 
-      {/* KPI cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="dashboard-glass-panel ring-0">
-          <CardHeader className="pb-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Data sources
+      {/* 1. Top summary */}
+      <section className="space-y-3">
+        <SectionLabel>At a glance</SectionLabel>
+        {analysisBusy && !analysisReady ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <BriefTile
+              title="Business health"
+              body={health}
+              emptyHint={noInsightCopy}
+            />
+            <BriefTile
+              title="Key change"
+              body={keyChange}
+              emptyHint={
+                analysisReady
+                  ? "No standout shift called out in the latest review."
+                  : noInsightCopy
+              }
+            />
+            <BriefTile
+              title="Biggest risk"
+              body={risk}
+              variant="risk"
+              emptyHint={
+                analysisReady
+                  ? "No major risk flagged—still validate assumptions."
+                  : noInsightCopy
+              }
+            />
+            <BriefTile
+              title="Biggest opportunity"
+              body={opportunity}
+              variant="opportunity"
+              emptyHint={
+                analysisReady
+                  ? "No opportunity surfaced yet—refresh after new data."
+                  : noInsightCopy
+              }
+            />
+          </div>
+        )}
+      </section>
+
+      {/* 2. Important metrics */}
+      <section className="space-y-3">
+        <SectionLabel>Important metrics</SectionLabel>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {metricSlots.map((slot) => (
+            <div
+              key={slot.key}
+              className="rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                {slot.label}
+              </p>
+              {slot.displayValue ? (
+                <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">
+                  {slot.displayValue}
+                </p>
+              ) : (
+                <p className="mt-2 text-lg text-slate-400">Not detected</p>
+              )}
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <span className="text-[11px] text-slate-500">Trend signal</span>
+                <TrendBadge trend={slot.trend} />
+              </div>
+              {slot.note && (
+                <p className="mt-2 text-xs text-slate-500 leading-snug line-clamp-2">
+                  {slot.note}
+                </p>
+              )}
+              {slot.sourceName && (
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Source · {slot.sourceName}
+                </p>
+              )}
+            </div>
+          ))}
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Record volume
             </p>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">{data.total_datasets}</p>
-          </CardContent>
-        </Card>
-        <Card className="dashboard-glass-panel ring-0">
-          <CardHeader className="pb-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Total records
-            </p>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
+            <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">
               {data.total_rows.toLocaleString()}
             </p>
-          </CardContent>
-        </Card>
-        {data.kpis.slice(0, 2).map((kpi: { label: string; value: number; dataset_name: string }, i: number) => (
-          <Card key={i} className="dashboard-glass-panel ring-0">
-            <CardHeader className="pb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                {kpi.label}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold">
-                {Number(kpi.value).toLocaleString(undefined, {
-                  maximumFractionDigits: 0,
-                })}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Source · {kpi.dataset_name}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {data.kpis.length > 2 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {data.kpis.slice(2).map((kpi: { label: string; value: number; dataset_name: string }, i: number) => (
-            <Card key={i} className="dashboard-glass-panel ring-0">
-              <CardHeader className="pb-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {kpi.label}
-                </p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">
-                  {Number(kpi.value).toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Source · {kpi.dataset_name}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <span className="text-[11px] text-slate-500">Coverage</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                {data.total_datasets} source
+                {data.total_datasets !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Rows ingested across the workspace
+            </p>
+          </div>
         </div>
-      )}
+        <p className="text-xs text-slate-400 max-w-2xl">
+          Labels follow your column names. Expenses and profit appear when those
+          fields exist, or when the latest insights mention them.
+        </p>
+      </section>
 
-      {/* Tabs */}
-      <Tabs defaultValue="dashboard">
-        <TabsList className="dashboard-pill-tabs">
-          <TabsTrigger value="dashboard">Business Health</TabsTrigger>
-          <TabsTrigger value="analysis">Insights</TabsTrigger>
-          <TabsTrigger value="forecast">Forecast</TabsTrigger>
-          <TabsTrigger value="datasets">Data Sources</TabsTrigger>
-        </TabsList>
+      {/* 3. Leadership briefing */}
+      <section className="space-y-3">
+        <SectionLabel>Leadership briefing</SectionLabel>
+        <div className="rounded-2xl border border-slate-200/80 bg-white/85 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40 overflow-hidden">
+          <div className="grid divide-y divide-slate-100 dark:divide-slate-800 lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
+            <div className="p-6 lg:p-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                What happened
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                {analysisReady && happened ? (
+                  happened
+                ) : (
+                  <span className="text-slate-400">
+                    {analysisBusy
+                      ? "Synthesizing a concise read of your workspace…"
+                      : `Generate insights for a plain-language summary of performance across your ${data.total_datasets} source${data.total_datasets !== 1 ? "s" : ""}.`}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="p-6 lg:p-7 bg-slate-50/50 dark:bg-slate-900/20">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Why it matters
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                {analysisReady && matters ? (
+                  matters
+                ) : (
+                  <span className="text-slate-400">
+                    {analysisBusy
+                      ? "Prioritizing the signal that should drive your next decision…"
+                      : "Context for impact and tradeoffs will appear here after the first insights run."}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="p-6 lg:p-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Recommended action
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100 font-medium">
+                {analysisReady && action ? (
+                  action
+                ) : (
+                  <span className="text-slate-400 font-normal">
+                    {analysisBusy
+                      ? "Selecting the highest-leverage next step…"
+                      : "Your top recommended move will show here once insights are generated."}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          {runOverviewAnalysis.isError && (
+            <p className="px-6 py-3 text-sm text-destructive border-t border-slate-100 dark:border-slate-800">
+              {runOverviewAnalysis.error.message}
+            </p>
+          )}
+        </div>
+      </section>
 
-        {/* Business Health tab - charts */}
-        <TabsContent value="dashboard" className="space-y-4 mt-4">
-          {data.charts.length > 0 ? (
-            <div className="grid gap-5 md:grid-cols-2">
-              {data.charts.map(
-                (
-                  chart: {
-                    id: string;
-                    dataset_name?: string;
-                    title: string;
-                    type: ChartConfig["type"];
-                    data: ChartConfig["data"];
-                    x_label?: string;
-                    y_label?: string;
-                  },
-                  i: number
-                ) => (
-                <div key={chart.id}>
+      {/* 4. Charts */}
+      <section className="space-y-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <SectionLabel>Supporting views</SectionLabel>
+            <p className="text-sm text-slate-500 mt-1 max-w-xl">
+              Charts back the narrative above. Open a source for filters and
+              detail.
+            </p>
+          </div>
+        </div>
+        {data.charts.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2">
+            {data.charts.map(
+              (
+                chart: {
+                  id: string;
+                  dataset_name?: string;
+                  title: string;
+                  type: ChartConfig["type"];
+                  data: ChartConfig["data"];
+                  x_label?: string;
+                  y_label?: string;
+                },
+                i: number
+              ) => (
+                <div key={chart.id} className="space-y-2">
                   <AutoChart chart={chart} accentIndex={i} />
                   {chart.dataset_name && (
-                    <p className="mt-2 text-xs font-medium text-slate-500">
+                    <p className="text-xs font-medium text-slate-500">
                       Source · {chart.dataset_name}
                     </p>
                   )}
                 </div>
               )
-              )}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No charts are available yet from your connected sources.
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Insights tab */}
-        <TabsContent value="analysis" className="mt-4">
-          {overviewAnalysis.isLoading ? (
-            <Skeleton className="h-64" />
-          ) : analysisResult ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Last refreshed:{" "}
-                  {new Date(
-                    overviewAnalysis.data!.created_at
-                  ).toLocaleString()}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => runOverviewAnalysis.mutate()}
-                  disabled={runOverviewAnalysis.isPending}
-                >
-                  {runOverviewAnalysis.isPending
-                    ? "Refreshing..."
-                    : "Refresh insights"}
-                </Button>
-              </div>
-              <AnalysisPanel result={analysisResult} />
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Synthesize narrative insights, variance, and recommended next
-                  steps across every connected source—built for leadership review.
-                </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Covers {data.total_datasets} source
-                  {data.total_datasets !== 1 ? "s" : ""} and{" "}
-                  {data.total_rows.toLocaleString()} records.
-                </p>
-                <Button
-                  onClick={() => runOverviewAnalysis.mutate()}
-                  disabled={runOverviewAnalysis.isPending}
-                >
-                  {runOverviewAnalysis.isPending
-                    ? "Generating insights..."
-                    : "Generate insights"}
-                </Button>
-                {runOverviewAnalysis.isError && (
-                  <p className="text-sm text-destructive mt-2">
-                    {runOverviewAnalysis.error.message}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Forecast tab */}
-        <TabsContent value="forecast" className="mt-4">
-          {forecastMutation.data ? (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Outlook for{" "}
-                <strong>{forecastMutation.data.value_column.replace(/_/g, " ")}</strong>{" "}
-                · <strong>{forecastMutation.data.dataset_name}</strong>
-              </p>
-              <ForecastChart
-                data={forecastMutation.data}
-                valueColumn={forecastMutation.data.value_column}
-              />
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Project forward from the strongest time-series signal across your
-                  sources—ideal for planning and board-ready narratives.
-                </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Uses linear regression on your historical series; results are
-                  directional, not guarantees.
-                </p>
-                <Button
-                  onClick={() => forecastMutation.mutate()}
-                  disabled={forecastMutation.isPending}
-                >
-                  {forecastMutation.isPending
-                    ? "Generating..."
-                    : "Generate Forecast"}
-                </Button>
-                {forecastMutation.isError && (
-                  <p className="text-sm text-destructive mt-2">
-                    {forecastMutation.error.message}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Data Sources tab */}
-        <TabsContent value="datasets" className="mt-4">
-          <div className="grid gap-3">
-            {data.datasets.map((ds) => (
-              <Card
-                key={ds.id}
-                className="transition-colors hover:bg-accent/50"
-              >
-                <CardContent className="flex items-center justify-between py-3">
-                  <Link href={`/datasets/${ds.id}`} className="flex-1">
-                    <p className="text-sm font-medium">{ds.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {ds.row_count?.toLocaleString()} rows &middot;{" "}
-                      {ds.column_count} columns &middot;{" "}
-                      {new Date(ds.created_at).toLocaleDateString()}
-                    </p>
-                  </Link>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-3 shrink-0"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setAppendTarget({ id: ds.id, name: ds.name });
-                    }}
-                  >
-                    + Extend source
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+            )}
           </div>
-        </TabsContent>
-      </Tabs>
+        ) : (
+          <Card className="border-dashed border-slate-200 bg-slate-50/50 dark:bg-slate-900/20">
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              No charts yet from your sources. Ensure date and numeric columns
+              are detected, or open a source to adjust the schema.
+            </CardContent>
+          </Card>
+        )}
+      </section>
 
-      {/* Append dialog */}
+      {/* Planning + sources (secondary) — outlook full width so the chart reads clearly */}
+      <section className="space-y-3">
+        <SectionLabel>Planning & sources</SectionLabel>
+        <div className="flex flex-col gap-6">
+          <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 md:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950/30 w-full">
+            <h3 className="text-sm font-semibold text-slate-900">Outlook</h3>
+            <p className="text-xs text-slate-500 mt-1 mb-2 leading-relaxed max-w-3xl">
+              Directional linear projection—not a forecast of record.{" "}
+              <span className="text-slate-600 dark:text-slate-400">
+                Workspace outlook uses the{" "}
+                <strong className="font-medium text-slate-800 dark:text-slate-200">
+                  source with the most rows
+                </strong>{" "}
+                that has both a date column and a revenue-style numeric column,
+                then the{" "}
+                <strong className="font-medium text-slate-800 dark:text-slate-200">
+                  first date
+                </strong>{" "}
+                and{" "}
+                <strong className="font-medium text-slate-800 dark:text-slate-200">
+                  first numeric measure
+                </strong>{" "}
+                from that file&apos;s schema. To model a different column or
+                file, open that data source and use Forecast there.
+              </span>
+            </p>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end mb-5 md:mb-6">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="outlook-horizon"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Forecast horizon
+                </label>
+                <select
+                  id="outlook-horizon"
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 min-w-[11rem]"
+                  value={outlookPeriods}
+                  onChange={(e) => setOutlookPeriods(Number(e.target.value))}
+                >
+                  <option value={30}>30 periods</option>
+                  <option value={90}>90 periods</option>
+                  <option value={180}>180 periods</option>
+                  <option value={365}>365 periods</option>
+                </select>
+                <p className="text-[11px] text-slate-400 max-w-xs leading-snug">
+                  Each period matches your data spacing (day, week, or month).
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-lg shrink-0"
+                onClick={() => forecastMutation.mutate()}
+                disabled={forecastMutation.isPending}
+              >
+                {forecastMutation.isPending
+                  ? "Generating..."
+                  : forecastMutation.data
+                    ? "Regenerate outlook"
+                    : "Generate outlook"}
+              </Button>
+            </div>
+
+            {forecastMutation.isError && (
+              <p className="text-sm text-destructive mb-4">
+                {forecastMutation.error.message}
+              </p>
+            )}
+
+            {forecastMutation.data ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-300">
+                  <p className="font-medium text-slate-800 dark:text-slate-100">
+                    Series in this chart
+                  </p>
+                  <p className="mt-1 leading-relaxed">
+                    <span className="font-medium">
+                      {forecastMutation.data.value_column.replace(/_/g, " ")}
+                    </span>
+                    {" · "}
+                    timeline{" "}
+                    <span className="font-medium">
+                      {forecastMutation.data.date_column.replace(/_/g, " ")}
+                    </span>
+                    {" · "}
+                    file{" "}
+                    <span className="font-medium">
+                      {forecastMutation.data.dataset_name}
+                    </span>
+                  </p>
+                  <p className="mt-2 text-slate-500 dark:text-slate-400">
+                    Showing{" "}
+                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                      {forecastMutation.data.stats.forecast_periods}
+                    </span>{" "}
+                    future {forecastMutation.data.stats.period_type}
+                    {forecastMutation.data.stats.forecast_periods === 1
+                      ? ""
+                      : "s"}
+                    .
+                  </p>
+                </div>
+                <ForecastChart
+                  data={forecastMutation.data}
+                  valueColumn={forecastMutation.data.value_column}
+                  chartHeightClassName="min-h-[16rem] h-[min(34rem,52vh)] sm:min-h-[20rem]"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/30 w-full lg:max-w-xl">
+            <h3 className="text-sm font-semibold text-slate-900">Data sources</h3>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
+              Jump into a file for previews, insights, and append.
+            </p>
+            <ul className="space-y-2">
+              {data.datasets.map((ds) => (
+                <li key={ds.id}>
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-transparent px-2 py-2 hover:border-slate-200 hover:bg-white/80 dark:hover:border-slate-700 dark:hover:bg-slate-900/40 transition-colors">
+                    <Link
+                      href={`/datasets/${ds.id}`}
+                      className="flex-1 min-w-0"
+                    >
+                      <p className="text-sm font-medium text-slate-900 truncate">
+                        {ds.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {ds.row_count?.toLocaleString()} rows ·{" "}
+                        {ds.column_count} cols ·{" "}
+                        {new Date(ds.created_at).toLocaleDateString()}
+                      </p>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-xs"
+                      onClick={() =>
+                        setAppendTarget({ id: ds.id, name: ds.name })
+                      }
+                    >
+                      Extend
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Full analysis (optional depth) */}
+      {analysisReady && overviewAnalysis.data?.result_json && (
+        <details className="group rounded-2xl border border-slate-200/60 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/20">
+          <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
+            <span>Full analysis detail</span>
+            <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">
+              ▾
+            </span>
+          </summary>
+          <div className="px-5 pb-6 pt-0 border-t border-slate-200/60 dark:border-slate-800">
+            <div className="pt-4 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg mb-4"
+                onClick={() => runOverviewAnalysis.mutate()}
+                disabled={runOverviewAnalysis.isPending}
+              >
+                {runOverviewAnalysis.isPending
+                  ? "Refreshing..."
+                  : "Refresh insights"}
+              </Button>
+            </div>
+            <AnalysisPanel
+              result={overviewAnalysis.data!.result_json as AnalysisResult}
+            />
+          </div>
+        </details>
+      )}
+
       <Dialog
         open={!!appendTarget}
         onOpenChange={(open) => !open && setAppendTarget(null)}
@@ -478,7 +745,6 @@ export default function OverviewPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Floating AI Chat */}
       <ChatOverlay datasets={data.datasets} />
     </div>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import {
   AreaChart,
   Area,
@@ -110,9 +111,12 @@ function forecastPeriodInsight(
 export function ForecastChart({
   data,
   valueColumn,
+  chartHeightClassName = "h-80",
 }: {
   data: ForecastData;
   valueColumn: string;
+  /** Tailwind height classes for the plot area (default h-80). */
+  chartHeightClassName?: string;
 }) {
   const combined = [
     ...data.historical.map((h) => ({
@@ -186,7 +190,7 @@ export function ForecastChart({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium">
-            {metricLabel} — Historical &amp; Forecast
+            {metricLabel} — Historical & forecast
           </CardTitle>
           {chartInsight ? (
             <div className="mt-3 space-y-1.5">
@@ -202,7 +206,12 @@ export function ForecastChart({
           ) : null}
         </CardHeader>
         <CardContent>
-          <div className="h-80 rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
+          <div
+            className={cn(
+              "rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2",
+              chartHeightClassName
+            )}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={combined}
