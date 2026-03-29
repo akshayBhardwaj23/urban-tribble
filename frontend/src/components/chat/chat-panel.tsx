@@ -92,19 +92,19 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
     0
   );
   const selectedName = isAllDatasets
-    ? "all connected sources"
+    ? "all sources in this workspace"
     : datasets.find((d) => d.id === selectedDataset)?.name;
 
   const suggestions = isAllDatasets
     ? [
-        "Summarize performance across my sources",
-        "What's total revenue across all sources?",
-        "Compare sales vs expenses",
+        "Summarize how my sources look together",
+        "What is total revenue across all sources?",
+        "Compare sales and expenses",
       ]
     : [
-        "What was the total revenue?",
+        "What was total revenue?",
         "Which category had the highest sales?",
-        "Show me the monthly trend",
+        "Show the monthly trend",
       ];
 
   return (
@@ -118,7 +118,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
             ? "fixed bottom-5 right-5 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
             : "fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-primary pl-3 pr-4 py-2.5 text-primary-foreground shadow-lg transition-transform hover:scale-[1.02] active:scale-95"
         }
-        aria-label={open ? "Close assistant" : `Ask ${PRODUCT_NAME}`}
+        aria-label={open ? "Close Q&A" : `Ask ${PRODUCT_NAME}`}
       >
         {open ? (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -155,7 +155,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
-                <span className="text-sm font-semibold">Insights assistant</span>
+                <span className="text-sm font-semibold">Q&A on your data</span>
                 {isAllDatasets && (
                   <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
                     Workspace
@@ -209,12 +209,12 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
               <div className="flex items-center justify-center text-center py-8">
                 <div className="space-y-2 max-w-[280px]">
                   <p className="text-sm font-medium text-foreground">
-                    Ask anything about {selectedName}
+                    Ask about {selectedName}
                   </p>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {isAllDatasets
-                      ? "Grounded answers across every connected source"
-                      : "Answers are scoped to this source only"}
+                      ? "Answers use every source in this workspace."
+                      : "Answers use this source only."}
                   </p>
                   <div className="space-y-1.5 pt-1">
                     {suggestions.map((suggestion) => (
@@ -277,8 +277,8 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={
                   isAllDatasets
-                    ? "Ask across the workspace..."
-                    : "Ask about this source..."
+                    ? "Question for the workspace…"
+                    : "Question for this source…"
                 }
                 className="flex-1 text-sm h-9"
                 disabled={chatMutation.isPending}

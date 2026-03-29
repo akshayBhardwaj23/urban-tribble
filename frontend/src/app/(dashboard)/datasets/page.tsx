@@ -49,17 +49,16 @@ export default function DatasetsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Data Sources</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Sources</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every imported file your workspace uses for reporting, insights, and
-            forecasts.
+            Files in this workspace—used for the overview, source views, and briefings.
           </p>
         </div>
         <Link
           href="/upload"
           className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          Import Data
+          Import data
         </Link>
       </div>
 
@@ -73,14 +72,13 @@ export default function DatasetsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-sm text-muted-foreground mb-4">
-              No data sources yet. Import a spreadsheet to anchor your first
-              metrics.
+              No sources yet. Import a spreadsheet to anchor your first metrics.
             </p>
             <Link
               href="/upload"
               className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Import Data
+              Import data
             </Link>
           </CardContent>
         </Card>
@@ -141,12 +139,11 @@ export default function DatasetsPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove data source</DialogTitle>
+            <DialogTitle>Remove source</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This permanently removes{" "}
-            <strong>{deleteTarget?.name}</strong> and all associated insights,
-            views, and conversation history. This cannot be undone.
+            This permanently removes <strong>{deleteTarget?.name}</strong> and its briefings, views,
+            and chat history. This cannot be undone.
           </p>
           {deleteMutation.isError && (
             <p className="text-sm text-destructive">
@@ -168,7 +165,7 @@ export default function DatasetsPage() {
               }
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Removing…" : "Remove"}
             </Button>
           </div>
         </DialogContent>

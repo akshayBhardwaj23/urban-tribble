@@ -151,7 +151,7 @@ export function TimeframeToolbar({
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-            Analysis period
+            Time range
           </span>
           <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200/90 bg-white/80 p-1 shadow-sm">
             {PRESETS.map((p) => (
@@ -167,7 +167,7 @@ export function TimeframeToolbar({
                 )}
                 title={
                   !hasDateColumn && p.id !== "all"
-                    ? "No date field detected in this source"
+                    ? "No date column on this source"
                     : undefined
                 }
                 onClick={() => {
@@ -188,7 +188,7 @@ export function TimeframeToolbar({
                 active === "custom" ? "" : "text-slate-600"
               )}
               title={
-                !hasDateColumn ? "No date field detected in this source" : undefined
+                !hasDateColumn ? "No date column on this source" : undefined
               }
               onClick={openCustomDialog}
             >
@@ -219,7 +219,7 @@ export function TimeframeToolbar({
       <Dialog open={customOpen} onOpenChange={setCustomOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Custom period</DialogTitle>
+            <DialogTitle>Custom range</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">

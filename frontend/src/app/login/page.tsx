@@ -35,7 +35,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardContent className="pt-6 pb-6 flex flex-col items-center gap-4">
           <p className="text-sm text-muted-foreground text-center">
-            Sign in to access your workspaces and data
+            Sign in to open your workspaces
           </p>
           <Button
             className="w-full h-11 gap-2"

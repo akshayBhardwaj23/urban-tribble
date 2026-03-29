@@ -65,13 +65,13 @@ export function buildStaticSummaryKpiDetails(input: {
     aggregation: input.aggregationLabel,
     source_column: col ?? null,
     date_column: null,
-    date_range_label: "Full cleaned file (summary stats—not the live filtered frame)",
+    date_range_label: "Full cleaned file (saved summary, not the live filtered view)",
     row_count: 0,
   };
 }
 
 /** Client-side parity when API returns KPIs without `details` (older responses). */
-/** Workspace Business Health tiles (overview KPI slots). */
+/** Workspace overview KPI tiles. */
 export function buildWorkspaceMetricSlotDetails(input: {
   label: string;
   sourceName: string | null;
@@ -86,18 +86,18 @@ export function buildWorkspaceMetricSlotDetails(input: {
       : "Workspace");
   return {
     metric_title: input.label,
-    definition: `This tile is filled by matching your workspace overview KPI list to “${input.label}” using label heuristics (and AI key-metric text when present). It is not a custom SQL query per session.${
+    definition: `This tile picks the workspace KPI whose label best matches “${input.label}” (plus the latest briefing’s key metrics when present). It is a label match, not a custom query each session.${
       input.note ? ` ${input.note}` : ""
     }`,
     formula_summary:
-      "Backend: aggregated metrics from each ingested dataset, then best match by keyword patterns for this slot.",
+      "Server aggregates each ingested source, then maps the closest label into this slot.",
     source_file: src,
     columns_used: [],
-    aggregation: "server-defined",
+    aggregation: "Workspace rollup",
     source_column: null,
     date_column: null,
     date_range_label:
-      "Each source uses its own ingested range; workspace view does not apply a single date filter here.",
+      "Each source keeps its own date range; this workspace row does not apply one shared filter.",
     row_count: input.totalRowsWorkspace,
   };
 }
@@ -116,8 +116,8 @@ export function buildHeuristicKpiDetails(input: {
   if (!col || col === "__row_count__") {
     return {
       metric_title: input.title,
-      definition: `"${input.title}" reflects a row count on the filtered dataframe (${input.filteredRowCount.toLocaleString()} rows).`,
-      formula_summary: "pandas: len(df) after any date filter.",
+      definition: `"${input.title}" is the row count after your date filter (${input.filteredRowCount.toLocaleString()} rows).`,
+      formula_summary: "Count of rows in the filtered table.",
       source_file: input.datasetName,
       columns_used: [],
       aggregation: "count",
@@ -143,8 +143,8 @@ export function buildHeuristicKpiDetails(input: {
   }
   return {
     metric_title: input.title,
-    definition: `"${input.title}" is the ${agg} of \`${col}\` over ${input.filteredRowCount.toLocaleString()} filtered rows.`,
-    formula_summary: `pandas: df['${col}'].${agg}()`,
+    definition: `"${input.title}" is the ${agg} of \`${col}\` across ${input.filteredRowCount.toLocaleString()} filtered rows.`,
+    formula_summary: `${agg.toUpperCase()} of column \`${col}\` on the filtered rows.`,
     source_file: input.datasetName,
     columns_used: [col],
     aggregation: agg,

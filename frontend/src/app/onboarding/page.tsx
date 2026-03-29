@@ -72,7 +72,7 @@ export default function OnboardingPage() {
           Welcome to {PRODUCT_NAME}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Create your first workspace to centralize sources and decisions
+          Name a workspace to hold your sources and briefings
         </p>
       </div>
 

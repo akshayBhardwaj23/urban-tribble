@@ -114,12 +114,12 @@ export function TraceDetailsBody({
 
         {context.modelLabel ? (
           <div className="sm:col-span-2">
-            <TraceField label="Model / format">{context.modelLabel}</TraceField>
+            <TraceField label="Model">{context.modelLabel}</TraceField>
           </div>
         ) : null}
 
         <div className="sm:col-span-2">
-          <TraceField label="How this was produced">{context.methodNote}</TraceField>
+          <TraceField label="How we built this">{context.methodNote}</TraceField>
         </div>
       </dl>
 
@@ -138,8 +138,8 @@ export function TraceDetailsBody({
 
       {context.caveats.length > 0 ? (
         <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/25">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-900/80 dark:text-amber-200/90 mb-1.5">
-            Data quality & caveats
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-900/80 dark:text-amber-200/90 mb-1.5">
+            Caveats
           </p>
           <ul className="list-disc pl-4 space-y-1 text-xs text-amber-950/90 dark:text-amber-100/90">
             {context.caveats.map((c, i) => (
@@ -182,7 +182,7 @@ export function TraceCollapsible({
           />
           <span className="min-w-0">
             <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              Verify data scope
+              What fed this briefing
             </span>
             {summaryHint ? (
               <span className="mt-0.5 block text-xs text-slate-500 truncate">
@@ -211,7 +211,7 @@ export function TraceCollapsible({
 export function TraceVerifyDialog({
   context,
   triggerLabel = "View source",
-  title = "How this was produced",
+  title = "Basis for this read",
   extraHeadline,
   size = "default",
 }: {

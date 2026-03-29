@@ -100,17 +100,16 @@ export default function UploadPage() {
           <header className="space-y-8">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3.5 py-1.5 text-xs font-medium text-primary">
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              Import
+              Add data
             </div>
 
             <div className="space-y-3 max-w-2xl">
               <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-foreground">
-                Choose how you want to work
+                Start from an outcome—or upload freely
               </h1>
               <p className="text-base text-muted-foreground leading-relaxed">
-                Start from a defined business outcome—we show what to upload and what
-                analysis you get—or import on your own terms when you already know your
-                files.
+                Pick a briefing template for guided file hints and framing, or go
+                straight to manual upload when you already know what you are bringing.
               </p>
             </div>
 
@@ -123,11 +122,11 @@ export default function UploadPage() {
                   id="templates-heading"
                   className="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
                 >
-                  Analysis templates
+                  Briefing templates
                 </h2>
                 <p className="mt-2 text-sm text-foreground/90 leading-relaxed max-w-xl">
-                  Practical, commercially relevant paths. Pick one to see file guidance
-                  and the analysis framing before you upload.
+                  Common decision reviews—each shows what to upload and how the briefing
+                  will be framed before you add files.
                 </p>
               </div>
 
@@ -178,7 +177,7 @@ export default function UploadPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
-                        Upload data manually
+                        Manual upload
                       </p>
                       <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
                         {CUSTOM_ANALYSIS_TEMPLATE.summary}
@@ -211,7 +210,7 @@ export default function UploadPage() {
               onClick={goChoose}
             >
               <ArrowLeft className="h-4 w-4 mr-1.5" aria-hidden />
-              Change path
+              Change route
             </Button>
           </div>
 
@@ -219,7 +218,7 @@ export default function UploadPage() {
             <div className="space-y-8">
               <header className="space-y-2 max-w-2xl">
                 <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                  Selected template
+                  Template
                 </p>
                 <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
                   {guidedTemplate.title}
@@ -237,11 +236,10 @@ export default function UploadPage() {
                   )}
                 >
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    What to upload
+                    Files to bring
                   </h2>
                   <ExpectedInputsList
                     items={guidedTemplate.recommendedInputs}
-                    label="Recommended files"
                     className="mt-3"
                   />
                   <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
@@ -249,7 +247,7 @@ export default function UploadPage() {
                   </p>
                   {guidedTemplate.bestFor && (
                     <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
-                      <span className="font-medium text-foreground/85">Typical users:</span>{" "}
+                      <span className="font-medium text-foreground/85">Who it suits:</span>{" "}
                       {guidedTemplate.bestFor}
                     </p>
                   )}
@@ -272,11 +270,11 @@ export default function UploadPage() {
               <Card className="border-border/80 shadow-md shadow-black/3 overflow-hidden">
                 <CardHeader className="border-b bg-muted/15 pb-5 pt-6 px-6 sm:px-8">
                   <CardTitle className="text-lg font-semibold tracking-tight">
-                    Import
+                    Files
                   </CardTitle>
                   <p className="text-sm text-muted-foreground font-normal mt-2 leading-relaxed max-w-2xl">
-                    Add one or more files below. Each file is classified and mapped; you
-                    confirm before analysis runs. Optional notes help match your intent.
+                    Add one or more files. Each is classified and mapped; you confirm the read
+                    before charts and briefings run. Optional notes align the model with your intent.
                   </p>
                 </CardHeader>
                 <CardContent className="pt-8 pb-8 px-6 sm:px-8">
@@ -295,7 +293,7 @@ export default function UploadPage() {
             <div className="space-y-8">
               <header className="space-y-2 max-w-2xl">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Manual import
+                  Manual upload
                 </p>
                 <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
                   {CUSTOM_ANALYSIS_TEMPLATE.title}
@@ -320,12 +318,12 @@ export default function UploadPage() {
               <Card className="border-border/80 shadow-md shadow-black/3 overflow-hidden">
                 <CardHeader className="border-b bg-muted/15 pb-5 pt-6 px-6 sm:px-8">
                   <CardTitle className="text-lg font-semibold tracking-tight">
-                    Import
+                    Files
                   </CardTitle>
                   <p className="text-sm text-muted-foreground font-normal mt-2 leading-relaxed max-w-2xl">
-                    Structured tables work best—rows as records, columns as fields. You can
-                    upload several files in one go; each is understood on its own, then
-                    combined in your workspace after you confirm.
+                    Structured tables work best: one row per record, clear column names. You can
+                    queue several files; each is read on its own, then combined in the workspace
+                    after you confirm.
                   </p>
                 </CardHeader>
                 <CardContent className="pt-8 pb-8 px-6 sm:px-8">

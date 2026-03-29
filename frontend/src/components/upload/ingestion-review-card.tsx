@@ -163,8 +163,8 @@ export function IngestionReviewCard({
       </div>
 
       <p className="text-sm text-muted-foreground leading-relaxed">
-        Here is how we read your file for trends and KPIs. Adjust anything that looks off, then
-        confirm so analysis matches how you think about this data.
+        How we mapped this file for trends and KPIs. Adjust anything that looks wrong, then
+        confirm so charts and briefings match how you use the data.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -203,7 +203,7 @@ export function IngestionReviewCard({
             disabled={saving || confirmed}
             onChange={(e) => setDateColumn(e.target.value)}
           >
-            <option value="">Not set — optional for some views</option>
+            <option value="">Not set (optional for some views)</option>
             {dateChoices.map((c) => (
               <option key={c} value={c}>
                 {c.replace(/_/g, " ")}
@@ -211,7 +211,7 @@ export function IngestionReviewCard({
             ))}
           </select>
           <p className="text-[11px] text-muted-foreground">
-            Used for trends over time. Pick the column that is really your calendar or period.
+            Drives trends over time—choose the column that represents your calendar or period.
           </p>
         </div>
 
@@ -234,7 +234,7 @@ export function IngestionReviewCard({
             ))}
           </select>
           <p className="text-[11px] text-muted-foreground">
-            Revenue, cost, quantity, or another number you want rolled up into KPIs and charts.
+            Revenue, cost, quantity, or another figure to roll into KPIs and charts.
           </p>
         </div>
       </div>
@@ -242,7 +242,7 @@ export function IngestionReviewCard({
       <div className="space-y-2">
         <p className="text-xs font-medium text-foreground">Breakdowns</p>
         <p className="text-[11px] text-muted-foreground">
-          Region, product, customer, campaign — choose fields we should treat as segments.
+          Region, product, customer, campaign—pick fields to treat as segments.
         </p>
         <div className="flex flex-wrap gap-2">
           {segmentChoices.length === 0 ? (
@@ -279,7 +279,7 @@ export function IngestionReviewCard({
       {ingestion.interpretations.length > 0 && (
         <div className="rounded-lg bg-muted/40 px-3 py-2.5 space-y-1">
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-            Our read
+            How we read it
           </p>
           <ul className="text-sm text-foreground/90 space-y-1 list-disc list-inside">
             {ingestion.interpretations.map((line, i) => (
@@ -291,7 +291,7 @@ export function IngestionReviewCard({
 
       {ingestion.flags.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Notes</p>
+          <p className="text-xs font-medium text-muted-foreground">Heads-up</p>
           <ul className="space-y-2">
             {ingestion.flags.map((f) => (
               <li
@@ -315,8 +315,8 @@ export function IngestionReviewCard({
       {!confirmed && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1 border-t border-border/60">
           <p className="text-xs text-muted-foreground max-w-md">
-            When this looks right, confirm — we will save your choices and use them for dashboards
-            and analysis.
+            When this matches how you think about the file, confirm—we save your choices for
+            charts and briefings.
           </p>
           <Button type="button" onClick={() => void handleConfirm()} disabled={saving}>
             {saving ? "Saving…" : "Confirm this file"}

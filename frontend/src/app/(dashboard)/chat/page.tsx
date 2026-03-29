@@ -65,10 +65,10 @@ export default function ChatPage() {
   return (
     <div className="mx-auto flex h-[calc(100vh-6rem)] max-w-3xl flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Insights assistant</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Q&A on your data</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Natural-language Q&A over a selected source—grounded in what you
-          imported.
+          Questions in plain language, scoped to one source—the answers use what you imported,
+          not the open web.
         </p>
       </div>
 
@@ -76,7 +76,7 @@ export default function ChatPage() {
       {!selectedDataset ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Choose a data source</CardTitle>
+            <CardTitle className="text-base">Choose a source</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingDatasets ? (
@@ -87,7 +87,7 @@ export default function ChatPage() {
               </div>
             ) : !datasets || datasets.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No sources available. Import data first.
+                No sources yet. Import a file first.
               </p>
             ) : (
               <div className="space-y-2">
@@ -112,7 +112,7 @@ export default function ChatPage() {
         <>
           <div className="mb-3 flex items-center gap-2">
             <p className="text-sm text-muted-foreground">
-              Scoped to:{" "}
+              Using:{" "}
               <span className="font-medium text-foreground">
                 {datasets?.find((d) => d.id === selectedDataset)?.name}
               </span>
@@ -134,10 +134,10 @@ export default function ChatPage() {
               {messages.length === 0 ? (
                 <div className="flex h-full items-center justify-center py-20 text-center">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">No messages yet</p>
+                    <p className="text-sm font-medium">Ask your first question</p>
                     <p className="text-xs text-muted-foreground max-w-xs">
-                      Try asking: &quot;What was the total revenue?&quot; or
-                      &quot;Which product had the highest sales?&quot;
+                      For example: &quot;What was total revenue?&quot; or &quot;Which product had
+                      the highest sales?&quot;
                     </p>
                   </div>
                 </div>

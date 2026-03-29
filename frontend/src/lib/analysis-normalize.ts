@@ -1,5 +1,6 @@
 /** Normalize AI analysis insights (legacy title/description or structured finding fields). */
 
+import { INSIGHT_WHY_MATTERS_FALLBACK } from "@/lib/analysis-fallback-copy";
 import type { InsightTraceSlice } from "@/lib/traceability";
 
 export type InsightPolarity = "positive" | "negative" | "neutral";
@@ -7,6 +8,8 @@ export type InsightPolarity = "positive" | "negative" | "neutral";
 export type ConfidenceBand = "high" | "medium" | "low" | "unknown";
 
 export interface NormalizedInsight {
+  /** Operator-brief title (4–9 words); from API or derived from finding */
+  headline: string;
   finding: string;
   why_it_matters: string;
   likely_cause: string | null;
@@ -54,6 +57,59 @@ function uniqueCaveats(items: string[]): string[] {
     out.push(t);
   }
   return out;
+}
+
+const WEAK_HEADLINE_RE =
+  /^(data|dataset|the data|this data|analysis|insight|observation|summary|trend|business observation|marketing insight|revenue analysis|customer spending)/i;
+
+/** First sentence or trimmed segment for fallback headline (no API headline). */
+function firstSentenceOrTrim(s: string, maxLen: number): string {
+  const t = s.trim();
+  const end = t.search(/[.!?](?=\s|$)/);
+  if (end >= 14 && end < maxLen + 24) {
+    return t.slice(0, end + 1).trim();
+  }
+  if (t.length <= maxLen) return t;
+  const cut = t.slice(0, maxLen - 1);
+  const sp = cut.lastIndexOf(" ");
+  return `${sp > 35 ? cut.slice(0, sp) : cut}…`;
+}
+
+function deriveInsightHeadline(
+  finding: string,
+  type: InsightPolarity,
+  hasCaveats: boolean
+): string {
+  const stripped = finding
+    .replace(/^(the |this |this pass |this briefing |the api |the extract )/i, "")
+    .trim();
+  let candidate = firstSentenceOrTrim(stripped, 88);
+  candidate = candidate.replace(/\.$/, "").trim();
+  if (candidate.length < 12 || WEAK_HEADLINE_RE.test(candidate)) {
+    if (type === "negative" && hasCaveats) return "Data quality limiting conviction";
+    if (type === "negative") return "Commercial downside flagged";
+    if (type === "positive") return "Upside worth validating";
+    return "Operating signal to review";
+  }
+  if (!/^[A-Z]/.test(candidate)) {
+    candidate = candidate.charAt(0).toUpperCase() + candidate.slice(1);
+  }
+  return candidate;
+}
+
+/** Text under headline when it does not duplicate the full finding. */
+export function insightContextLine(headline: string, finding: string): string | null {
+  const f = finding.trim();
+  const h = headline.replace(/…\s*$/, "").trim();
+  if (!f) return null;
+  if (f === headline) return null;
+  const fl = f.toLowerCase();
+  const hl = h.toLowerCase();
+  if (fl.startsWith(hl)) {
+    const rest = f.slice(h.length).replace(/^[.\s—:,-]+/, "").trim();
+    return rest.length >= 12 ? rest : null;
+  }
+  return f;
 }
 
 /** Parse High/Medium/Low from explicit field or leading words of `confidence`. */
@@ -144,10 +200,11 @@ export function normalizeInsight(raw: unknown): NormalizedInsight | null {
 
   const finalFinding =
     finding || (why.length > 100 ? `${why.slice(0, 97)}…` : why);
-  const finalWhy =
-    why ||
-    "Commercial impact isn’t explicit yet—rerun after you label cost, channel, or cohort columns so we can tie this to margin or cash.";
+  const finalWhy = why || INSIGHT_WHY_MATTERS_FALLBACK;
 
+  const rawHeadline = str(
+    o.headline || o.card_title || o.operator_title || o.brief_title
+  );
   const likely = str(o.likely_cause) || null;
   const action = str(o.recommended_action) || null;
   const confidence = str(o.confidence) || null;
@@ -173,7 +230,12 @@ export function normalizeInsight(raw: unknown): NormalizedInsight | null {
   if (trace?.caveats?.length) caveatParts.push(...trace.caveats);
   const caveats = uniqueCaveats(caveatParts);
 
+  const headline =
+    rawHeadline ||
+    deriveInsightHeadline(finalFinding, polarity(o.type), caveats.length > 0);
+
   return {
+    headline,
     finding: finalFinding,
     why_it_matters: finalWhy,
     likely_cause: likely,

@@ -52,7 +52,7 @@ export function WorkspaceSwitcher() {
                 Workspace
               </span>
               <span className="text-sm font-medium truncate w-full">
-                {activeWorkspace?.name ?? "Select workspace"}
+                {activeWorkspace?.name ?? "Choose workspace"}
               </span>
             </div>
             {showChevron ? (
@@ -77,7 +77,7 @@ export function WorkspaceSwitcher() {
           ))}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setDialogOpen(true)}>
-            + New Workspace
+            New workspace
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -85,7 +85,7 @@ export function WorkspaceSwitcher() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create a new workspace</DialogTitle>
+            <DialogTitle>New workspace</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="flex flex-col gap-4 mt-2">
             <Input
@@ -96,7 +96,7 @@ export function WorkspaceSwitcher() {
               disabled={creating}
             />
             <Button type="submit" disabled={creating || !newName.trim()}>
-              {creating ? "Creating..." : "Create"}
+              {creating ? "Creating…" : "Create"}
             </Button>
           </form>
         </DialogContent>

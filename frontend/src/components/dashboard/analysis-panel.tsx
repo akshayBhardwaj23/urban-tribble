@@ -4,6 +4,12 @@ import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
+  INSIGHT_PAY_ATTENTION_FALLBACK,
+  INSIGHT_SOURCE_FALLBACK,
+  INSIGHT_UNGRADED_CONFIDENCE,
+} from "@/lib/analysis-fallback-copy";
+import {
+  insightContextLine,
   normalizeInsightsList,
   parseInsightTraceSlice,
   sortInsightsForDisplay,
@@ -27,6 +33,10 @@ import {
   TraceCollapsible,
   TraceVerifyDialog,
 } from "@/components/trust/analysis-trace";
+import {
+  CONFIDENCE_TONE_LEGEND,
+  confidenceToneCardLine,
+} from "@/lib/confidence-tone";
 
 /** API payload; `insights` may be legacy or structured (normalized at render). */
 export interface AnalysisResult {
@@ -86,7 +96,7 @@ function SectionHeading({
 function polarityLabel(t: NormalizedInsight["type"]): string {
   if (t === "negative") return "Downside";
   if (t === "positive") return "Upside";
-  return "Observation";
+  return "Context";
 }
 
 function polarityBar(t: NormalizedInsight["type"]): string {
@@ -118,13 +128,13 @@ function confidenceShortLabel(level: ConfidenceBand): string {
 function confidenceAriaLabel(level: ConfidenceBand): string {
   switch (level) {
     case "high":
-      return "Model confidence: high";
+      return "Conviction: high";
     case "medium":
-      return "Model confidence: medium";
+      return "Conviction: medium";
     case "low":
-      return "Model confidence: low";
+      return "Conviction: low";
     default:
-      return "Model confidence: not graded";
+      return "Conviction: not graded";
   }
 }
 
@@ -184,7 +194,7 @@ function InsightCaveatsBlock({
         />
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
-            Data caveats
+            Validate before you act
           </p>
           <ul className="mt-1.5 space-y-1 text-xs leading-snug text-slate-600 dark:text-slate-300">
             {caveats.map((c, i) => (
@@ -211,17 +221,17 @@ function TopPrioritiesBlock({
   return (
     <section
       className="rounded-2xl border border-slate-200/80 bg-gradient-to-b from-slate-50/95 via-white to-white shadow-sm ring-1 ring-slate-900/[0.03] dark:border-slate-800 dark:from-slate-900/50 dark:via-slate-950/80 dark:to-slate-950 dark:ring-white/[0.04]"
-      aria-label="Top priorities"
+      aria-label="Priorities"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800/80">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Top priorities
+          Priorities
         </h3>
         {traceContext ? (
           <TraceVerifyDialog
             context={traceContext}
-            title="How priorities were derived"
-            extraHeadline="Condensed from the findings below—same underlying scope."
+            title="What this list draws on"
+            extraHeadline="Same scope as the findings below."
             triggerLabel="Scope"
             size="sm"
           />
@@ -255,7 +265,7 @@ function TopPrioritiesBlock({
               <p className="mt-2 text-sm font-semibold leading-snug tracking-tight text-slate-900 dark:text-slate-50">
                 {item.title}
               </p>
-              <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+              <p className="mt-1.5 text-xs leading-snug text-slate-600 dark:text-slate-300">
                 {item.explanation}
               </p>
             </div>
@@ -275,7 +285,6 @@ function InsightCard({
   index: number;
   parentTrace?: AnalysisTraceContext | null;
 }) {
-  const empty = "—";
   const verifyContext =
     mergeInsightTrace(parentTrace ?? null, insight.trace) ??
     parentTrace ??
@@ -287,126 +296,138 @@ function InsightCard({
       insight.confidence_level === "medium" ||
       insight.confidence_level === "unknown");
 
+  const contextLine = insightContextLine(insight.headline, insight.finding);
+  const watchLine =
+    insight.recommended_action?.trim() || INSIGHT_PAY_ATTENTION_FALLBACK;
+
   return (
-    <article className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+    <article className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-950/40">
       <div
         className={`absolute left-0 top-0 h-full w-1 ${polarityBar(insight.type)}`}
         aria-hidden
       />
-      <div className="pl-5 pr-5 py-5 sm:pl-6">
-        <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
-          <div className="flex flex-wrap items-center gap-2 gap-y-1">
-            <span className="text-xs font-mono text-slate-400 tabular-nums">
+      <div className="pl-5 pr-5 py-4 sm:pl-5 sm:pr-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-mono text-slate-400 tabular-nums">
               {String(index + 1).padStart(2, "0")}
             </span>
             <Badge
               variant="outline"
-              className="text-[10px] font-semibold uppercase tracking-wide border-slate-200"
+              className="h-5 text-[9px] font-semibold uppercase tracking-wide border-slate-200/90 text-slate-600 dark:text-slate-400"
             >
               {polarityLabel(insight.type)}
             </Badge>
           </div>
-          <div className="flex items-center gap-2.5 sm:pt-0.5">
+          <div className="flex items-start gap-2">
             <InsightConfidenceMeter level={insight.confidence_level} />
-            <div className="min-w-0 text-right sm:text-left">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                Confidence
-              </p>
-              <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                {confidenceShortLabel(insight.confidence_level)}
+            <div className="min-w-0">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+                Conviction · {confidenceShortLabel(insight.confidence_level)}
+              </span>
+              <p className="mt-0.5 text-[10px] leading-snug text-slate-500 dark:text-slate-400 max-w-[16rem] sm:max-w-xs">
+                {confidenceToneCardLine(insight.confidence_level)}
               </p>
             </div>
           </div>
         </div>
 
-        <dl className="mt-4 space-y-4">
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Takeaway
-            </dt>
-            <dd className="mt-1.5 text-sm font-semibold leading-snug text-slate-900 dark:text-slate-50">
-              {insight.finding}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Commercial impact
-            </dt>
-            <dd className="mt-1.5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-              {insight.why_it_matters}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Likely driver
-            </dt>
-            <dd className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              {insight.likely_cause?.trim() || (
-                <span className="text-slate-400 italic font-normal">
-                  No credible driver yet—add cost, channel, cohort, or SKU
-                  fields, then re-run so this isn’t guesswork.
-                </span>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Next move
-            </dt>
-            <dd className="mt-1.5 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">
-              {insight.recommended_action?.trim() || empty}
-            </dd>
-          </div>
-        </dl>
+        <h3 className="mt-3 text-[15px] font-semibold leading-snug tracking-tight text-slate-900 dark:text-slate-50 pr-1">
+          {insight.headline}
+        </h3>
 
-        <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-          {insight.confidence_rationale ? (
-            <div className="rounded-lg border border-slate-100/80 bg-slate-50/40 px-3 py-2 dark:border-slate-800/80 dark:bg-slate-900/25">
+        {contextLine ? (
+          <p className="mt-2 text-sm leading-snug text-slate-600 dark:text-slate-300">
+            {contextLine}
+          </p>
+        ) : null}
+
+        <div className="mt-3 rounded-lg border border-slate-100/90 bg-slate-50/50 px-3 py-2.5 dark:border-slate-800/80 dark:bg-slate-900/20">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+            Implication
+          </p>
+          <p className="mt-1 text-sm leading-snug text-slate-800 dark:text-slate-100">
+            {insight.why_it_matters}
+          </p>
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <span
+            className="mt-0.5 text-slate-400 text-xs font-semibold shrink-0"
+            aria-hidden
+          >
+            →
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+              Next
+            </p>
+            <p className="mt-0.5 text-sm font-medium leading-snug text-slate-900 dark:text-slate-50">
+              {watchLine}
+            </p>
+            {insight.likely_cause?.trim() ? (
+              <p className="mt-1.5 text-xs leading-snug text-slate-500 dark:text-slate-400">
+                <span className="font-medium text-slate-600 dark:text-slate-300">
+                  Hypothesis:{" "}
+                </span>
+                {insight.likely_cause.trim()}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <details className="group mt-4 rounded-lg border border-slate-100 dark:border-slate-800 open:border-slate-200/90 dark:open:border-slate-700">
+          <summary className="cursor-pointer list-none px-3 py-2 text-left text-[11px] font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2">
+            <span>Evidence & limits</span>
+            <span className="text-slate-400 text-[10px] transition-transform group-open:rotate-180">
+              ▾
+            </span>
+          </summary>
+          <div className="space-y-3 border-t border-slate-100 px-3 py-3 dark:border-slate-800">
+            {insight.confidence_rationale ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Conviction note
+                </p>
+                <p className="mt-1 text-xs leading-snug text-slate-600 dark:text-slate-300 m-0">
+                  {insight.confidence_rationale}
+                </p>
+              </div>
+            ) : insight.confidence_level === "unknown" &&
+              !insight.confidence?.trim() ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug m-0">
+                {INSIGHT_UNGRADED_CONFIDENCE}
+              </p>
+            ) : null}
+
+            <InsightCaveatsBlock
+              caveats={insight.caveats}
+              emphasize={caveatEmphasis}
+            />
+
+            <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Why this confidence level
+                Figures
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300 m-0">
-                {insight.confidence_rationale}
+              <p className="mt-1 text-xs font-mono text-slate-600 dark:text-slate-400 wrap-break-word m-0">
+                {insight.source_reference?.trim() || (
+                  <span className="text-slate-400 font-sans">{INSIGHT_SOURCE_FALLBACK}</span>
+                )}
               </p>
             </div>
-          ) : insight.confidence_level === "unknown" &&
-            !insight.confidence?.trim() ? (
-            <p className="text-xs text-slate-400 dark:text-slate-500 italic leading-relaxed m-0">
-              The model did not score confidence for this finding—treat it as
-              directional until you validate against source rows.
-            </p>
-          ) : null}
-
-          <InsightCaveatsBlock
-            caveats={insight.caveats}
-            emphasize={caveatEmphasis}
-          />
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Evidence
-            </p>
-            <p className="mt-1 text-xs font-mono text-slate-600 dark:text-slate-400 wrap-break-word m-0">
-              {insight.source_reference?.trim() || (
-                <span className="text-slate-400 font-sans">
-                  Aggregate stats / schema (tie to a row filter when you
-                  brief the team)
-                </span>
-              )}
-            </p>
+            {verifyContext ? (
+              <div className="flex justify-end pt-1">
+                <TraceVerifyDialog
+                  context={verifyContext}
+                  title="Basis for this brief"
+                  extraHeadline={`${insight.headline} · ${polarityLabel(insight.type)}`}
+                  triggerLabel="View basis"
+                  size="sm"
+                />
+              </div>
+            ) : null}
           </div>
-          {verifyContext ? (
-            <div className="flex justify-end pt-2">
-              <TraceVerifyDialog
-                context={verifyContext}
-                title="Verify this insight"
-                extraHeadline={`Finding ${String(index + 1).padStart(2, "0")} · ${polarityLabel(insight.type)}`}
-                triggerLabel="View source"
-                size="sm"
-              />
-            </div>
-          ) : null}
-        </div>
+        </details>
       </div>
     </article>
   );
@@ -459,12 +480,41 @@ export function AnalysisPanel({
     <div className="space-y-10 max-w-4xl">
       <header className="border-b border-slate-200/80 pb-5 dark:border-slate-800">
         <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50">
-          AI analysis
+          Briefing
         </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Downside first, then operating observations, then upside. Written for
-          owners and GMs—interpretation and tradeoffs, not a data inventory.
+        <p className="mt-1 text-sm text-slate-500 leading-snug">
+          Downsides first, then context, then upside. Favor ties to revenue, margin, concentration,
+          and risk; when the file is thin, the copy below says what to validate next.
         </p>
+
+        <details className="group mt-4 rounded-lg border border-slate-200/80 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/25">
+          <summary className="cursor-pointer list-none px-4 py-2.5 text-left text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2">
+            <span>Why conviction changes the wording</span>
+            <span className="text-slate-400 text-[10px] transition-transform group-open:rotate-180 shrink-0">
+              ▾
+            </span>
+          </summary>
+          <div className="border-t border-slate-200/70 dark:border-slate-800 px-4 py-3 space-y-2.5">
+            <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 m-0">
+              Each signal carries a conviction label so the tone matches how strong the evidence
+              is—no false confidence when the extract is thin.
+            </p>
+            <ul className="space-y-2 m-0 pl-0 list-none">
+              {CONFIDENCE_TONE_LEGEND.map((row) => (
+                <li
+                  key={row.band}
+                  className="text-[11px] leading-snug text-slate-600 dark:text-slate-300"
+                >
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    {row.title}
+                  </span>
+                  {" — "}
+                  {row.body}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
       </header>
 
       {traceContext ? (
@@ -477,11 +527,11 @@ export function AnalysisPanel({
       <TopPrioritiesBlock items={topPriorities} traceContext={traceContext} />
 
       <section>
-        <SectionHeading hint="What you’d say first in a steering meeting: net position, urgency, and whether to act, watch, or dig.">
-          Headline
+        <SectionHeading hint="One or two sentences: net position and whether to act, wait, or dig deeper—specific to this scope, not generic praise.">
+          Bottom line
         </SectionHeading>
         <div className="rounded-2xl border border-slate-200/90 bg-slate-50/60 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/30">
-          <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+          <p className="text-sm leading-snug text-slate-800 dark:text-slate-100">
             {executive_summary}
           </p>
         </div>
@@ -489,7 +539,7 @@ export function AnalysisPanel({
 
       {key_metrics.length > 0 ? (
         <section>
-          <SectionHeading hint="Sanity-check definitions (gross vs net, cash vs accrual, trailing vs YTD) before you size bets off these.">
+          <SectionHeading hint="Confirm definitions (gross vs net, cash vs accrual) before these figures drive spend or headcount.">
             Key figures
           </SectionHeading>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -532,9 +582,9 @@ export function AnalysisPanel({
                     <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
                       <TraceVerifyDialog
                         context={figureCtx}
-                        title="Key figure — source"
+                        title="Figure basis"
                         extraHeadline={metric.label}
-                        triggerLabel="View source"
+                        triggerLabel="See basis"
                         size="sm"
                       />
                     </div>
@@ -548,8 +598,8 @@ export function AnalysisPanel({
 
       {insights.length > 0 ? (
         <section>
-          <SectionHeading hint="Each card is one decision: what we believe, how it hits revenue, cost, or risk, and the move to assign.">
-            Issues & opportunities
+          <SectionHeading hint="Short operator brief per card: context, implication, next step. Conviction steers how direct the language is; open Evidence & limits for rationale and figures.">
+            Signals
           </SectionHeading>
           <div className="space-y-5">
             {insights.map((insight, i) => (
@@ -566,8 +616,8 @@ export function AnalysisPanel({
 
       {anomalies.length > 0 ? (
         <section>
-          <SectionHeading hint="Skew, gaps, or duplication that could misstate performance—address before you lock a plan on the numbers above.">
-            Data quality & caveats
+          <SectionHeading hint="Skew, gaps, or duplication that could misstate revenue, cost, or risk—fix or footnote before you lock the plan.">
+            Quality flags
           </SectionHeading>
           <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 px-5 py-4 dark:border-amber-900/50 dark:bg-amber-950/20">
             <ul className="space-y-3">
@@ -581,7 +631,7 @@ export function AnalysisPanel({
                   >
                     {anomaly.severity}
                   </Badge>
-                  <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                  <p className="text-sm leading-snug text-slate-800 dark:text-slate-100">
                     {anomaly.description}
                   </p>
                 </li>
@@ -593,14 +643,14 @@ export function AnalysisPanel({
 
       {recommendations.length > 0 ? (
         <section>
-          <SectionHeading hint="Cross-file or cross-functional moves that still deserve an owner even if they aren’t tied to one card above.">
-            Portfolio actions
+          <SectionHeading hint="Cross-cutting moves that still need an owner if they are not already covered above.">
+            Open items
           </SectionHeading>
           <ol className="list-none space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/30">
             {recommendations.map((rec, i) => (
               <li
                 key={i}
-                className="flex gap-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200"
+                className="flex gap-3 text-sm leading-snug text-slate-700 dark:text-slate-200"
               >
                 <span className="font-mono text-xs text-slate-400 tabular-nums w-6 shrink-0">
                   {i + 1}.

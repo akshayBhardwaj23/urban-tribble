@@ -60,17 +60,17 @@ function OutcomeRibbon({ template }: { template: AnalysisTemplate }) {
       )}
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-        Your outcome
+        Framing
       </p>
       <p className="text-sm font-semibold text-foreground leading-snug">{template.title}</p>
       <p className="text-sm text-muted-foreground leading-relaxed">
         {template.analysisDelivered}
       </p>
       <div className="pt-3 border-t border-primary/15 mt-3 space-y-2">
-        <ExpectedInputsList items={template.recommendedInputs} label="Recommended files" />
+        <ExpectedInputsList items={template.recommendedInputs} />
         {template.bestFor ? (
           <p className="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
-            <span className="font-medium text-foreground/80">Typical users:</span>{" "}
+            <span className="font-medium text-foreground/80">Who it suits:</span>{" "}
             {template.bestFor}
           </p>
         ) : null}
@@ -189,7 +189,7 @@ export function FileDropzone({
       } catch (err) {
         updateEntry(i, {
           status: "error",
-          error: err instanceof Error ? err.message : "Import failed",
+          error: err instanceof Error ? err.message : "Upload failed",
         });
       }
     }
@@ -256,11 +256,11 @@ export function FileDropzone({
           <div className="flex items-start gap-2">
             <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" aria-hidden />
             <div>
-              <p className="text-sm font-medium">Ingestion complete</p>
+              <p className="text-sm font-medium">Ready to confirm</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {completedResults.length} source
-                {completedResults.length !== 1 ? "s" : ""} prepared. Check each card, fix anything
-                we misread, then confirm every file before continuing.
+                {completedResults.length !== 1 ? "s" : ""} prepared. Review each card, correct any
+                misread fields, then confirm every file before you continue.
               </p>
             </div>
           </div>
@@ -276,10 +276,10 @@ export function FileDropzone({
               title={
                 allFilesConfirmed
                   ? undefined
-                  : "Confirm each file below before continuing"
+                  : "Confirm each file on its card first"
               }
             >
-              Continue to workspace
+              Continue
               <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden />
             </Button>
           </div>
@@ -287,8 +287,8 @@ export function FileDropzone({
 
         {!allFilesConfirmed && (
           <p className="text-xs text-muted-foreground text-center sm:text-left">
-            Confirm each file with the button on its card so we know the interpretation is right
-            before analysis runs.
+            Use the button on each card to confirm the read so briefings and charts match how you
+            define the data.
           </p>
         )}
 
@@ -347,7 +347,7 @@ export function FileDropzone({
                   <p className="text-sm font-medium truncate">{entry.file.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {(entry.file.size / 1024).toFixed(1)} KB
-                    {entry.status === "done" && " · Prepared"}
+                    {entry.status === "done" && " · Ready"}
                     {entry.status === "error" && ` · ${entry.error}`}
                   </p>
                 </div>
@@ -367,7 +367,7 @@ export function FileDropzone({
             {entry.status !== "done" && (
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">
-                  What should we know? <span className="font-normal">(optional)</span>
+                  Context <span className="font-normal">(optional)</span>
                 </label>
                 <Textarea
                   placeholder={analysisTemplate.contextPlaceholder}
@@ -411,7 +411,7 @@ export function FileDropzone({
                   setEntries((prev) => prev.filter((e) => e.status !== "pending"))
                 }
               >
-                Clear pending
+                Clear queue
               </Button>
             )}
             <Button
@@ -422,7 +422,7 @@ export function FileDropzone({
               disabled={pendingCount === 0 || busy}
             >
               <Sparkles className="h-4 w-4 mr-2" aria-hidden />
-              Prepare for analysis
+              Prepare files
               {pendingCount > 0 ? ` (${pendingCount})` : ""}
             </Button>
           </div>
@@ -454,8 +454,8 @@ export function FileDropzone({
             {isDragActive ? "Release to add files" : "Drop files here or click to browse"}
           </p>
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            Excel or CSV exports from your systems work well. You can queue several files—each
-            will be prepared and reviewed before analysis runs.
+            Excel or CSV exports from your systems work well. Queue several files if needed—each
+            is prepared and reviewed before charts and briefings run.
           </p>
         </div>
         <p className="text-xs text-muted-foreground">

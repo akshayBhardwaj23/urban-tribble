@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "@/lib/brand";
 
 const navItems = [
-  { href: "/dashboard", label: "Business Health", icon: "◈" },
-  { href: "/upload", label: "Import Data", icon: "↑" },
-  { href: "/datasets", label: "Data Sources", icon: "◫" },
+  { href: "/dashboard", label: "Overview", icon: "◈" },
+  { href: "/upload", label: "Import", icon: "↑" },
+  { href: "/datasets", label: "Sources", icon: "◫" },
 ];
 
 export default function DashboardLayout({

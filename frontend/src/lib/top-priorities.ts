@@ -161,7 +161,7 @@ function deriveFallback(src: TopPrioritiesSource): TopPriorityItem[] {
     push({
       kind: "risk",
       priority: "high",
-      title: titleFromBody(neg.finding, 76),
+      title: truncate(neg.headline || titleFromBody(neg.finding, 76), 88),
       explanation: firstSentence(neg.why_it_matters, 220) || truncate(neg.why_it_matters, 220),
     });
   }
@@ -171,7 +171,7 @@ function deriveFallback(src: TopPrioritiesSource): TopPriorityItem[] {
     push({
       kind: "opportunity",
       priority: "high",
-      title: titleFromBody(pos.finding, 76),
+      title: truncate(pos.headline || titleFromBody(pos.finding, 76), 88),
       explanation:
         firstSentence(pos.why_it_matters, 220) || truncate(pos.why_it_matters, 220),
     });
@@ -187,7 +187,7 @@ function deriveFallback(src: TopPrioritiesSource): TopPriorityItem[] {
     push({
       kind: "inefficiency",
       priority: "medium",
-      title: titleFromBody(ineff.finding, 76),
+      title: truncate(ineff.headline || titleFromBody(ineff.finding, 76), 88),
       explanation:
         firstSentence(ineff.why_it_matters, 220) ||
         truncate(ineff.why_it_matters, 220),
@@ -209,7 +209,7 @@ function deriveFallback(src: TopPrioritiesSource): TopPriorityItem[] {
     push({
       kind: "next_action",
       priority: "high",
-      title: titleFromBody(rec, 56) || "Primary next move",
+      title: titleFromBody(rec, 56) || "Lead move",
       explanation: truncate(rec, 220),
     });
   } else {
@@ -229,7 +229,7 @@ function deriveFallback(src: TopPrioritiesSource): TopPriorityItem[] {
     push({
       kind: "next_action",
       priority: "high",
-      title: "Start here",
+      title: "Open here",
       explanation: firstSentence(exec, 240) || truncate(exec, 240),
     });
   }
@@ -252,15 +252,15 @@ export function buildTopPriorities(src: TopPrioritiesSource): TopPriorityItem[] 
 export function lensLabel(kind: PriorityKind): string {
   switch (kind) {
     case "risk":
-      return "Risk";
+      return "Downside";
     case "opportunity":
-      return "Opportunity";
+      return "Upside";
     case "inefficiency":
-      return "Inefficiency";
+      return "Spend or friction";
     case "anomaly":
-      return "Data / trust";
+      return "Data trust";
     case "next_action":
-      return "Next move";
+      return "Next step";
     default:
       return "Priority";
   }

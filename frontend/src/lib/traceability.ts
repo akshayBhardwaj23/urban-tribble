@@ -1,3 +1,5 @@
+import { TRACE_SCOPE_FALLBACK_NOTE } from "@/lib/analysis-fallback-copy";
+
 /** Provenance for AI analysis and metrics—used for trust / verification UX. */
 
 export interface TraceSourceFile {
@@ -10,7 +12,7 @@ export interface TraceSourceFile {
 }
 
 export interface AnalysisTraceContext {
-  /** Short title for dialogs, e.g. "AI analysis scope" */
+  /** Short title for dialogs, e.g. "Analysis scope" */
   scopeTitle: string;
   /** One line, e.g. workspace vs single file */
   scopeSubtitle?: string;
@@ -84,7 +86,7 @@ export function buildDatasetAiTraceContext(input: {
     );
   }
   caveats.push(
-    "Dashboard date filters apply to charts on the Business Health tab—they do not re-slice the aggregate summary sent to this AI pass unless the product explicitly says so."
+    "Date filters on the Overview tab affect charts and live KPIs—they do not automatically re-slice the saved aggregate used for this briefing unless stated."
   );
 
   const sheetName =
@@ -93,8 +95,8 @@ export function buildDatasetAiTraceContext(input: {
       : undefined;
 
   return {
-    scopeTitle: "AI analysis scope",
-    scopeSubtitle: "Single source — full-dataset aggregates",
+    scopeTitle: "Briefing scope",
+    scopeSubtitle: "Single file · full-dataset aggregates",
     sourceFiles: [
       {
         name: input.datasetName,
@@ -105,18 +107,18 @@ export function buildDatasetAiTraceContext(input: {
       },
     ],
     columnsInScope: cols,
-    dateRangeLabel: "Full history in cleaned file (aggregate summary)",
+    dateRangeLabel: "Full history in the cleaned file (aggregate summary)",
     rowBasisLabel:
       input.rowCount != null
         ? `${input.rowCount.toLocaleString()} rows after cleaning`
         : "Row count from latest ingest",
-    modelLabel: "Model + structured JSON (see backend config)",
+    modelLabel: "Structured model output (backend config)",
     methodNote:
-      "The model receives column metadata and statistical summaries (data_summary) derived from the cleaned dataset, not raw row-level dumps.",
+      "The model sees column roles and statistical summaries from the cleaned file—not raw row exports.",
     caveats,
     assumptions: [
-      "Insights infer commercial meaning from detected column roles (date, revenue-like, category, numeric)—mislabeled columns can skew conclusions.",
-      "Unless an insight cites a specific comparison, treat numbers as descriptive aggregates, not audited financials.",
+      "Column roles are inferred—wrong labels skew the read.",
+      "Unless an insight cites a specific cut, treat figures as operational aggregates, not audited financials.",
     ],
   };
 }
@@ -134,7 +136,7 @@ export function buildDatasetDashboardTraceContext(input: {
   const caveats: string[] = [];
   if (input.timeframeWarning) caveats.push(input.timeframeWarning);
   caveats.push(
-    "Chart series and KPI tiles come from the dashboard endpoint for this source—they can differ from the static aggregate blob used for AI analysis."
+    "Charts and KPI tiles use the live dashboard for this source; they can differ from the static aggregate used in the Briefing tab."
   );
 
   const sheetName =
@@ -143,8 +145,8 @@ export function buildDatasetDashboardTraceContext(input: {
       : undefined;
 
   return {
-    scopeTitle: "Charts & KPI scope",
-    scopeSubtitle: "Business Health tab — filtered view when a period is selected",
+    scopeTitle: "Charts and KPI scope",
+    scopeSubtitle: "Overview tab · filtered when a period is selected",
     sourceFiles: [
       {
         name: input.datasetName,
@@ -161,7 +163,7 @@ export function buildDatasetDashboardTraceContext(input: {
       input.rowCount != null
         ? `${input.rowCount.toLocaleString()} rows in source (ingested)`
         : undefined,
-    modelLabel: "Server-side aggregates + chart specs",
+    modelLabel: "Server aggregates and chart specs",
     methodNote:
       "Values reflect the schema detected at import and any timeframe you set above. Open Preview to spot-check underlying rows.",
     caveats,
@@ -176,10 +178,10 @@ export function buildWorkspaceAiTraceContext(input: {
   totalRows: number;
 }): AnalysisTraceContext {
   const caveats: string[] = [
-    "Workspace analysis merges summaries from each listed source; cross-file joins are not automatic unless dimensions align.",
+    "Workspace briefing merges summaries from each listed source; cross-file joins are not automatic unless dimensions align.",
   ];
   return {
-    scopeTitle: "Workspace AI analysis scope",
+    scopeTitle: "Workspace briefing scope",
     scopeSubtitle: `${input.datasets.length} source${input.datasets.length === 1 ? "" : "s"} · ${input.totalRows.toLocaleString()} total rows (ingested)`,
     sourceFiles: input.datasets.map((d) => ({
       name: d.name,
@@ -191,16 +193,16 @@ export function buildWorkspaceAiTraceContext(input: {
         : {}),
     })),
     columnsInScope: [],
-    dateRangeLabel: "Per-file full history in merged summary payload",
+    dateRangeLabel: "Each file’s full history in the merged summary payload",
     rowBasisLabel: `${input.totalRows.toLocaleString()} rows combined (ingest counts)`,
-    modelLabel: "Model + structured JSON (workspace overview)",
+    modelLabel: "Structured model output (workspace)",
     methodNote:
-      "Each file’s schema slices and summaries are concatenated for the model; verify column names across files before acting on cross-source claims.",
+      "Each file’s schema and summaries are stacked for one pass—align column names before you act on cross-file claims.",
     caveats,
     assumptions: [
-      "Column-level detail lives on each dataset’s Schema tab—this workspace pass only sees merged metadata summaries.",
-      "File order and naming may influence which source the model emphasizes—check evidence lines on each insight.",
-      "No double-entry accounting validation is performed.",
+      "Column detail lives on each file’s Schema tab—this pass only sees merged summaries.",
+      "File order and naming can nudge emphasis—use each insight’s backing line before you commit.",
+      "No double-entry or audit validation.",
     ],
   };
 }
@@ -211,10 +213,10 @@ export function mergeInsightTrace(
 ): AnalysisTraceContext | null {
   if (!parent && !slice) return null;
   const base: AnalysisTraceContext = parent ?? {
-    scopeTitle: "Insight provenance",
+    scopeTitle: "Finding basis",
     sourceFiles: [],
     columnsInScope: [],
-    methodNote: "Insight-level trace supplied by the model or UI fallback.",
+    methodNote: TRACE_SCOPE_FALLBACK_NOTE,
     caveats: [],
     assumptions: [],
   };

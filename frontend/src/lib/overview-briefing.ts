@@ -145,7 +145,7 @@ export function buildMetricSlots(
     [
       { key: "revenue", label: "Revenue", kpi: revenueKpi },
       { key: "expenses", label: "Expenses", kpi: expenseKpi },
-      { key: "profit", label: "Profit / margin", kpi: profitKpi },
+      { key: "profit", label: "Profit or margin", kpi: profitKpi },
       { key: "efficiency", label: "Efficiency", kpi: effKpi },
     ];
 

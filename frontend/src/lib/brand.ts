@@ -6,14 +6,14 @@ export const PRODUCT_NAME = "Clarus";
 
 /** Primary positioning — browser, login, hero eyebrow */
 export const POSITIONING_LINE =
-  "AI business analyst for growing businesses";
+  "AI analyst for revenue, cost, and the tradeoffs between them";
 
 /** Short promise — footer, meta support, hero */
 export const PRODUCT_TAGLINE =
-  "Turn messy business data into clear decisions.";
+  "Turn spreadsheet noise into a briefing you can act on.";
 
 /** Browser tab + Open Graph description */
-export const META_DESCRIPTION = `${PRODUCT_NAME} is an AI business analyst for founders: upload revenue, cost, and ops spreadsheets. See growth drivers, margin pressure, and wasted spend—then decide faster.`;
+export const META_DESCRIPTION = `${PRODUCT_NAME} helps operators read revenue, cost, and ops data: upload spreadsheets, get a calm briefing on what moved and what to verify, then decide with clearer tradeoffs.`;
 
 /** Login screen subtitle (same intent as POSITIONING_LINE; split if you want login-only copy) */
 export const LOGIN_HEADLINE = POSITIONING_LINE;

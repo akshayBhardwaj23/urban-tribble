@@ -45,6 +45,7 @@ import {
   buildStaticSummaryKpiDetails,
   parseKpiDrillDown,
 } from "@/lib/kpi-drill-down";
+import { DATASET_ANALYSIS_EMPTY_INVITE } from "@/lib/analysis-fallback-copy";
 
 type DashboardRequest =
   | { kind: "all" }
@@ -155,6 +156,98 @@ export default function DatasetPage() {
     [appendMutation]
   );
 
+  const timeframeWarn =
+    hasDateColumn &&
+    timeframe.preset !== "all" &&
+    dashboardData.data?.timeframe &&
+    !dashboardData.data.timeframe.applied
+      ? "This range could not be applied—check the date column format on this source."
+      : null;
+
+  const resolvedTfRange =
+    dashboardData.data?.timeframe?.applied &&
+    dashboardData.data.timeframe.start &&
+    dashboardData.data.timeframe.end
+      ? {
+          start: dashboardData.data.timeframe.start,
+          end: dashboardData.data.timeframe.end,
+        }
+      : null;
+
+  const datasetDateMax = dashboardData.data?.date_bounds?.max ?? null;
+
+  const dashboardTraceContext = useMemo(() => {
+    const d = dataset.data;
+    const summary = (d?.data_summary ?? null) as Record<string, unknown> | null;
+    const schema = d?.schema_json;
+    if (!d) {
+      return buildDatasetDashboardTraceContext({
+        datasetName: "",
+        datasetId: params.id,
+        rowCount: null,
+        columnCount: null,
+        schema: null,
+        dateRangeLabel: null,
+        timeframeWarning: null,
+      });
+    }
+    return buildDatasetDashboardTraceContext({
+      datasetName: d.name,
+      datasetId: d.id,
+      rowCount: typeof summary?.rows === "number" ? summary.rows : null,
+      columnCount: typeof summary?.columns === "number" ? summary.columns : null,
+      schema: schema ?? null,
+      dateRangeLabel: resolvedTfRange
+        ? `${resolvedTfRange.start} → ${resolvedTfRange.end}`
+        : null,
+      timeframeWarning: timeframeWarn,
+    });
+  }, [dataset.data, params.id, resolvedTfRange, timeframeWarn]);
+
+  const kpiDrillContext = useMemo(() => {
+    const summary = (dataset.data?.data_summary ?? null) as
+      | Record<string, unknown>
+      | null;
+    const tf = dashboardData.data?.timeframe;
+    const dateRangeLabel =
+      tf?.applied && (tf?.start || tf?.end)
+        ? `${tf.start ?? "…"} → ${tf.end ?? "…"}`
+        : "Full ingested range (no date filter on this view)";
+    const dateColumn = tf?.date_column ?? null;
+    const filteredRowCount =
+      dashboardData.data?.filtered_row_count ??
+      (typeof summary?.rows === "number" ? summary.rows : 0);
+    return { dateRangeLabel, dateColumn, filteredRowCount };
+  }, [
+    dataset.data?.data_summary,
+    dashboardData.data?.timeframe,
+    dashboardData.data?.filtered_row_count,
+  ]);
+
+  const aiTraceContext = useMemo(() => {
+    const d = dataset.data;
+    const summary = (d?.data_summary ?? null) as Record<string, unknown> | null;
+    const schema = d?.schema_json;
+    if (!d) {
+      return buildDatasetAiTraceContext({
+        datasetName: "",
+        datasetId: params.id,
+        rowCount: null,
+        columnCount: null,
+        schema: null,
+        cleaningStepSummaries: undefined,
+      });
+    }
+    return buildDatasetAiTraceContext({
+      datasetName: d.name,
+      datasetId: d.id,
+      rowCount: typeof summary?.rows === "number" ? summary.rows : null,
+      columnCount: typeof summary?.columns === "number" ? summary.columns : null,
+      schema: schema ?? null,
+      cleaningStepSummaries: d.cleaned_report?.steps?.slice(0, 4),
+    });
+  }, [dataset.data, params.id]);
+
   if (dataset.isLoading) {
     return (
       <div className="space-y-6">
@@ -173,7 +266,7 @@ export default function DatasetPage() {
     return (
       <Card>
         <CardContent className="py-8 text-center text-sm text-destructive">
-          Could not load this data source: {dataset.error.message}
+          Could not load this source: {dataset.error.message}
         </CardContent>
       </Card>
     );
@@ -182,87 +275,6 @@ export default function DatasetPage() {
   const data = dataset.data!;
   const schema = data.schema_json;
   const summary = data.data_summary as Record<string, unknown> | null;
-
-  const timeframeWarn =
-    hasDateColumn &&
-    timeframe.preset !== "all" &&
-    dashboardData.data?.timeframe &&
-    !dashboardData.data.timeframe.applied
-      ? "This period could not be applied—verify the date field format in the source."
-      : null;
-
-  const resolvedTfRange =
-    dashboardData.data?.timeframe?.applied &&
-    dashboardData.data.timeframe.start &&
-    dashboardData.data.timeframe.end
-      ? {
-          start: dashboardData.data.timeframe.start,
-          end: dashboardData.data.timeframe.end,
-        }
-      : null;
-
-  const datasetDateMax = dashboardData.data?.date_bounds?.max ?? null;
-
-  const dashboardTraceContext = useMemo(
-    () =>
-      buildDatasetDashboardTraceContext({
-        datasetName: data.name,
-        datasetId: data.id,
-        rowCount: typeof summary?.rows === "number" ? summary.rows : null,
-        columnCount: typeof summary?.columns === "number" ? summary.columns : null,
-        schema,
-        dateRangeLabel: resolvedTfRange
-          ? `${resolvedTfRange.start} → ${resolvedTfRange.end}`
-          : null,
-        timeframeWarning: timeframeWarn,
-      }),
-    [
-      data.name,
-      data.id,
-      summary?.rows,
-      summary?.columns,
-      schema,
-      resolvedTfRange,
-      timeframeWarn,
-    ]
-  );
-
-  const kpiDrillContext = useMemo(() => {
-    const tf = dashboardData.data?.timeframe;
-    const dateRangeLabel =
-      tf?.applied && (tf?.start || tf?.end)
-        ? `${tf.start ?? "…"} → ${tf.end ?? "…"}`
-        : "Full ingested range (no date filter on this view)";
-    const dateColumn = tf?.date_column ?? null;
-    const filteredRowCount =
-      dashboardData.data?.filtered_row_count ??
-      (typeof summary?.rows === "number" ? summary.rows : 0);
-    return { dateRangeLabel, dateColumn, filteredRowCount };
-  }, [
-    dashboardData.data?.timeframe,
-    dashboardData.data?.filtered_row_count,
-    summary?.rows,
-  ]);
-
-  const aiTraceContext = useMemo(
-    () =>
-      buildDatasetAiTraceContext({
-        datasetName: data.name,
-        datasetId: data.id,
-        rowCount: typeof summary?.rows === "number" ? summary.rows : null,
-        columnCount: typeof summary?.columns === "number" ? summary.columns : null,
-        schema,
-        cleaningStepSummaries: data.cleaned_report?.steps?.slice(0, 4),
-      }),
-    [
-      data.name,
-      data.id,
-      summary?.rows,
-      summary?.columns,
-      schema,
-      data.cleaned_report?.steps,
-    ]
-  );
 
   return (
     <div className="space-y-6">
@@ -283,7 +295,7 @@ export default function DatasetPage() {
             size="sm"
             onClick={() => setAppendDialogOpen(true)}
           >
-            + Extend source
+            Add rows
           </Button>
           {!analysis.data && (
             <Button
@@ -292,8 +304,8 @@ export default function DatasetPage() {
               disabled={runAnalysis.isPending}
             >
               {runAnalysis.isPending
-                ? "Analyzing…"
-                : "Run AI analysis"}
+                ? "Running…"
+                : "Run briefing"}
             </Button>
           )}
           <Button
@@ -321,11 +333,11 @@ export default function DatasetPage() {
       {dashboardData.data?.dataset_brief ? (
         <div className="dashboard-glass-panel px-5 py-4 text-sm leading-relaxed">
           <span className="font-bold uppercase tracking-wide text-slate-600">
-            Source summary
+            Source read
           </span>
           {dashboardData.data.dashboard_plan_source === "ai" ? (
             <span className="ml-2 text-xs font-semibold text-violet-600">
-              · AI-curated layout
+              · Layout from model
             </span>
           ) : null}
           <p className="mt-2 text-slate-600">
@@ -435,8 +447,8 @@ export default function DatasetPage() {
 
       <Tabs defaultValue="dashboard">
         <TabsList className="dashboard-pill-tabs">
-          <TabsTrigger value="dashboard">Business Health</TabsTrigger>
-          <TabsTrigger value="analysis">AI analysis</TabsTrigger>
+          <TabsTrigger value="dashboard">Overview</TabsTrigger>
+          <TabsTrigger value="analysis">Briefing</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
           <TabsTrigger value="data">Preview</TabsTrigger>
           <TabsTrigger value="details">Schema</TabsTrigger>
@@ -452,8 +464,8 @@ export default function DatasetPage() {
           ) : (dashboardData.data?.charts?.length ?? 0) === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No charts could be produced from this source with the current
-                schema and filters.
+                No charts for this source with the current fields and time range. Adjust columns
+                or the range above and try again.
               </CardContent>
             </Card>
           ) : (
@@ -477,16 +489,15 @@ export default function DatasetPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
-                  Run AI analysis for takeaways tied to revenue, cost, and risk—plus
-                  a clear next move—not a narration of what’s in each column.
+                  {DATASET_ANALYSIS_EMPTY_INVITE}
                 </p>
                 <Button
                   onClick={() => runAnalysis.mutate()}
                   disabled={runAnalysis.isPending}
                 >
                   {runAnalysis.isPending
-                    ? "Analyzing…"
-                    : "Run AI analysis"}
+                    ? "Running…"
+                    : "Run briefing"}
                 </Button>
                 {runAnalysis.isError && (
                   <p className="text-sm text-destructive mt-2">
@@ -509,16 +520,16 @@ export default function DatasetPage() {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <p className="text-sm text-muted-foreground mb-4">
-                    Model the next period from your historical series using linear
-                    regression—useful for planning, not as a sole forecast of record.
+                    Extends the historical series with a simple linear fit—helpful for planning,
+                    not a forecast of record on its own.
                   </p>
                   <Button
                     onClick={() => forecastMutation.mutate()}
                     disabled={forecastMutation.isPending}
                   >
                     {forecastMutation.isPending
-                      ? "Generating..."
-                      : "Generate Forecast"}
+                      ? "Building…"
+                      : "Build forecast"}
                   </Button>
                   {forecastMutation.isError && (
                     <p className="text-sm text-destructive mt-2">
@@ -531,8 +542,7 @@ export default function DatasetPage() {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Forecasting needs at least one date field and one revenue or
-                numeric measure.
+                Add at least one date field and one revenue or numeric amount to build a forecast.
               </CardContent>
             </Card>
           )}
@@ -556,7 +566,7 @@ export default function DatasetPage() {
                 <Skeleton className="h-48" />
               ) : preview.isError ? (
                 <p className="text-sm text-destructive">
-                  Failed to load preview
+                  Preview could not be loaded
                 </p>
               ) : (
                 <div className="overflow-auto rounded-md border max-h-96">
@@ -598,7 +608,7 @@ export default function DatasetPage() {
           {schema && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Detected schema</CardTitle>
+                <CardTitle className="text-base">Column roles</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
@@ -656,7 +666,7 @@ export default function DatasetPage() {
           {data.cleaned_report && data.cleaned_report.steps.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Preparation log</CardTitle>
+                <CardTitle className="text-base">File preparation</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-1">
@@ -684,11 +694,11 @@ export default function DatasetPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove data source</DialogTitle>
+            <DialogTitle>Remove source</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This permanently removes <strong>{data.name}</strong> and all
-            associated insights, views, and conversation history. This cannot be undone.
+            This permanently removes <strong>{data.name}</strong> and its briefings, views, and chat
+            history. This cannot be undone.
           </p>
           {deleteMutation.isError && (
             <p className="text-sm text-destructive">
@@ -708,7 +718,7 @@ export default function DatasetPage() {
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Removing…" : "Remove"}
             </Button>
           </div>
         </DialogContent>
@@ -718,11 +728,11 @@ export default function DatasetPage() {
       <Dialog open={appendDialogOpen} onOpenChange={setAppendDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Extend {data.name}</DialogTitle>
+            <DialogTitle>Add rows · {data.name}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Import a file with matching columns to append rows to this source.
-            Duplicate records are removed automatically.
+            Upload a file with the same columns to append rows. Duplicates are removed
+            automatically.
           </p>
           {appendMutation.isError && (
             <p className="text-sm text-destructive">
@@ -731,8 +741,7 @@ export default function DatasetPage() {
           )}
           {appendMutation.isSuccess && (
             <p className="text-sm text-green-600">
-              Data appended successfully. {appendMutation.data.row_count} total
-              rows now.
+              Rows added. {appendMutation.data.row_count} total rows in this source.
             </p>
           )}
           <input
@@ -754,7 +763,7 @@ export default function DatasetPage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={appendMutation.isPending}
             >
-              {appendMutation.isPending ? "Appending..." : "Choose File"}
+              {appendMutation.isPending ? "Adding…" : "Choose file"}
             </Button>
           </div>
         </DialogContent>

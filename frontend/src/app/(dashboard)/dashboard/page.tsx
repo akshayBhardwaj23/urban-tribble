@@ -38,6 +38,13 @@ import {
 } from "@/lib/overview-briefing";
 import { buildWorkspaceAiTraceContext } from "@/lib/traceability";
 import { buildWorkspaceMetricSlotDetails } from "@/lib/kpi-drill-down";
+import {
+  WORKSPACE_BRIEFING_EMPTY_TILES,
+  WORKSPACE_NO_BRIEFING_YET,
+  WORKSPACE_OPERATOR_READ_BUSY,
+  WORKSPACE_OPERATOR_READ_EMPTY,
+  workspaceRunBriefingInvite,
+} from "@/lib/analysis-fallback-copy";
 import { KpiDetailsSheet } from "@/components/dashboard/kpi-details-sheet";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -212,20 +219,20 @@ export default function OverviewPage() {
       <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Business Health
+            Overview
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Choose a workspace in the sidebar to load your overview.
+            Pick a workspace in the sidebar to load this view.
           </p>
         </div>
         <Card className="border-slate-200/80 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-14 text-center">
             <p className="text-sm text-muted-foreground mb-4 max-w-md">
-              No active workspace is set. Select one from the workspace menu above,
-              or create a new workspace if you have not yet.
+              No workspace is selected. Choose one from the menu above, or create a workspace if
+              you are just getting started.
             </p>
             <p className="text-xs text-muted-foreground">
-              If you just signed in, try refreshing the page after a moment.
+              If you just signed in, a quick refresh can help the list load.
             </p>
           </CardContent>
         </Card>
@@ -262,10 +269,10 @@ export default function OverviewPage() {
       <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Business Health
+            Overview
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            We could not load the workspace overview.
+            This overview could not be loaded.
           </p>
         </div>
         <Card className="border-destructive/30 shadow-sm">
@@ -274,8 +281,8 @@ export default function OverviewPage() {
               {error instanceof Error ? error.message : "Request failed"}
             </p>
             <p className="text-xs text-muted-foreground">
-              Check that the API is running and your session is valid. If you recently changed
-              workspaces, try again.
+              Check that the API is running and you are still signed in. If you switched
+              workspaces, try once more.
             </p>
             <Button type="button" size="sm" onClick={() => refetch()}>
               Retry
@@ -291,23 +298,23 @@ export default function OverviewPage() {
       <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Business Health
+            Overview
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            A single view of what changed, what matters, and what to do next.
+            What moved, what it may imply, and what to do next—across your sources.
           </p>
         </div>
         <Card className="border-slate-200/80 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-14 text-center">
             <p className="text-sm text-muted-foreground mb-4 max-w-md">
-              Import data to unlock a decision-first briefing: health read, key
-              shifts, risks, opportunities, and charts that support the story.
+              Import a file to see net position, what moved, downside and upside, and charts
+              that support the read.
             </p>
             <Link
               href="/upload"
               className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Import Data
+              Import data
             </Link>
           </CardContent>
         </Card>
@@ -326,20 +333,18 @@ export default function OverviewPage() {
   const analysisBusy =
     overviewAnalysis.isLoading || runOverviewAnalysis.isPending;
 
-  const noInsightCopy =
-    "Run workspace AI analysis to turn your sources into a decision-ready read.";
+  const noInsightCopy = WORKSPACE_NO_BRIEFING_YET;
 
   return (
     <div className="space-y-10 max-w-6xl pb-10">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Business Health
+            Overview
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
             {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
-            · {data.total_rows.toLocaleString()} records · Decisions first,
-            charts second
+            · {data.total_rows.toLocaleString()} rows · Briefing first, then charts
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -353,12 +358,12 @@ export default function OverviewPage() {
                 setAppendTarget({ id: ds.id, name: ds.name });
               }}
             >
-              Extend source
+              Add rows
             </Button>
           )}
           <Link href="/upload">
             <Button size="sm" className="rounded-lg">
-              Import Data
+              Import data
             </Button>
           </Link>
           <Button
@@ -369,17 +374,17 @@ export default function OverviewPage() {
             disabled={analysisBusy}
           >
             {runOverviewAnalysis.isPending
-              ? "Analyzing workspace…"
+              ? "Running briefing…"
               : analysisReady
-                ? "Re-run analysis"
-                : "Run workspace analysis"}
+                ? "Re-run briefing"
+                : "Run workspace briefing"}
           </Button>
         </div>
       </header>
 
       {/* 1. Top summary */}
       <section className="space-y-3">
-        <SectionLabel>At a glance</SectionLabel>
+        <SectionLabel>Snapshot</SectionLabel>
         {analysisBusy && !analysisReady ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -389,36 +394,36 @@ export default function OverviewPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <BriefTile
-              title="Business health"
+              title="Net position"
               body={health}
               emptyHint={noInsightCopy}
             />
             <BriefTile
-              title="Key change"
+              title="Main shift"
               body={keyChange}
               emptyHint={
                 analysisReady
-                  ? "No standout shift called out in the latest review."
+                  ? WORKSPACE_BRIEFING_EMPTY_TILES.keyChange
                   : noInsightCopy
               }
             />
             <BriefTile
-              title="Biggest risk"
+              title="Largest downside"
               body={risk}
               variant="risk"
               emptyHint={
                 analysisReady
-                  ? "No major risk flagged—still validate assumptions."
+                  ? WORKSPACE_BRIEFING_EMPTY_TILES.risk
                   : noInsightCopy
               }
             />
             <BriefTile
-              title="Biggest opportunity"
+              title="Largest upside"
               body={opportunity}
               variant="opportunity"
               emptyHint={
                 analysisReady
-                  ? "No opportunity surfaced yet—refresh after new data."
+                  ? WORKSPACE_BRIEFING_EMPTY_TILES.upside
                   : noInsightCopy
               }
             />
@@ -428,7 +433,7 @@ export default function OverviewPage() {
 
       {/* 2. Important metrics */}
       <section className="space-y-3">
-        <SectionLabel>Important metrics</SectionLabel>
+        <SectionLabel>Key numbers</SectionLabel>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {metricSlots.map((slot) => (
             <div
@@ -443,10 +448,10 @@ export default function OverviewPage() {
                   {slot.displayValue}
                 </p>
               ) : (
-                <p className="mt-2 text-lg text-slate-400">Not detected</p>
+                <p className="mt-2 text-lg text-slate-400">No match yet</p>
               )}
               <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-                <span className="text-[11px] text-slate-500">Trend signal</span>
+                <span className="text-[11px] text-slate-500">Direction</span>
                 <TrendBadge trend={slot.trend} />
               </div>
               {slot.note && (
@@ -481,14 +486,14 @@ export default function OverviewPage() {
               {data.total_rows.toLocaleString()}
             </p>
             <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-              <span className="text-[11px] text-slate-500">Coverage</span>
+              <span className="text-[11px] text-slate-500">Sources</span>
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
                 {data.total_datasets} source
                 {data.total_datasets !== 1 ? "s" : ""}
               </span>
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
-              Rows ingested across the workspace
+              Total rows across this workspace
             </p>
             <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
               <KpiDetailsSheet
@@ -505,19 +510,19 @@ export default function OverviewPage() {
           </div>
         </div>
         <p className="text-xs text-slate-400 max-w-2xl">
-          Labels follow your column names. Expenses and profit appear when those
-          fields exist, or when the latest insights mention them.
+          Titles follow your column names. Expense and profit slots fill when those fields exist
+          or when the latest briefing names them.
         </p>
       </section>
 
       {/* 3. Leadership briefing */}
       <section className="space-y-3">
-        <SectionLabel>Leadership briefing</SectionLabel>
+        <SectionLabel>Operator summary</SectionLabel>
         <div className="rounded-2xl border border-slate-200/80 bg-white/85 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40 overflow-hidden">
           <div className="grid divide-y divide-slate-100 dark:divide-slate-800 lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
             <div className="p-6 lg:p-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                What happened
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                What moved
               </p>
               <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
                 {analysisReady && happened ? (
@@ -525,15 +530,15 @@ export default function OverviewPage() {
                 ) : (
                   <span className="text-slate-400">
                     {analysisBusy
-                      ? "Building a concise workspace read…"
-                      : `Run workspace analysis for a concise performance read across your ${data.total_datasets} source${data.total_datasets !== 1 ? "s" : ""}.`}
+                      ? WORKSPACE_OPERATOR_READ_BUSY.whatMoved
+                      : workspaceRunBriefingInvite(data.total_datasets)}
                   </span>
                 )}
               </p>
             </div>
             <div className="p-6 lg:p-7 bg-slate-50/50 dark:bg-slate-900/20">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Why it matters
+                So what
               </p>
               <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
                 {analysisReady && matters ? (
@@ -541,15 +546,15 @@ export default function OverviewPage() {
                 ) : (
                   <span className="text-slate-400">
                     {analysisBusy
-                      ? "Prioritizing what should drive the next decision…"
-                      : "Commercial impact and tradeoffs land here after the first workspace analysis run."}
+                      ? WORKSPACE_OPERATOR_READ_BUSY.soWhat
+                      : WORKSPACE_OPERATOR_READ_EMPTY.soWhat}
                   </span>
                 )}
               </p>
             </div>
             <div className="p-6 lg:p-7">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Recommended action
+                Lead move
               </p>
               <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100 font-medium">
                 {analysisReady && action ? (
@@ -557,8 +562,8 @@ export default function OverviewPage() {
                 ) : (
                   <span className="text-slate-400 font-normal">
                     {analysisBusy
-                      ? "Selecting the highest-leverage next step…"
-                      : "Your highest-leverage move will show here after analysis runs."}
+                      ? WORKSPACE_OPERATOR_READ_BUSY.leadMove
+                      : WORKSPACE_OPERATOR_READ_EMPTY.leadMove}
                   </span>
                 )}
               </p>
@@ -576,9 +581,9 @@ export default function OverviewPage() {
       <section className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <SectionLabel>Supporting views</SectionLabel>
+            <SectionLabel>Charts</SectionLabel>
             <p className="text-sm text-slate-500 mt-1 max-w-xl">
-              Charts back the narrative above. Open a source for filters and
+              Supporting views for the briefing above. Open a source for filters and row-level
               detail.
             </p>
           </div>
@@ -621,7 +626,7 @@ export default function OverviewPage() {
 
       {/* Planning + sources (secondary) — outlook full width so the chart reads clearly */}
       <section className="space-y-3">
-        <SectionLabel>Planning & sources</SectionLabel>
+        <SectionLabel>Outlook & sources</SectionLabel>
         <div className="flex flex-col gap-6">
           <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 md:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950/30 w-full">
             <h3 className="text-sm font-semibold text-slate-900">Outlook</h3>
@@ -652,7 +657,7 @@ export default function OverviewPage() {
                   htmlFor="outlook-horizon"
                   className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
                 >
-                  Forecast horizon
+                  Horizon
                 </label>
                 <select
                   id="outlook-horizon"
@@ -694,7 +699,7 @@ export default function OverviewPage() {
               <div className="space-y-4">
                 <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-300">
                   <p className="font-medium text-slate-800 dark:text-slate-100">
-                    Series in this chart
+                    What this chart uses
                   </p>
                   <p className="mt-1 leading-relaxed">
                     <span className="font-medium">
@@ -733,9 +738,9 @@ export default function OverviewPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/30 w-full lg:max-w-xl">
-            <h3 className="text-sm font-semibold text-slate-900">Data sources</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Sources</h3>
             <p className="text-xs text-slate-500 mt-1 mb-4">
-              Jump into a file for previews, insights, and append.
+              Open a source for preview, briefing detail, or to add rows.
             </p>
             <ul className="space-y-2">
               {data.datasets.map((ds) => (
@@ -762,7 +767,7 @@ export default function OverviewPage() {
                         setAppendTarget({ id: ds.id, name: ds.name })
                       }
                     >
-                      Extend
+                      Add rows
                     </Button>
                   </div>
                 </li>
@@ -776,7 +781,7 @@ export default function OverviewPage() {
       {analysisReady && overviewAnalysis.data?.result_json && (
         <details className="group rounded-2xl border border-slate-200/60 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/20">
           <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
-            <span>Full AI analysis</span>
+            <span>Full briefing</span>
             <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">
               ▾
             </span>
@@ -791,8 +796,8 @@ export default function OverviewPage() {
                 disabled={runOverviewAnalysis.isPending}
               >
                 {runOverviewAnalysis.isPending
-                  ? "Re-running…"
-                  : "Re-run analysis"}
+                  ? "Running…"
+                  : "Re-run briefing"}
               </Button>
             </div>
             <AnalysisPanel
@@ -809,11 +814,11 @@ export default function OverviewPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Extend {appendTarget?.name}</DialogTitle>
+            <DialogTitle>Add rows · {appendTarget?.name}</DialogTitle>
           </DialogHeader>
           {data.datasets.length > 1 && (
             <div className="space-y-1">
-              <label className="text-sm font-medium">Target source</label>
+              <label className="text-sm font-medium">Source</label>
               <select
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 value={appendTarget?.id ?? ""}
@@ -833,8 +838,8 @@ export default function OverviewPage() {
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            Import a file with matching columns to append rows to this source.
-            Duplicate records are removed automatically.
+            Upload a file with the same columns to append rows. Duplicates are removed
+            automatically.
           </p>
           {appendMutation.isError && (
             <p className="text-sm text-destructive">
@@ -843,8 +848,7 @@ export default function OverviewPage() {
           )}
           {appendMutation.isSuccess && (
             <p className="text-sm text-green-600">
-              Data appended successfully. {appendMutation.data.row_count} total
-              rows now.
+              Rows added. {appendMutation.data.row_count} total rows in this source.
             </p>
           )}
           <input
@@ -866,7 +870,7 @@ export default function OverviewPage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={appendMutation.isPending}
             >
-              {appendMutation.isPending ? "Appending..." : "Choose File"}
+              {appendMutation.isPending ? "Adding…" : "Choose file"}
             </Button>
           </div>
         </DialogContent>

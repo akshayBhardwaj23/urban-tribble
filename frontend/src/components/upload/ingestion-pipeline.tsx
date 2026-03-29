@@ -6,12 +6,12 @@ import type { IngestionProfile } from "@/lib/ingestion";
 import { fileTypeLabel } from "@/lib/ingestion";
 
 const STAGES: { key: string; title: string; subtitleLoading: string }[] = [
-  { key: "uploaded", title: "File received", subtitleLoading: "Secure upload complete" },
-  { key: "type", title: "Format recognized", subtitleLoading: "Checking structure" },
-  { key: "classify", title: "Dataset classified", subtitleLoading: "Matching to your context" },
-  { key: "columns", title: "Columns mapped", subtitleLoading: "Profiling fields" },
-  { key: "issues", title: "Quality check", subtitleLoading: "Scanning for gaps" },
-  { key: "ready", title: "Ready for analysis", subtitleLoading: "Preparing workspace" },
+  { key: "uploaded", title: "File received", subtitleLoading: "Upload complete" },
+  { key: "type", title: "Format identified", subtitleLoading: "Checking structure" },
+  { key: "classify", title: "Type assigned", subtitleLoading: "Matching to your context" },
+  { key: "columns", title: "Fields mapped", subtitleLoading: "Profiling columns" },
+  { key: "issues", title: "Quick quality pass", subtitleLoading: "Scanning for gaps" },
+  { key: "ready", title: "Ready for charts and briefing", subtitleLoading: "Handing off to workspace" },
 ];
 
 interface IngestionPipelineProps {
@@ -51,7 +51,7 @@ export function IngestionPipeline({
     if (!ingestion) return STAGES[4].subtitleLoading;
     const warns = ingestion.flags.filter((f) => f.kind === "warning");
     if (warns.length === 0 && ingestion.flags.length === 0) {
-      return "No issues flagged—this source looks solid.";
+      return "No structure issues at import—still run your normal read on trends and margin.";
     }
     if (warns.length === 0) {
       return `${ingestion.flags.length} note${ingestion.flags.length === 1 ? "" : "s"} for you below.`;
@@ -64,7 +64,7 @@ export function IngestionPipeline({
     : STAGES[3].subtitleLoading;
 
   const classifySubtitle = ingestion
-    ? `${ingestion.classification.label} · ${ingestion.classification.confidence === "high" ? "Strong match" : ingestion.classification.confidence === "medium" ? "Reasonable match" : "Best guess—confirm if needed"}`
+    ? `${ingestion.classification.label} · ${ingestion.classification.confidence === "high" ? "Strong match" : ingestion.classification.confidence === "medium" ? "Likely match—confirm if unsure" : "Uncertain—confirm before you rely on it"}`
     : STAGES[2].subtitleLoading;
 
   const subtitles: string[] = [
@@ -73,7 +73,7 @@ export function IngestionPipeline({
     classifySubtitle,
     columnSubtitle,
     issuesSubtitle,
-    "Open the dataset to explore metrics, charts, and AI insights.",
+    "Open the source for KPIs, charts, and the full briefing.",
   ];
 
   let activeIndex = 0;
@@ -86,7 +86,7 @@ export function IngestionPipeline({
   return (
     <div className={cn("rounded-xl border bg-card/80 backdrop-blur-sm p-5 shadow-sm", className)}>
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4">
-        Ingestion progress
+        Preparing file
       </p>
       <ol className="space-y-0">
         {STAGES.map((stage, i) => {

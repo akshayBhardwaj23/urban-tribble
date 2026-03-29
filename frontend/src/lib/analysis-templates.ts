@@ -20,16 +20,16 @@ export interface AnalysisTemplate {
 export const CUSTOM_ANALYSIS_TEMPLATE: AnalysisTemplate = {
   id: "custom",
   title: "Manual upload",
-  summary: "Bring files when you already know what you’re loading.",
+  summary: "For when you already know the files and just need them in the workspace.",
   analysisDelivered:
-    "Standard pipeline: we detect structure, classify each dataset, map dates and amounts, and you confirm before dashboards and workspace analysis run.",
+    "We detect structure, classify the dataset, map dates and amounts, and you confirm before charts and briefings run.",
   recommendedInputs: [
-    "Structured tables (rows = records, columns = fields)",
+    "Tables where each row is a record and columns are fields",
     "Exports from sales, finance, marketing, or ops",
-    "Several related files in one import when useful",
+    "Several related files in one import when that matches how you work",
   ],
-  suggestedFiles: "Any structured spreadsheet — sales, finance, marketing, or ops exports (Excel, CSV, TSV).",
-  bestFor: "Teams with ready files or one-off imports.",
+  suggestedFiles: "Any structured spreadsheet—sales, finance, marketing, or ops (Excel, CSV, TSV).",
+  bestFor: "Teams dropping in ready files or doing one-off imports.",
   contextPlaceholder:
     'e.g. "Q3 regional sales", "Vendor spend by department", "Weekly funnel export"',
 };
@@ -38,9 +38,9 @@ export const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
   {
     id: "monthly_business_review",
     title: "Monthly business review",
-    summary: "Leadership-ready view of how the month moved versus prior periods.",
+    summary: "How the month moved against prior periods, in a leadership-ready frame.",
     analysisDelivered:
-      "Executive-style read: key metrics vs last period, what shifted, and a short list of risks and opportunities—aligned to a monthly operating rhythm.",
+      "Key metrics vs last period, what shifted, and a short list of risks and opportunities—suited to a monthly operating rhythm.",
     recommendedInputs: [
       "Revenue report",
       "Expense sheet",
@@ -48,16 +48,16 @@ export const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
     ],
     suggestedFiles:
       "KPI or scorecard exports, revenue and cost summaries, pipeline or forecast snapshots. One file or several that cover the same period.",
-    bestFor: "CEOs, COOs, and finance partners running a monthly cadence.",
+    bestFor: "CEOs, COOs, and finance leads on a monthly cadence.",
     contextPlaceholder:
       'e.g. "September MBR — revenue, opex, pipeline vs plan"',
   },
   {
     id: "profit_leak_audit",
     title: "Profit leak audit",
-    summary: "Surface margin and spend patterns that quietly erode profit.",
+    summary: "Margin and spend patterns that may be eroding profit without much noise.",
     analysisDelivered:
-      "Focus on margin drains: unusual cost or discount patterns, heavy vendors or categories, and concentration so you can prioritize fixes with numbers behind them.",
+      "Margin pressure: unusual cost or discount patterns, heavy vendors or categories, and concentration—so you can prioritize fixes with numbers behind them.",
     recommendedInputs: [
       "P&L or margin extract",
       "Vendor spend detail",
@@ -72,9 +72,9 @@ export const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
   {
     id: "sales_performance",
     title: "Sales performance analysis",
-    summary: "Rep, region, and product performance in one coherent picture.",
+    summary: "Rep, region, and product in one coherent view.",
     analysisDelivered:
-      "Performance against time and segments: who and what is driving revenue, lagging areas, and trend signals you can use in reviews and planning.",
+      "Performance over time and by segment: who and what is driving revenue, what is lagging, and trends you can use in reviews and planning.",
     recommendedInputs: [
       "Opportunity, order, or revenue export",
       "Rep, region, or territory breakdown",
@@ -89,9 +89,9 @@ export const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
   {
     id: "campaign_efficiency",
     title: "Campaign efficiency review",
-    summary: "Compare spend, reach, and outcomes across campaigns and channels.",
+    summary: "Spend, reach, and outcomes compared across campaigns and channels.",
     analysisDelivered:
-      "Efficiency lens: cost per outcome, channel and campaign comparison, and where budget is working—so marketing can reallocate with clarity.",
+      "Cost per outcome, channel and campaign comparison, and where budget is working—so you can reallocate with a clearer picture.",
     recommendedInputs: [
       "Ad spend export",
       "Attributed revenue or conversion report",
@@ -106,9 +106,9 @@ export const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
   {
     id: "customer_value",
     title: "Customer value breakdown",
-    summary: "See concentration, segments, and value across your customer base.",
+    summary: "Concentration, segments, and value across the customer base.",
     analysisDelivered:
-      "Value and mix: top accounts, segment-level revenue or retention signals, and where concentration sits—useful for CS, sales, and strategy.",
+      "Value and mix: top accounts, segment-level revenue or retention signals, and where concentration sits—for CS, sales, and strategy.",
     recommendedInputs: [
       "CRM or account export",
       "Revenue, ARR, or subscription billing",

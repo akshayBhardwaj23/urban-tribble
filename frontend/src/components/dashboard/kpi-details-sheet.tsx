@@ -42,7 +42,7 @@ export function KpiDetailsBody({ d }: { d: KpiDrillDownDetails }) {
     <div className="space-y-5 text-left">
       <Row label="Definition">{d.definition}</Row>
       {d.formula_summary ? (
-        <Row label="How it’s computed" mono>
+        <Row label="Calculation" mono>
           {d.formula_summary}
         </Row>
       ) : null}
@@ -103,7 +103,7 @@ export function KpiDetailsSheet({
           />
         }
       >
-        View details
+        See basis
       </DialogTrigger>
       <DialogContent
         showCloseButton
@@ -114,7 +114,7 @@ export function KpiDetailsSheet({
             {metricLabel}
           </DialogTitle>
           <p className="text-xs text-muted-foreground mt-1 font-normal">
-            How this number is derived
+            Where this number comes from
           </p>
         </DialogHeader>
         <div className="max-h-[min(70dvh,28rem)] overflow-y-auto px-5 py-4">

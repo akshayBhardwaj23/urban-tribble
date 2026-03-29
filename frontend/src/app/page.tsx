@@ -18,7 +18,7 @@ const features = [
   {
     title: "A written read—not a wall of widgets",
     description:
-      "Executive summary, the KPIs that matter, what moved, and what looks off. Charts only when they clarify revenue, mix, or trend.",
+      "Bottom line, the KPIs that anchor decisions, what moved, and what looks wrong. Charts only when they clarify revenue, mix, or trend.",
   },
   {
     title: "Questions in the language you already use",
@@ -62,7 +62,7 @@ const pricingTiers = [
     period: "/month",
     features: [
       "Unlimited uploads",
-      "Full AI analysis (GPT-4o)",
+      "Full analyst briefing (model-backed)",
       "Plain-English Q&A on your data",
       "Forecasts from your history",
       "Multi-file & overview",
@@ -276,12 +276,12 @@ export default function LandingPage() {
               {
                 step: "01",
                 title: "Upload your real files",
-                desc: "Revenue, expenses, inventory, payroll—Excel or CSV. One line of context per file so the analysis lands in the right frame.",
+                desc: "Revenue, expenses, inventory, payroll—Excel or CSV. One line of context per file so the briefing lands in the right frame.",
               },
               {
                 step: "02",
                 title: `${PRODUCT_NAME} prepares and reads them`,
-                desc: "We clean structure, run the analyst pass, and surface summary, KPIs, risks, and recommendations tied to your actual numbers.",
+                desc: "We clean structure, run the analyst pass, and surface the bottom line, KPIs, downside and upside, and concrete moves tied to your numbers.",
               },
               {
                 step: "03",

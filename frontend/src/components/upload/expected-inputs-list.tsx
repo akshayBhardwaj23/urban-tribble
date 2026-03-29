@@ -10,7 +10,7 @@ interface ExpectedInputsListProps {
 /** Lightweight, scannable bullet list for template “expected inputs”. */
 export function ExpectedInputsList({
   items,
-  label = "Recommended files",
+  label = "Suggested files",
   className,
 }: ExpectedInputsListProps) {
   if (items.length === 0) return null;

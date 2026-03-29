@@ -62,9 +62,9 @@ export function interpretationReadiness(ingestion: IngestionProfile): Interpreta
 }
 
 export const READINESS_LABELS: Record<InterpretationReadiness, string> = {
-  ready: "Ready",
-  needs_review: "Needs review",
-  missing_field: "Missing a key field",
+  ready: "Looks ready",
+  needs_review: "Worth a second look",
+  missing_field: "Set date or amount",
 };
 
 export function fileTypeLabel(ext: string): string {

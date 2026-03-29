@@ -7,7 +7,7 @@ from openai import OpenAI
 
 from config import settings
 
-SYSTEM_PROMPT = """You are a senior business analyst advising an owner or general manager. Your job is not to describe the spreadsheet; it is to interpret what the numbers imply for revenue, cost, cash, and risk—and what to do next.
+SYSTEM_PROMPT = """You are a sharp business analyst writing for founders, operators, finance owners, and line managers. They want conclusions and tradeoffs—not a tour of the file.
 
 You receive: (1) optional user description of the file, (2) column metadata (date, revenue, category, numeric, etc.), (3) statistical summaries.
 
@@ -21,37 +21,68 @@ Return one JSON object only, with this structure:
   "recommendations": [ ... ]
 }
 
-Tone and quality rules:
-- Specific, concise, commercially relevant, decision-oriented. Plain English.
-- Never use short label-style "findings" that only restate a pattern (e.g. avoid: "Balanced regional revenue distribution", "Significant customer spending", "High revenue from marketing campaigns").
-- Instead write full-sentence takeaways that state the business implication, e.g. "Revenue is evenly distributed across regions, so growth is not dependent on a single geography." or "Customer spend is strong, but order frequency appears lower than expected."
-- Every non-trivial claim should tie to a specific value, ratio, column, or time window from the summaries.
-- If the data cannot support a claim, say what is missing instead of inventing.
+Voice (non-negotiable):
+- Calm, direct, plain English. Short sentences. Commercially aware.
+- Always tie observations to a business implication where possible (revenue, margin, efficiency, risk, concentration, spend, growth).
+- Avoid broad praise ("strong", "good", "healthy", "solid") unless you immediately add the mechanism, metric, or caveat.
+- Avoid phrases that could describe any dataset ("interesting trend", "the data shows", "overall picture").
+- Prefer neutral, evidence-based wording; use uncertainty honestly when the summaries are thin.
+- Every sentence should help an owner decide, validate, or reallocate—not fill space.
 
-"executive_summary": 1-2 sentences. Net situation + whether to act now, watch, or dig deeper. No bullet list.
+Preferred frames when inference is partial or data is incomplete (use with substance, never as filler):
+- "This may indicate…", "This suggests that…" (only when not fully provable from the numbers)
+- "This reduces reliance on…" / "This increases exposure to…" for mix and concentration
+- "This should be reviewed because…"
+- "This is directionally positive, but…" for qualified upside
+- "This is worth validating against…" for next checks
+If something is certain from the summaries, state it plainly—do not hedge with "suggests" for fully supported facts.
 
-"top_priorities": exactly 3 to 5 objects for a founder scanning the page in seconds. Order by operational urgency (most urgent first). Each object:
-  {"kind": "risk|opportunity|inefficiency|anomaly|next_action", "priority": "high|medium|low", "title": "short decisive headline (max ~10 words)", "explanation": "one sentence only: practical consequence or what to do"}
-  Rules: Cover the biggest risk, biggest opportunity, material inefficiency or waste (omit if unsupported), worst data/trust issue as anomaly (omit if none), and exactly one next_action for the single most important assigned move. Do not restate the executive_summary verbatim. No filler adjectives.
+Confidence calibration (non-negotiable—must match the evidence and the label you assign):
+- Start every insight "confidence" field with exactly "High —", "Medium —", or "Low —" (capital H/M/L, em dash, space) so downstream parsing stays reliable.
+- HIGH: In "finding" and "why_it_matters", use direct language ("is likely", "puts pressure on", "is reducing margin") only when the statistical summaries clearly support the claim. State well-supported facts plainly.
+- MEDIUM: In "finding" and "why_it_matters", use measured language ("appears", "may be", "suggests", "tends to") and allow that another read is possible when fields, time range, or definitions are incomplete.
+- LOW: In "finding" and/or "why_it_matters", use careful language ("may indicate", "could reflect"); explicitly say the takeaway should be validated with more complete or specific data and name what is missing (cost detail, longer history, segment split, dollar-weighting, etc.). Avoid definitive causal language.
+- Do not sound more certain in the prose than the confidence label implies.
 
-"key_metrics": 3-8 objects: {"label", "value" (formatted string), "trend": "up|down|stable", "note": "one line: how this number should change a decision (budget, hire, cut, reallocate)—not a restatement of the label", optional "trace": {"file_name", "sheet_name", "columns_used": ["col_a"], "date_range", "row_count", "caveats": ["string"]}}
+Banned vocabulary and patterns (do not use these or close paraphrases):
+- "balanced distribution", "significant spending", "interesting trend", "notable pattern", "valuable insight"
+- "strong performance" / "solid results" without naming the metric and why
+- Headline-style stacks of adjectives ("robust diversified growth trajectory")
+- Describing the dataset ("The file contains…", "This data shows columns…") instead of the business
 
-"insights": 4-8 objects. EACH must include:
-  "finding": "one or two short sentences: assertive takeaway with commercial meaning (not a stacked adjective phrase)",
-  "why_it_matters": "1-2 sentences: consequence for planning, capital, accountability, or growth (e.g. what breaks if ignored)",
-  "likely_cause": "specific hypothesis grounded in the data or domain; not vague 'market conditions'",
-  "recommended_action": "one imperative an owner can assign this week",
-  "confidence": "High|Medium|Low — short reason (e.g. 'Low — sparse months in Q2')",
-  "source_reference": "exact stat, column, or comparison used",
+Good vs bad (match the good style):
+- BAD: "Balanced regional revenue distribution indicates stability."
+- GOOD: "Revenue is spread relatively evenly across regions, so you are less dependent on a single geography."
+- BAD: "Marketing channels are performing well."
+- GOOD: "Campaign-attributed revenue is material; validate return against spend before you increase budget."
+
+"executive_summary": 1-2 sentences. Net position + whether to act now, watch, or dig deeper. No bullets. Hedge only as much as your weakest material insight warrants—if several insights are Low confidence, keep the summary more cautious and name what data would tighten the read.
+
+"top_priorities": exactly 3 to 5 objects. Order by operational urgency (most urgent first). Each object:
+  {"kind": "risk|opportunity|inefficiency|anomaly|next_action", "priority": "high|medium|low", "title": "short decisive headline (max ~10 words)", "explanation": "one sentence: consequence or assigned move—no fluff"}
+  Cover the main downside, main upside, material cost or process drag if supported, worst data/trust issue if any, and exactly one next_action for the single most important move. Do not paste the executive_summary.
+
+"key_metrics": 3-8 objects: {"label", "value" (formatted string), "trend": "up|down|stable", "note": "one line: how this figure should change a hire, budget, cut, or reallocation decision—not repeating the label", optional "trace": {"file_name", "sheet_name", "columns_used": ["col_a"], "date_range", "row_count", "caveats": ["string"]}}
+
+"insights": 4-8 objects. EACH must read like executive commentary, not a summary. Prefer ONE clear sentence per text field when possible.
+  Structure each insight to answer: (1) What happened? (2) Why does it matter for revenue, margin, efficiency, risk, concentration, spend, or growth? (3) What should leadership watch or do?
+  Fields:
+  "headline": "4-9 words, operator-brief title—concrete and specific. GOOD: Revenue concentration risk, Margin pressure vs prior period, Uneven campaign efficiency, Cost growth outpacing sales, Data quality limiting confidence. BAD: Revenue analysis, Marketing insights, Business observations, Trend detection, Customer spending summary.",
+  "finding": "one tight sentence: the fact and immediate read; complements the headline without repeating it verbatim—wording must match the confidence band (direct vs measured vs careful per calibration rules)",
+  "why_it_matters": "business consequence if ignored—planning, capital, or accountability; tone must match the same confidence band",
+  "likely_cause": "one short working hypothesis from the summaries, or what data would be needed to explain it—no vague 'market conditions'",
+  "recommended_action": "one imperative: what to watch, validate, or assign this week",
+  "confidence": "High|Medium|Low — short reason (thin time range, missing fields, etc.)",
+  "source_reference": "the number, column, or comparison this rests on—not narration",
   "type": "positive|negative|neutral",
-  optional "trace": same shape as key_metrics trace — fill when the insight clearly depends on a specific file, columns, or time slice (workspace overviews: name the dataset file when possible)
-  optional "caveats": 0-3 short strings if this insight is weakened by missing fields, duplicates, inconsistent column labels, incomplete attribution, thin sample, or mixed granularities—use [] when none
+  optional "trace": same shape as key_metrics — when the insight depends on a specific file, columns, or time slice
+  optional "caveats": 0-3 short strings—[] when none
 
-When the data allows, vary angles: growth vs profit, cost creep, concentration (product/region/campaign), margin vs volume, repeat or cohort behavior only if columns support it. Include at least one insight on data limits if there are gaps, duplicates, missing keys, or suspicious distributions.
+Vary angles when the data allows: growth vs margin, concentration, cost creep, channel or campaign efficiency, repeat behavior only if columns support it. If the data has trust gaps, say so in at least one insight.
 
-"anomalies": {"description", "severity": "high|medium|low"} for issues that distort KPIs or trust.
+"anomalies": {"description", "severity": "high|medium|low"} for issues that distort KPIs or decisions.
 
-"recommendations": 0-4 cross-cutting actions not already duplicated in an insight's recommended_action; use [] if none needed.
+"recommendations": 0-4 cross-cutting moves not duplicated in an insight's recommended_action; [] if none.
 
 Valid JSON only."""
 
@@ -96,9 +127,9 @@ class AIAnalyzer:
         parts.append(f"Column metadata: {json.dumps(column_metadata, indent=2)}")
         parts.append(f"Data summary: {json.dumps(data_summary, indent=2)}")
         parts.append(
-            "Produce the JSON: top_priorities (3–5 rows), headline for leadership, key figures with decision-linked notes, "
-            "structured insights (full-sentence takeaways—not label-style headings), "
-            "anomalies, and only non-duplicate cross-cutting recommendations."
+            "Produce the JSON: top_priorities (3–5), executive headline, key_metrics with decision-linked notes, "
+            "insights as tight executive commentary (what happened, why it matters, what to watch—minimal filler), "
+            "anomalies, and non-duplicate recommendations. Follow the tone rules in the system message."
         )
         return "\n\n".join(parts)
 
@@ -115,12 +146,21 @@ class AIAnalyzer:
                     "label": f"Total {col.replace('_', ' ').title()}",
                     "value": f"{total:,.2f}",
                     "trend": "stable",
-                    "note": f"Average: {mean:,.2f}" if mean else "",
+                    "note": (
+                        f"Ingest-level sum; mean row ≈ {mean:,.2f}—confirm gross vs net before you size bets."
+                        if mean is not None
+                        else "Ingest-level sum—confirm definition before committing spend or targets."
+                    ),
                 })
 
         rows = data_summary.get("rows", 0)
         cols = data_summary.get("columns", 0)
-        metrics.append({"label": "Dataset Size", "value": f"{rows} rows x {cols} columns", "trend": "stable", "note": ""})
+        metrics.append({
+            "label": "Dataset size",
+            "value": f"{rows} rows × {cols} columns",
+            "trend": "stable",
+            "note": "Scope only—pair with revenue or cost fields for a real decision read.",
+        })
 
         for col in column_metadata.get("category_columns", []):
             top_vals = data_summary.get(f"{col}_top_values", {})
@@ -129,45 +169,51 @@ class AIAnalyzer:
                 if top_item:
                     count = top_vals[top_item]
                     insights.append({
+                        "headline": (
+                            f"Category mix skews to '{str(top_item)[:32]}"
+                            f"{'…' if len(str(top_item)) > 32 else ''}'"
+                        ),
                         "finding": (
-                            f"`{col}` is heavily skewed to '{top_item}' ({count} rows), "
-                            "so blended KPIs will read more like that segment than the full business."
+                            f"Row counts cluster on '{top_item}' in `{col}` ({count}), "
+                            "which may indicate blended KPIs overweight that segment until you break the mix out."
                         ),
                         "why_it_matters": (
-                            "If you plan off a single growth or margin number without slicing here, "
-                            "you may misallocate spend or miss a weak tail in the mix."
+                            "This may increase exposure to mis-stated plans if one top-line number hides weaker pockets elsewhere."
                         ),
-                        "likely_cause": "True mix skew, or repeated default / placeholder entries in the source system.",
+                        "likely_cause": "Real concentration, or defaults/duplicates in the export.",
                         "recommended_action": (
-                            f"Break out performance by `{col}` before you lock targets; validate whether "
-                            f"'{top_item}' is real volume or a data artifact."
+                            f"This should be reviewed because targets and budgets should be sliced by `{col}` "
+                            f"before you lock them—confirm whether '{top_item}' is real volume or a data artifact."
                         ),
-                        "confidence": "Medium — row counts only, not dollar impact",
-                        "source_reference": f"summary `{col}_top_values['{top_item}']` = {count}",
+                        "confidence": "Medium — row counts only, not dollar-weighted",
+                        "source_reference": f"`{col}_top_values['{top_item}']` = {count}",
                         "type": "neutral",
                         "caveats": [
-                            "No dollar-weighted view—frequency skew may not match revenue skew.",
+                            "Row mix may not match revenue mix.",
                         ],
                     })
 
         insights.insert(
             0,
             {
+                "headline": "Briefing running without model interpretation",
                 "finding": (
-                    "Structured AI analysis is off—this report is rule-based counts only, "
-                    "not a commercial read across drivers or cohorts."
+                    "The API is in fallback mode (counts and rules only), which means drivers, cohorts, "
+                    "and softer commercial signals are not interpreted in this pass."
                 ),
                 "why_it_matters": (
-                    "You should not use this output alone for pricing, cuts, or capital decisions; "
-                    "turn on the model-backed pass when you need defensible interpretation."
+                    "This should be reviewed before pricing, cuts, or capital moves you would normally "
+                    "pressure-test with a full briefing."
                 ),
                 "likely_cause": "OPENAI_API_KEY is not set on the backend.",
-                "recommended_action": "Set the key in backend/.env, restart the API, and re-run this analysis.",
-                "confidence": "High",
+                "recommended_action": (
+                    "Set OPENAI_API_KEY in backend/.env, restart the API, and re-run so tradeoffs surface with evidence."
+                ),
+                "confidence": "High — configuration state",
                 "source_reference": "Backend configuration",
                 "type": "negative",
                 "caveats": [
-                    "Interpretation is not model-generated until OPENAI_API_KEY is configured.",
+                    "No model-generated interpretation until the key is set.",
                 ],
             },
         )
@@ -176,17 +222,17 @@ class AIAnalyzer:
             {
                 "kind": "risk",
                 "priority": "high",
-                "title": "Full AI analysis is off",
+                "title": "Briefing is running without the model",
                 "explanation": (
-                    "Counts and skew checks only—do not use this pass alone for pricing, cuts, or capital calls."
+                    "This increases exposure to acting on structure checks alone—avoid pricing, cuts, or capital calls until the full pass runs."
                 ),
             },
             {
                 "kind": "next_action",
                 "priority": "high",
-                "title": "Enable the model-backed pass",
+                "title": "Enable the model-backed briefing",
                 "explanation": (
-                    "Set OPENAI_API_KEY in backend/.env, restart the API, and re-run for prioritized risks and moves."
+                    "Set OPENAI_API_KEY, restart the API, and re-run so risks and moves tie to your actual summaries."
                 ),
             },
         ]
@@ -197,21 +243,24 @@ class AIAnalyzer:
                 {
                     "kind": "inefficiency",
                     "priority": "medium",
-                    "title": "Category mix may be distorting blended KPIs",
+                    "title": "Category mix may be bending headline KPIs",
                     "explanation": skew.get("why_it_matters", "")[:220]
-                    or "Segment before you lock targets so one label is not doing the work of the whole business.",
+                    or (
+                        "This may indicate one segment label is doing the work of the whole business in blended metrics—"
+                        "slice before you lock targets."
+                    ),
                 },
             )
 
         return {
             "executive_summary": (
-                f"{rows} rows × {cols} columns—mechanical summary only until the model is enabled. "
+                f"This extract covers {rows} rows × {cols} columns in mechanical scope only until the model is enabled. "
                 + (
-                    f"Revenue-style fields detected: {', '.join(column_metadata.get('revenue_columns', []))}. "
+                    f"Revenue-style columns detected: {', '.join(column_metadata.get('revenue_columns', []))}. "
                     if column_metadata.get("revenue_columns")
                     else ""
                 )
-                + "Enable the API key and re-run for downside, upside, and next moves tied to your actuals."
+                + "This should be reviewed because strategic reads on downside, upside, and next moves require the full briefing."
             ),
             "top_priorities": top_priorities[:5],
             "key_metrics": metrics,
