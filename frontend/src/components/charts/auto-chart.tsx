@@ -511,6 +511,20 @@ export function AutoChart({
   );
 }
 
+/** ~1 tick per week for 30d+, all ticks only for 7d/14d-sized series (avoids overlap in 2-col layout). */
+function timeSeriesXAxisProps(pointCount: number) {
+  const n = pointCount;
+  const compact = n > 0 && n <= 14;
+  const interval = compact ? 0 : Math.max(1, Math.ceil(n / 8) - 1);
+  const bottom = compact ? 12 : 22;
+  const minTickGap = compact ? 4 : 12;
+  const tick =
+    compact
+      ? tickStyle
+      : { ...tickStyle, angle: -32, textAnchor: "end" as const };
+  return { interval, bottom, minTickGap, tick };
+}
+
 function renderDualArea(
   data: DualPoint[],
   safeId: string,
@@ -520,12 +534,12 @@ function renderDualArea(
   const p = getSaaSPalette(accentIndex, kind);
   const idCur = `saasCur-${safeId}`;
   const idPrev = `saasPrev-${safeId}`;
-  const showEveryDayTick = data.length > 0 && data.length <= 45;
+  const xAxis = timeSeriesXAxisProps(data.length);
 
   return (
     <AreaChart
       data={data}
-      margin={{ top: 14, right: 10, left: 0, bottom: showEveryDayTick ? 10 : 4 }}
+      margin={{ top: 14, right: 10, left: 0, bottom: xAxis.bottom }}
     >
       <defs>
         <linearGradient id={idCur} x1="0" y1="0" x2="0" y2="1">
@@ -548,13 +562,13 @@ function renderDualArea(
       />
       <XAxis
         dataKey="x"
-        tick={tickStyle}
+        tick={xAxis.tick}
         tickLine={false}
         axisLine={false}
         tickFormatter={formatChartAxisDate}
-        tickMargin={10}
-        interval={showEveryDayTick ? 0 : undefined}
-        minTickGap={showEveryDayTick ? 2 : 20}
+        tickMargin={8}
+        interval={xAxis.interval}
+        minTickGap={xAxis.minTickGap}
       />
       <YAxis
         tick={tickStyle}

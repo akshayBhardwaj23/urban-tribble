@@ -146,7 +146,20 @@ export function ForecastChart({
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
   const chartInsight = forecastPeriodInsight(data, metricLabel);
-  const denseForecastTicks = combined.length > 0 && combined.length <= 45;
+  const fcN = combined.length;
+  const fcCompact = fcN > 0 && fcN <= 14;
+  const fcInterval = fcCompact ? 0 : Math.max(1, Math.ceil(fcN / 8) - 1);
+  const fcBottom = fcCompact ? 10 : 22;
+  const fcMinGap = fcCompact ? 4 : 12;
+  const fcTick = fcCompact
+    ? { fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }
+    : {
+        fill: "hsl(220, 9%, 46%)",
+        fontSize: 11,
+        fontWeight: 500,
+        angle: -32,
+        textAnchor: "end" as const,
+      };
 
   return (
     <div className="space-y-4">
@@ -219,7 +232,7 @@ export function ForecastChart({
                   top: 8,
                   right: 8,
                   left: 0,
-                  bottom: denseForecastTicks ? 10 : 4,
+                  bottom: fcBottom,
                 }}
               >
                 <defs>
@@ -240,13 +253,13 @@ export function ForecastChart({
                 />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }}
+                  tick={fcTick}
                   tickLine={false}
                   axisLine={{ stroke: "hsl(220, 13%, 91%)", strokeWidth: 1 }}
-                  tickMargin={10}
+                  tickMargin={8}
                   tickFormatter={(v) => formatChartAxisDate(v)}
-                  interval={denseForecastTicks ? 0 : undefined}
-                  minTickGap={denseForecastTicks ? 2 : 20}
+                  interval={fcInterval}
+                  minTickGap={fcMinGap}
                 />
                 <YAxis
                   tick={{ fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }}
