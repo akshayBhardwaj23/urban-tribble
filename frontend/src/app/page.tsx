@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ThemeMenuCompact } from "@/components/theme-menu";
 import {
   POSITIONING_LINE,
   PRODUCT_NAME,
@@ -107,7 +108,8 @@ export default function LandingPage() {
           >
             {PRODUCT_NAME}
           </Link>
-          <nav className="flex items-center gap-6">
+          <nav className="flex items-center gap-4 sm:gap-6">
+            <ThemeMenuCompact className="sm:mr-1" />
             <Link
               href="#value"
               className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline"

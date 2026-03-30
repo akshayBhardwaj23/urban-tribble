@@ -4,7 +4,7 @@ AI-powered business analytics SaaS. Upload Excel/CSV files and get automated das
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14+, TypeScript, Tailwind CSS, shadcn/ui, Recharts
+- **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts
 - **Backend**: FastAPI, Python 3.11+, Pandas, OpenAI GPT-4o, SQLAlchemy
 - **Database**: SQLite (dev) / PostgreSQL (prod)
 
@@ -51,4 +51,4 @@ backend/           FastAPI app
 docs/              Architecture documentation
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full architecture details.
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full system map: auth, storage, every major API, AI flows, and step-by-step examples.

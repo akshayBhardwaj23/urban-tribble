@@ -589,7 +589,7 @@ export default function OverviewPage() {
           </div>
         </div>
         {data.charts.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="flex flex-col gap-6 w-full">
             {data.charts.map(
               (
                 chart: {

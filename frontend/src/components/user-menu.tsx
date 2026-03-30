@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeAppearanceSubmenu } from "@/components/theme-menu";
 
 export function UserMenu() {
   const { data: session } = useSession();
@@ -64,6 +65,8 @@ export function UserMenu() {
           <p className="text-sm font-medium truncate">{name}</p>
           <p className="text-xs text-muted-foreground truncate">{email}</p>
         </div>
+        <DropdownMenuSeparator />
+        <ThemeAppearanceSubmenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => signOut({ callbackUrl: "/" })}

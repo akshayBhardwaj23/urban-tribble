@@ -1,245 +1,360 @@
-# Excel Consultant — Architecture
+# Clarus / Excel Consultant — Architecture & Deep Dive
 
-## Overview
+This document is the **authoritative technical map** of the project: how data moves, where it lives, which APIs exist, and how AI is used. Use it to onboard, debug, or answer stakeholder questions.
 
-Users upload Excel or CSV files; the platform ingests and cleans the data, runs AI-driven analysis, and surfaces results in auto-generated dashboards. Natural-language chat answers questions over the dataset using generated queries and explanations. The system is built with **Next.js** (frontend), **FastAPI** (backend), and **OpenAI** models for analysis and chat.
+---
 
-## Tech Stack
+## 1. Product mental model (one paragraph)
 
-- **Frontend:** Next.js 14+ (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts, TanStack Query
-- **Backend:** FastAPI, Python 3.11+, Pandas, OpenAI GPT-4o, SQLAlchemy
-- **Database:** SQLite (dev) / PostgreSQL (prod)
-- **Storage:** Local filesystem (dev) / S3 (prod)
-- **Deployment:** Vercel (frontend), Railway (backend)
+Users sign in with Google, pick a **workspace** (isolated container), and upload **tabular files** (Excel/CSV/TSV). The backend **cleans** rows, **infers column roles** (date, revenue-like, category, etc.), stores **metadata in SQLite** and **cleaned rows as Parquet on disk**, and optionally builds a **dashboard plan** (KPIs + charts). The UI shows **per-dataset** dashboards, **AI briefings** (structured JSON from the model), **workspace overview** (rollup KPIs/charts + optional workspace-level briefing), **linear forecasts**, and **chat** that turns questions into **pandas code** executed safely on the DataFrame.
 
-## Architecture Diagram
+---
 
-```mermaid
-flowchart TB
-  subgraph frontend[Frontend]
-    fileUpload[FileUpload]
-    dashboardView[Dashboard]
-    aiChat[AIChat]
-  end
-  backendApi[BackendAPI]
-  subgraph backendModules[BackendModules]
-    dataCleaner[DataCleaner]
-    columnDetector[ColumnDetector]
-    aiAnalyzer[AIAnalyzer]
-    queryEngine[QueryEngine]
-  end
-  database[(Database)]
-  fileStorage[FileStorage]
-  openaiGpt[GPT4o]
+## 2. Tech stack (as implemented)
 
-  fileUpload --> backendApi
-  dashboardView --> backendApi
-  aiChat --> backendApi
-  backendApi --> dataCleaner
-  backendApi --> columnDetector
-  backendApi --> aiAnalyzer
-  backendApi --> queryEngine
-  dataCleaner --> database
-  columnDetector --> database
-  queryEngine --> database
-  backendApi --> fileStorage
-  aiAnalyzer --> openaiGpt
-```
+| Layer | Technology |
+|--------|------------|
+| Frontend | Next.js (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui (Base UI), TanStack Query, Recharts, next-themes |
+| Auth | NextAuth.js (Google provider); session in browser |
+| Backend | FastAPI, SQLAlchemy, Pandas, PyArrow/Parquet, OpenAI Python SDK |
+| Database | SQLite by default (`DATABASE_URL`); PostgreSQL-compatible via SQLAlchemy URL |
+| File storage | Local directory `UPLOAD_DIR` (default `./data/uploads`); original file + `{upload_id}_cleaned.parquet` |
+| AI | OpenAI chat completions (`OPENAI_MODEL`, default `gpt-4o`); JSON responses for analysis and chat pipeline |
 
-## Data Flow
+Deployment targets mentioned in older docs (Vercel/Railway) are **not enforced in code**—configure via hosting.
+
+---
+
+## 3. High-level system diagram
 
 ```mermaid
-sequenceDiagram
-  participant user as User
-  participant fe as Frontend
-  participant api as BackendAPI
-  participant cleaner as DataCleaner
-  participant store as Storage
-  participant gpt as OpenAI
-
-  Note over user,gpt: Upload flow
-  user->>fe: Upload file
-  fe->>api: POST upload and describe file
-  api->>cleaner: Clean rows and types
-  cleaner-->>api: Cleaned dataset
-  api->>api: Detect columns
-  api->>gpt: AI analysis
-  gpt-->>api: Insights and summaries
-  api->>store: Save file metadata and analysis
-  store-->>api: Persisted
-  api-->>fe: Dashboard payload
-  fe-->>user: Render dashboard
-
-  Note over user,gpt: Chat flow
-  user->>fe: Ask question
-  fe->>api: POST chat
-  api->>gpt: Generate pandas query
-  gpt-->>api: Query text
-  api->>api: Execute query via QueryEngine
-  api->>gpt: Explain results
-  gpt-->>api: Natural language answer
-  api-->>fe: Answer and optional chart hints
-  fe-->>user: Show answer
-```
-
-## Authentication Flow
-
-```mermaid
-sequenceDiagram
-  participant user as User
-  participant fe as Frontend
-  participant nextauth as NextAuth
-  participant api as BackendAPI
-  participant db as Database
-
-  user->>fe: Click Sign In
-  fe->>nextauth: signIn google
-  nextauth-->>fe: Google OAuth redirect
-  fe->>nextauth: Callback with token
-  nextauth-->>fe: Session JWT
-  fe->>api: POST auth sync with email and name
-  api->>db: Create or update user
-  db-->>api: User record
-  api-->>fe: User profile and workspaces
-  alt No workspaces
-    fe->>fe: Redirect to onboarding
-    user->>fe: Enter workspace name
-    fe->>api: POST workspaces
-    api->>db: Create workspace
-    api-->>fe: Workspace created
+flowchart LR
+  subgraph client [Browser]
+    Next[Next.js App]
   end
-  fe->>fe: Redirect to dashboard
+  subgraph api [FastAPI]
+    RU[routes/uploads]
+    RD[routes/datasets]
+    RA[routes/analysis]
+    RDb[routes/dashboards]
+    RC[routes/chat]
+    RW[routes/workspaces]
+    RAuth[routes/auth]
+  end
+  subgraph services [Services]
+    FP[file_processor]
+    DC[data_cleaner]
+    CD[column_detector]
+    DP[dashboard_planner]
+    IC[ingestion_classifier]
+    AA[ai_analyzer]
+    QE[query_engine]
+    FC[forecaster]
+    DE[dashboard_executor]
+  end
+  subgraph persist [Persistence]
+    SQL[(SQLite)]
+    FS[(Parquet files)]
+  end
+  subgraph ai [OpenAI]
+    GPT[Chat API]
+  end
+
+  Next -->|HTTPS + X-User-Email| RAuth
+  Next --> RU & RD & RA & RDb & RC & RW
+  RU --> FP & DC & CD & DP & IC
+  RD --> FS
+  RA --> AA & FC
+  RDb --> DE & FS
+  RC --> QE & FS
+  AA --> GPT
+  QE --> GPT
+  DP --> GPT
+  RU & RD & RA & RDb & RC & RW --> SQL
+  FP & DC --> FS
 ```
 
-## Database Schema
+---
 
-| Table | Purpose |
-|-------|---------|
-| **users** | User accounts synced from Google OAuth: email, name, image, active workspace. |
-| **workspaces** | Isolated containers for user data: name, owner. |
-| **uploads** | Original file records: path/URL, size, MIME type, status, timestamps. Scoped to workspace. |
-| **datasets** | Logical dataset per upload: schema snapshot, column metadata, row counts. |
-| **analyses** | AI analysis runs: prompts, model, structured output, links to dataset. |
-| **dashboards** | Dashboard definitions: layout, widget specs, bindings to analysis/dataset. |
-| **chat_messages** | Chat history: role, content, optional tool/query traces, dataset scope. |
-| **dataset_relations** | Joins or links between datasets (e.g. keys, relationship type). Scoped to workspace. |
+## 4. Authentication & workspace scoping
 
-## API Endpoints
+### 4.1 Frontend
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Liveness/readiness for load balancers. |
-| `POST` | `/api/auth/sync` | Sync user from NextAuth session (create or update). |
-| `GET` | `/api/auth/me` | Get current user profile + workspaces. |
-| `POST` | `/api/workspaces` | Create a new workspace. |
-| `GET` | `/api/workspaces` | List workspaces for current user. |
-| `POST` | `/api/workspaces/{id}/activate` | Set active workspace. |
-| `POST` | `/api/uploads` | Create upload; accept file + optional description. |
-| `GET` | `/api/uploads/{id}` | Upload metadata and processing status. |
-| `GET` | `/api/datasets` | List all datasets (workspace-scoped). |
-| `GET` | `/api/datasets/{id}` | Dataset profile and column info. |
-| `GET` | `/api/datasets/{id}/preview` | Paginated sample rows for UI preview. |
-| `POST` | `/api/analysis/run` | Trigger AI analysis for a dataset. |
-| `GET` | `/api/analysis/{id}` | Fetch a completed analysis by id. |
-| `POST` | `/api/chat` | Natural-language Q&A over a dataset. |
-| `GET` | `/api/dashboards/{id}` | Dashboard configuration and data bindings. |
-| `GET` | `/api/relations/detect` | Auto-detect relations across datasets. |
-| `GET` | `/api/relations` | List all detected relations. |
+1. User signs in with **Google** via NextAuth (`frontend/src/lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts`).
+2. After session exists, `WorkspaceProvider` (`frontend/src/lib/workspace-context.tsx`) calls **`POST /api/auth/sync`** with `{ email, name, image }`.
+3. Sync response includes `workspaces`, `active_workspace_id`, and `needs_onboarding` (true when user has zero workspaces).
+4. `setApiUserEmail` (`frontend/src/lib/api.ts`) stores the email so **every subsequent API call** sends header **`X-User-Email: <email>`**.
 
-## Project Structure
+### 4.2 Backend
 
-### `frontend/`
+- `deps.get_current_user` reads **`X-User-Email`**, loads `User` from DB (no JWT validation on API—**trust boundary is the frontend + network**).
+- `deps.require_user` → 401 if missing user.
+- `deps.require_active_workspace` → 400 if user has no `active_workspace_id` or workspace is not owned by user.
 
-```text
-frontend/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx              # Landing page
-│   │   ├── login/page.tsx        # Google OAuth sign-in
-│   │   ├── onboarding/page.tsx   # First-time workspace creation
-│   │   ├── api/auth/[...nextauth]/route.ts
-│   │   └── (dashboard)/
-│   │       ├── layout.tsx        # Auth guard + sidebar + workspace switcher
-│   │       ├── upload/page.tsx
-│   │       ├── datasets/page.tsx
-│   │       ├── datasets/[id]/page.tsx
-│   │       └── chat/page.tsx
-│   ├── components/
-│   │   ├── ui/                   # shadcn primitives
-│   │   ├── charts/               # Recharts wrappers
-│   │   ├── upload/               # File upload + context form
-│   │   ├── auth-guard.tsx        # Route protection
-│   │   ├── user-menu.tsx         # User avatar + sign out
-│   │   └── workspace-switcher.tsx
-│   └── lib/
-│       ├── api.ts                # Backend API client (auto-attaches user header)
-│       ├── auth.ts               # NextAuth config
-│       ├── providers.tsx         # Session + Query + Workspace providers
-│       ├── workspace-context.tsx # Workspace state management
-│       └── utils.ts
-├── .env.local.example
-├── package.json
-└── tailwind.config.ts
-```
+**Implication:** The API is **not** a public internet API without an additional gateway; it assumes the same user controls the browser that sets the header.
 
-### `backend/`
+### 4.3 Workspace rules
 
-```text
-backend/
-├── main.py                     # FastAPI entry point
-├── config.py                   # Settings via pydantic-settings
-├── database.py                 # SQLAlchemy engine + session
-├── deps.py                     # Auth dependencies (get_current_user, require_user)
-├── routes/
-│   ├── auth.py                 # User sync + profile
-│   ├── workspaces.py           # Workspace CRUD + activation
-│   ├── uploads.py
-│   ├── datasets.py
-│   ├── analysis.py
-│   ├── dashboards.py
-│   ├── chat.py
-│   └── relations.py
-├── services/
-│   ├── file_processor.py       # Parse Excel/CSV
-│   ├── data_cleaner.py         # Clean + normalize
-│   ├── column_detector.py      # Type + name heuristic detection
-│   ├── ai_analyzer.py          # OpenAI analysis
-│   ├── query_engine.py         # Chat: question -> pandas -> answer
-│   ├── forecaster.py           # Linear regression forecasting
-│   └── relation_detector.py    # Cross-dataset relation detection
-├── models/
-│   └── models.py               # SQLAlchemy models (User, Workspace, Upload, ...)
-├── schemas/
-│   └── schemas.py              # Pydantic request/response schemas
-├── data/                       # SQLite DB + uploaded files (dev)
-└── requirements.txt
-```
+- All dataset/upload/dashboard/chat/analysis operations (except a few read helpers) use **`require_active_workspace`** so rows are **scoped to the active workspace**.
+- Join path: `Upload.workspace_id` → `Dataset.upload_id`. Listing datasets uses `dataset_upload_pairs_for_workspace` (`backend/services/workspace_query.py`).
 
-## Future Roadmap
+---
 
-**Analytics**
+## 5. Persistence: database schema
 
-- Prophet (or similar) forecasting on time series
-- Custom metrics and KPI builder
-- What-if and scenario modeling
-- Comparative intelligence across periods or segments
-- Industry benchmarking (where data allows)
-- Anomaly detection and alerting
+ORM: `backend/models/models.py`.
 
-**Collaboration**
+| Table | Role |
+|-------|------|
+| **users** | `email` (unique), `name`, `image`, `active_workspace_id` (FK logical to workspaces) |
+| **workspaces** | `name`, `owner_id` → users |
+| **uploads** | Original file metadata: `filename`, `file_type`, **`file_url` (absolute path to saved file)**, `user_description`, `status`, row/column counts, **`workspace_id`** |
+| **datasets** | One per successful upload: `name`, **`schema_json`** (column detector output), **`data_summary`** (aggregates JSON), **`cleaned_report_json`**, **`dashboard_plan_json`** (optional AI/heuristic plan), **`business_classification`** (ingestion classifier id) |
+| **analyses** | Each run: `dataset_id`, `type` (`overview` = per-dataset briefing, **`workspace_overview`** = whole-workspace briefing—see §7.4 quirk), `result_json`, `ai_summary` |
+| **dashboards** | Table exists; not all features may be driven from UI—check routes if extending |
+| **chat_messages** | Persists `user` / `assistant` turns per `dataset_id` (even workspace chat stores under a dataset in multi-df path—see chat route) |
+| **dataset_relations** | Cross-dataset link metadata; **backend routes exist**; **frontend does not call relations APIs today** |
 
-- Team workspaces and roles
-- Shareable dashboards and links
-- Scheduled email/PDF reports
-- Comments and annotations on widgets
+**Migrations:** `main.py` lifespan runs `create_all` plus small SQLite `ALTER TABLE` backfills for `dashboard_plan_json` and `business_classification`, and a one-time heuristic to set `uploads.workspace_id` for legacy NULLs.
 
-**Platform**
+---
 
-- Drag-and-drop dashboard builder
-- Google Sheets import
-- PDF table extraction
-- Tally / Zoho (and similar) integrations
-- Hindi and regional-language summaries
-- Background jobs with Celery and Redis
-- S3 assets behind a CDN for scale
+## 6. Persistence: filesystem
+
+Under `UPLOAD_DIR` (default `backend/data/uploads/`):
+
+| File | Purpose |
+|------|---------|
+| `{upload_id}{ext}` | Original upload (e.g. `.csv`) |
+| `{upload_id}_cleaned.parquet` | **Canonical working copy** for dashboards, chat, forecast, append |
+
+Almost all analytics **reload Parquet**, not the original Excel, so cleaning steps are stable.
+
+---
+
+## 7. Core pipelines (step-by-step)
+
+### 7.1 Upload → dataset (happy path)
+
+**API:** `POST /api/uploads/` (multipart: `file`, `description`).
+
+**Steps (`backend/routes/uploads.py`):**
+
+1. Validate extension against `settings.ALLOWED_EXTENSIONS` (`.xlsx`, `.xls`, `.csv`, `.tsv`).
+2. Create `Upload` row (`processing`), stream bytes to `{upload_id}{ext}`.
+3. `FileProcessor.read` → Pandas DataFrame.
+4. `DataCleaner.clean` → cleaned `df` + `clean_report` (steps, shapes).
+5. `ColumnDetector.detect` → `metadata` (lists: `date_columns`, `revenue_columns`, `category_columns`, `numeric_columns`, `text_columns`).
+6. `ColumnDetector.summary` → numeric aggregates (e.g. `{col}_total`, `{col}_mean`, top category counts) stored as **`data_summary`** JSON.
+7. `DashboardPlanner.build_plan` → JSON plan (KPIs + charts + optional `dataset_brief`); may call OpenAI when configured.
+8. `build_ingestion_profile` → UI-facing **`ingestion`** object (classification, flags, interpretations).
+9. Save `Dataset` with JSON fields; `df.to_parquet` cleaned file.
+10. Commit; return `dataset_id`, `ingestion`, `all_columns`, etc.
+
+**Frontend:** `FileDropzone` → `api.uploadFile` → review cards → `PATCH /api/datasets/{id}` to set `business_classification`, primary date/amount, segment columns (updates schema + may rebuild plan—see `datasets.py`).
+
+### 7.2 Per-dataset dashboard (KPIs + charts)
+
+**API:** `GET /api/dashboards/dataset/{dataset_id}?start_date=&end_date=&last_n_days=`
+
+**Flow (`backend/routes/dashboards.py` + services):**
+
+1. Load Parquet; parse `schema_json`.
+2. Optional **date filter**: `last_n_days` anchors on **max date in file** (not wall-clock “today”).
+3. If `dashboard_plan_json` exists and has charts → **`execute_plan`** builds KPIs + chart payloads from the (possibly filtered) `df`.
+4. Else → **`legacy_charts`** + **`fallback_ui_kpis`**.
+5. Response includes `filtered_row_count`, `timeframe` meta, `date_bounds`, `daily_aggregates`, etc.
+
+**Frontend:** Dataset page `Overview` tab; `TimeframeToolbar` maps presets to query params (`frontend`).
+
+### 7.3 Per-dataset AI briefing
+
+**API:** `POST /api/analysis/run` body `{ "dataset_id": "..." }`  
+**Fetch latest:** `GET /api/analysis/dataset/{dataset_id}`
+
+**Flow (`backend/routes/analysis.py` + `services/ai_analyzer.py`):**
+
+1. Load `data_summary` + `schema_json` + optional `user_description`.
+2. **`AIAnalyzer.analyze`** sends statistical summaries to the model with a strict **JSON-only** system prompt (executive summary, `top_priorities`, `key_metrics`, `insights`, `anomalies`, `recommendations`).
+3. If `OPENAI_API_KEY` is empty → **`_fallback_analysis`** heuristic JSON (no model).
+4. Persist `Analysis` with `type="overview"`.
+
+**Frontend:** `AnalysisPanel` normalizes and renders signals, conviction, trace UI (`frontend/src/components/dashboard/analysis-panel.tsx`, `analysis-normalize.ts`).
+
+### 7.4 Workspace overview AI (quirk)
+
+**API:** `POST /api/analysis/overview/run`  
+**Latest:** `GET /api/analysis/overview/latest`
+
+**Flow:**
+
+1. Load **all** datasets in workspace; merge each `data_summary` into `combined_summary.datasets[]`.
+2. Merge column lists in `combined_metadata` (concatenation of names—**not** a SQL join).
+3. Call **`AIAnalyzer.analyze`** with workspace-level description string.
+4. **Storage quirk:** `Analysis` row uses `type="workspace_overview"` but **`dataset_id` is set to the first dataset’s id** in the loop (implementation detail for ORM constraint). The UI treats this as workspace-scoped via `overview/latest`, not via `dataset_id`.
+
+### 7.5 Forecasting
+
+**Per dataset:** `POST /api/analysis/forecast` — loads Parquet, picks `date_column` / `value_column` from request or first entries in `schema_json`, runs **`Forecaster.forecast`** (linear regression, bands).
+
+**Workspace outlook:** `POST /api/analysis/overview/forecast` — picks the **largest dataset by row count** that has both date and revenue columns; uses **first** date + **first** revenue column of that schema.
+
+### 7.6 Chat (natural language → pandas → explanation)
+
+**Single dataset:** `POST /api/chat` `{ dataset_id, question }`  
+**Workspace:** `POST /api/chat/workspace` `{ question }`
+
+**Flow (`services/query_engine.py`):**
+
+1. Load Parquet(s); build schema description for the model.
+2. **Pass 1:** Model returns JSON with `pandas_code` assigning to `result`.
+3. **Safety:** forbidden tokens (`import`, `exec`, etc.) rejected; code run in restricted namespace with **`SAFE_BUILTINS`** + `df` (or multiple `df_*` / `datasets` dict for workspace).
+4. **Pass 2:** Model explains result JSON → `answer` and optional `chart_data`.
+5. Messages appended to **`chat_messages`** (user + assistant).
+
+If no API key, chat degrades (engine checks `self.client`).
+
+---
+
+## 8. AI components compared
+
+| Component | Input | Output | Model role |
+|-----------|--------|--------|----------------|
+| **AIAnalyzer** | `data_summary` dict, `schema_json` dict, optional text | Single JSON object (briefing) | One structured JSON response |
+| **DashboardPlanner** | DataFrame + metadata + stats (+ description) | `dashboard_plan_json` | When `OPENAI_API_KEY` is set, calls chat completions (`OPENAI_MODEL`) for KPI/chart JSON; otherwise **heuristic** plan in code |
+| **QueryEngine** | Question + DataFrame(s) + schema | `answer`, optional `chart_data` | **Two-step:** codegen JSON → execute → explain JSON |
+| **Forecaster** | DataFrame + columns | Historical fit + forward points + stats | **No LLM**; numeric linear regression |
+
+Prompt tone for briefing is controlled in **`backend/services/ai_analyzer.py`** (`SYSTEM_PROMPT`).
+
+---
+
+## 9. API catalog (concrete paths)
+
+Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active workspace (see §4).
+
+### Auth & workspace
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/api/auth/sync` | Body: email, name, image — creates user, returns profile |
+| GET | `/api/auth/me` | Profile + workspaces |
+| POST | `/api/workspaces` | Create workspace |
+| GET | `/api/workspaces` | List |
+| POST | `/api/workspaces/{id}/activate` | Sets `user.active_workspace_id` |
+
+### Uploads & datasets
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/api/uploads/` | Multipart upload + process |
+| GET | `/api/uploads/{id}` | Metadata |
+| GET | `/api/datasets` | List in workspace |
+| GET | `/api/datasets/{id}` | Schema, summary, cleaning report |
+| PATCH | `/api/datasets/{id}` | Classification + primary columns + segments |
+| GET | `/api/datasets/{id}/preview` | Sample rows |
+| POST | `/api/datasets/{id}/append` | Append compatible file; rewrite Parquet |
+| DELETE | `/api/datasets/{id}` | Remove dataset + related rows/files per route logic |
+
+### Analysis & dashboards
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/api/analysis/run` | Per-dataset briefing |
+| GET | `/api/analysis/dataset/{dataset_id}` | Latest analysis or null |
+| GET | `/api/analysis/{analysis_id}` | By id (less used from UI) |
+| POST | `/api/analysis/forecast` | Per-dataset forecast |
+| POST | `/api/analysis/overview/run` | Workspace briefing |
+| GET | `/api/analysis/overview/latest` | Latest workspace briefing |
+| POST | `/api/analysis/overview/forecast` | Workspace outlook chart data |
+| GET | `/api/dashboards/dataset/{dataset_id}` | KPIs + charts + timeframe |
+| GET | `/api/dashboards/overview` | Cross-dataset KPIs + charts list |
+
+### Chat
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/api/chat` | Single dataset |
+| POST | `/api/chat/workspace` | Multi-dataset |
+
+### Other
+
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/health` | No auth |
+| — | `/api/relations/*` | Implemented in backend; **no frontend usage found** |
+
+The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`api` object).
+
+---
+
+## 10. Frontend map (routes → data)
+
+| Area | Route(s) | Primary APIs |
+|------|-----------|----------------|
+| Landing | `/` | None (marketing) |
+| Login | `/login` | NextAuth |
+| Onboarding | `/onboarding` | `POST /api/workspaces` |
+| Overview | `/dashboard` | `GET /api/dashboards/overview`, `GET/POST` overview analysis & forecast |
+| Upload | `/upload` | `POST /api/uploads/` |
+| Sources list | `/datasets` | `GET /api/datasets`, `DELETE` |
+| Dataset hub | `/datasets/[id]` | `GET` dataset, preview, `GET` dashboard data, `GET/POST` analysis, forecast, `PATCH` dataset |
+| Chat page | `/chat` | `GET /api/datasets`, `POST /api/chat` |
+| Floating chat | `ChatOverlay` on overview | `POST /api/chat` or `/api/chat/workspace` |
+
+State: **TanStack Query** caches server data; **WorkspaceContext** holds profile + active workspace; theme via **next-themes**.
+
+---
+
+## 11. Worked example (narrative)
+
+**Goal:** New user gets a workspace briefing after one CSV upload.
+
+1. User logs in → sync creates `users` row → onboarding creates `workspaces` row → activate sets `active_workspace_id`.
+2. User uploads `sales_q3.csv` → `uploads` + `datasets` rows; files `abc.csv` + `abc_cleaned.parquet`; `schema_json` marks `order_date`, `amount`.
+3. User confirms ingestion in UI → optional `PATCH` adjusts `primary_date_column` / `primary_amount_column` → backend may rebuild `dashboard_plan_json` and `data_summary`.
+4. Dataset **Overview** tab calls `GET /api/dashboards/dataset/{id}` → sees KPIs/charts from plan or legacy.
+5. User opens **Briefing** tab → `POST /api/analysis/run` → `analyses` row; UI shows `AnalysisPanel`.
+6. User opens **Overview** (workspace) → `POST /api/analysis/overview/run` merges summaries from all datasets → new `workspace_overview` analysis; tiles and collapsible full panel use `result_json`.
+
+---
+
+## 12. Configuration & limits
+
+| Variable / setting | Meaning |
+|--------------------|---------|
+| `DATABASE_URL` | SQLAlchemy URL |
+| `UPLOAD_DIR` | Where originals + Parquet live |
+| `OPENAI_API_KEY` | If empty: briefing uses **fallback** JSON; chat/query planner disabled or degraded |
+| `OPENAI_MODEL` | Chat model id |
+| `MAX_FILE_SIZE_MB` | Defined in settings; frontend dropzone also caps size (~50MB)—align if you add strict server-side checks |
+| `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
+| `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
+
+Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`).
+
+---
+
+## 13. What this document does *not* claim
+
+- **Multi-tenant isolation** beyond workspace id + owner check (no row-level security in DB).
+- **PDF or Google Sheets** ingest (not in `ALLOWED_EXTENSIONS`).
+- **Production hardening** (rate limits, API auth tokens, virus scan, etc.)—evaluate before public launch.
+
+---
+
+## 14. Suggested extensions to documentation
+
+If the repo grows, split into:
+
+- `docs/ARCHITECTURE.md` (this file — stays the overview)
+- `docs/API.md` (OpenAPI export from FastAPI `/docs` + examples)
+- `docs/AI.md` (prompt versions, eval notes)
+
+For **OpenAPI**, run the backend and use FastAPI’s automatic `/docs` / `openapi.json`.
+
+---
+
+## 15. Roadmap ideas (product, not committed)
+
+See older bullet lists in git history or product docs; common next steps: team workspaces, PDF ingest, background jobs, stronger API auth, relations UI wired to `dataset_relations`.

@@ -167,4 +167,31 @@
   .dashboard-pill-tabs [data-slot="tabs-trigger"]::after {
     display: none !important;
   }
+
+  /* Dark mode: same glass structure, tuned for contrast on oklch dark tokens */
+  .dark .dashboard-canvas {
+    background:
+      radial-gradient(ellipse 120% 80% at 100% -20%, oklch(0.28 0.07 300 / 0.35), transparent 52%),
+      radial-gradient(ellipse 100% 60% at -10% 100%, oklch(0.26 0.06 240 / 0.32), transparent 48%),
+      linear-gradient(165deg, oklch(0.16 0.02 280) 0%, oklch(0.15 0.02 260) 45%, oklch(0.14 0.02 220) 100%);
+  }
+
+  .dark .dashboard-glass-panel {
+    @apply rounded-3xl border border-white/10 bg-card/55 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.45),0_4px_20px_-8px_rgba(0,0,0,0.25)] backdrop-blur-xl;
+  }
+
+  .dark .dashboard-pill-tabs {
+    @apply h-auto min-h-10 rounded-2xl border border-white/10 bg-card/50 p-1 shadow-md backdrop-blur-md;
+  }
+
+  .dark .dashboard-pill-tabs [data-slot="tabs-trigger"] {
+    color: oklch(0.72 0.02 260);
+  }
+
+  .dark .dashboard-pill-tabs [data-slot="tabs-trigger"][data-active],
+  .dark .dashboard-pill-tabs [data-slot="tabs-trigger"][aria-selected="true"] {
+    background: oklch(0.22 0.02 260);
+    color: oklch(0.96 0.01 260);
+    box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+  }
 }

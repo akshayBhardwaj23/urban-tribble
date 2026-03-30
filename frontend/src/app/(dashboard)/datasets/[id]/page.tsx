@@ -456,9 +456,9 @@ export default function DatasetPage() {
 
         <TabsContent value="dashboard" className="space-y-4 mt-4">
           {dashboardData.isLoading ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-4 w-full">
               {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-72" />
+                <Skeleton key={i} className="h-72 w-full" />
               ))}
             </div>
           ) : (dashboardData.data?.charts?.length ?? 0) === 0 ? (
@@ -469,7 +469,7 @@ export default function DatasetPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="flex flex-col gap-5 w-full">
               {dashboardData.data?.charts.map((chart, i) => (
                 <AutoChart key={chart.id} chart={chart} accentIndex={i} />
               ))}

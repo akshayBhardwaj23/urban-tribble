@@ -153,7 +153,7 @@ export function TimeframeToolbar({
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
             Time range
           </span>
-          <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200/90 bg-white/80 p-1 shadow-sm">
+          <div className="flex flex-wrap gap-1 rounded-2xl border border-border/90 bg-muted/30 p-1 shadow-sm dark:border-border/60 dark:bg-muted/20">
             {PRESETS.map((p) => (
               <Button
                 key={p.id}
@@ -163,7 +163,7 @@ export function TimeframeToolbar({
                 disabled={!hasDateColumn && p.id !== "all"}
                 className={cn(
                   "h-8 rounded-xl px-3 text-xs font-semibold",
-                  active === p.id ? "" : "text-slate-600"
+                  active === p.id ? "" : "text-muted-foreground"
                 )}
                 title={
                   !hasDateColumn && p.id !== "all"
@@ -185,7 +185,7 @@ export function TimeframeToolbar({
               disabled={!hasDateColumn}
               className={cn(
                 "h-8 gap-1 rounded-xl px-3 text-xs font-semibold",
-                active === "custom" ? "" : "text-slate-600"
+                active === "custom" ? "" : "text-muted-foreground"
               )}
               title={
                 !hasDateColumn ? "No date column on this source" : undefined
@@ -223,7 +223,7 @@ export function TimeframeToolbar({
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">
-              <label className="text-xs font-medium text-slate-600">Start</label>
+              <label className="text-xs font-medium text-foreground">Start</label>
               <Input
                 type="date"
                 value={draftStart}
@@ -231,7 +231,7 @@ export function TimeframeToolbar({
               />
             </div>
             <div className="grid gap-1.5">
-              <label className="text-xs font-medium text-slate-600">End</label>
+              <label className="text-xs font-medium text-foreground">End</label>
               <Input
                 type="date"
                 value={draftEnd}

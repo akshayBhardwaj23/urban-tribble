@@ -27,11 +27,11 @@ export default function DashboardLayout({
       <WorkspaceQueryInvalidator />
       <div className="flex h-screen overflow-hidden">
         <aside
-          className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-white/50 bg-white/65 p-4 shadow-[4px_0_32px_-12px_rgba(99,102,241,0.08)] backdrop-blur-xl"
+          className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-border/80 bg-card/80 p-4 shadow-sm backdrop-blur-xl dark:border-border/60 dark:bg-card/90 dark:shadow-[4px_0_32px_-12px_rgba(0,0,0,0.35)]"
         >
           <Link
             href="/dashboard"
-            className="mb-2 px-3 py-2 text-lg font-bold tracking-tight text-slate-800"
+            className="mb-2 px-3 py-2 text-lg font-bold tracking-tight text-foreground"
           >
             {PRODUCT_NAME}
           </Link>
@@ -53,8 +53,8 @@ export default function DashboardLayout({
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all",
                     active
-                      ? "bg-white text-slate-900 shadow-md shadow-indigo-500/10"
-                      : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
+                      ? "bg-background text-foreground shadow-md shadow-black/5 dark:bg-accent dark:text-accent-foreground dark:shadow-black/20"
+                      : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                   )}
                 >
                   <span className="text-base opacity-80">{item.icon}</span>
@@ -64,7 +64,7 @@ export default function DashboardLayout({
             })}
           </nav>
 
-          <div className="shrink-0 border-t border-slate-200/60 pt-3">
+          <div className="shrink-0 border-t border-border/80 pt-3 dark:border-border/60">
             <UserMenu />
           </div>
         </aside>

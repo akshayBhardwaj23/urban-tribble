@@ -37,9 +37,10 @@ export function DashboardKpiTile({
   return (
     <div
       className={cn(
-        "flex min-h-[5.5rem] items-center gap-4 rounded-3xl border border-white/70",
-        "bg-white/75 px-5 py-4 shadow-[0_8px_32px_-12px_rgba(91,76,255,0.12),0_4px_16px_-4px_rgba(15,23,42,0.08)]",
-        "backdrop-blur-xl transition-shadow hover:shadow-[0_12px_40px_-12px_rgba(91,76,255,0.18)]"
+        "flex min-h-[5.5rem] items-center gap-4 rounded-3xl border border-border/80",
+        "bg-card/90 px-5 py-4 shadow-sm backdrop-blur-xl",
+        "transition-shadow hover:shadow-md",
+        "dark:border-border/60 dark:bg-card/70 dark:shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)]"
       )}
     >
       <div
@@ -51,17 +52,17 @@ export function DashboardKpiTile({
         <Icon className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
           {title}
         </p>
-        <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-slate-900">
+        <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-foreground">
           {value}
         </p>
         {subtitle ? (
-          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
         ) : null}
         {details ? (
-          <div className="mt-3 border-t border-slate-200/60 pt-2 dark:border-slate-600/40">
+          <div className="mt-3 border-t border-border/60 pt-2">
             <KpiDetailsSheet details={details} metricLabel={title} />
           </div>
         ) : null}

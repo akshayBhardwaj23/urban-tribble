@@ -465,12 +465,12 @@ export function AutoChart({
     return (
       <div
         className={cn(
-          "flex flex-col rounded-[28px] border border-slate-200/80 bg-white p-6",
-          "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.1)]"
+          "flex flex-col rounded-[28px] border border-border/80 bg-card p-6",
+          "shadow-sm dark:border-border/60 dark:bg-card/80"
         )}
       >
-        <h3 className="text-sm font-semibold text-slate-700">{chart.title}</h3>
-        <p className="mt-4 text-center text-sm text-slate-500">
+        <h3 className="text-sm font-semibold text-foreground">{chart.title}</h3>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
           Not enough valid numeric data to plot this chart.
         </p>
       </div>
@@ -482,22 +482,22 @@ export function AutoChart({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-[28px] border border-slate-200/70 bg-white",
-        "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08),0_2px_8px_-4px_rgba(15,23,42,0.06)]",
-        "transition-shadow duration-300 hover:shadow-[0_16px_40px_-16px_rgba(15,23,42,0.12)]"
+        "flex flex-col overflow-hidden rounded-[28px] border border-border/80 bg-card",
+        "shadow-sm transition-shadow duration-300 hover:shadow-md",
+        "dark:border-border/60 dark:bg-card/80 dark:hover:shadow-lg"
       )}
     >
-      <div className="border-b border-slate-100 px-5 pb-3 pt-5">
-        <h3 className="text-[13px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+      <div className="border-b border-border px-5 pb-3 pt-5">
+        <h3 className="text-[13px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
           {chart.title}
         </h3>
         {insight.line1 ? (
           <div className="mt-3 space-y-1.5">
-            <p className="text-[13px] font-medium leading-snug text-slate-800">
+            <p className="text-[13px] font-medium leading-snug text-foreground">
               {insight.line1}
             </p>
             {insight.line2 ? (
-              <p className="text-xs leading-relaxed text-slate-500">{insight.line2}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{insight.line2}</p>
             ) : null}
           </div>
         ) : null}
@@ -579,7 +579,7 @@ function renderDualArea(
           return (
             <ul className="flex list-none flex-wrap justify-center gap-5 pt-1">
               {sorted.map((entry, i) => (
-                <li key={i} className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <li key={i} className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <span
                     className="inline-block h-0 w-4"
                     style={{

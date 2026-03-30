@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { ThemeMenuCompact } from "@/components/theme-menu";
 
 export default function OnboardingPage() {
   const { status } = useSession();
@@ -66,7 +67,10 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4">
+      <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
+        <ThemeMenuCompact />
+      </div>
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight">
           Welcome to {PRODUCT_NAME}
