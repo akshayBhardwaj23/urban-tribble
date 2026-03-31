@@ -205,42 +205,43 @@ function HeroVisual() {
 function HeroFloatingSet() {
   return (
     <>
-      <div className="floating hidden xl:block" style={{ left: "2.2rem", top: "6.4rem", transform: "rotate(-5deg)" }}>
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)]">
+      <div className="floating hidden xl:block" style={{ left: "2.2rem", top: "7.6rem", transform: "rotate(-4deg)" }}>
+        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)] hover:-translate-y-1 transition-transform duration-300">
           <div className="rounded-2xl bg-[#ede7ff] p-3">
             <p className="text-[10px] text-violet-700">Revenue +12%</p>
             <p className="mt-1 text-xs text-slate-700">vs last period</p>
           </div>
         </div>
       </div>
-      <div className="floating hidden xl:block" style={{ left: "4.6rem", top: "15.3rem", transform: "rotate(-7deg)", animationDelay: "1s" }}>
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)]">
+      <div className="floating hidden xl:block" style={{ left: "4.8rem", top: "16.7rem", transform: "rotate(-5deg)", animationDelay: "1s" }}>
+        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)] hover:-translate-y-1 transition-transform duration-300">
           <div className="rounded-2xl border border-slate-200 bg-white p-3">
             <p className="text-[10px] text-slate-500">Top 3 cost drivers?</p>
             <p className="mt-1 text-xs text-slate-800">Shipping, CAC, Returns</p>
           </div>
         </div>
       </div>
-      <div className="floating hidden xl:block" style={{ left: "17.2rem", top: "5.1rem", transform: "rotate(8deg)", animationDelay: "1.6s" }}>
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)]">
-          <div className="rounded-2xl bg-[#fff6d8] p-3">
-            <p className="text-[10px] text-amber-700">Forecast confidence</p>
-            <div className="mt-1.5 h-1.5 rounded-full bg-amber-100">
-              <div className="h-1.5 w-[84%] rounded-full bg-amber-400" />
-            </div>
-          </div>
+      <div className="floating hidden xl:block" style={{ left: "13.8rem", top: "11.7rem", transform: "rotate(-3deg)", animationDelay: "1.4s" }}>
+        <div className="rounded-3xl border border-violet-100 bg-[#ede7ff] px-3 py-2 shadow-[0_16px_34px_-18px_rgba(79,70,229,0.35)] hover:-translate-y-1 transition-transform duration-300">
+          <p className="text-[11px] font-semibold text-violet-700">Executive AI brief</p>
         </div>
       </div>
-      <div className="floating hidden xl:block" style={{ right: "2.8rem", top: "8.8rem", transform: "rotate(6deg)", animationDelay: "0.5s" }}>
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)]">
+
+      <div className="floating hidden xl:block" style={{ right: "3.2rem", top: "8.2rem", transform: "rotate(5deg)", animationDelay: "0.5s" }}>
+        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)] hover:-translate-y-1 transition-transform duration-300">
           <div className="rounded-2xl border border-slate-200 bg-white p-3">
             <p className="text-[10px] text-slate-500">Chat</p>
             <p className="mt-1 text-xs text-slate-800">&quot;Why did cost increase?&quot;</p>
           </div>
         </div>
       </div>
-      <div className="floating hidden xl:block" style={{ right: "8.7rem", top: "18.6rem", transform: "rotate(4deg)", animationDelay: "1.3s" }}>
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)]">
+      <div className="floating hidden xl:block" style={{ right: "14.3rem", top: "14.5rem", transform: "rotate(-4deg)", animationDelay: "1.8s" }}>
+        <div className="rounded-3xl border border-emerald-100 bg-[#e7f7ef] px-3 py-2 shadow-[0_16px_34px_-18px_rgba(16,185,129,0.35)] hover:-translate-y-1 transition-transform duration-300">
+          <p className="text-[10px] text-emerald-700">98.4% data quality</p>
+        </div>
+      </div>
+      <div className="floating hidden xl:block" style={{ right: "8.2rem", top: "18.8rem", transform: "rotate(3deg)", animationDelay: "1.3s" }}>
+        <div className="rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)] hover:-translate-y-1 transition-transform duration-300">
           <div className="rounded-2xl border border-slate-200 bg-white p-3">
             <p className="text-[10px] text-slate-500">Mini graph</p>
             <svg viewBox="0 0 94 24" className="mt-1 h-4 w-20">
@@ -250,35 +251,36 @@ function HeroFloatingSet() {
         </div>
       </div>
 
-      <div className="floating hidden xl:block" style={{ left: "11.8rem", top: "23.8rem", animationDelay: "2.2s" }}>
-        <div className="h-16 w-16 rounded-full border border-sky-100 bg-[#eaf3ff] shadow-[0_14px_34px_-18px_rgba(59,130,246,0.45)]">
-          <div className="m-2 h-12 w-12 rounded-full border border-sky-300/80" />
+      <div className="floating hidden xl:block" style={{ left: "2.5rem", top: "3.8rem", animationDelay: "2s" }}>
+        <div className="rounded-[26px] bg-[#ede7ff] p-2 shadow-[0_16px_34px_-18px_rgba(79,70,229,0.35)]">
+          <div className="h-16 w-16 rounded-[20px] bg-gradient-to-b from-white/80 to-violet-100/70 p-2">
+            <div className="h-full w-full rounded-full bg-gradient-to-br from-amber-200 via-rose-200 to-violet-300" />
+          </div>
         </div>
       </div>
-      <div className="floating hidden xl:block" style={{ right: "11.2rem", top: "4.5rem", animationDelay: "2.3s" }}>
-        <div className="rounded-full border border-slate-200 bg-white p-2 shadow-[0_16px_34px_-18px_rgba(15,23,42,0.35)]">
-          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-violet-300 via-fuchsia-200 to-sky-300" />
+      <div className="floating hidden xl:block" style={{ left: "2.8rem", top: "23.4rem", animationDelay: "2.6s", transform: "rotate(-7deg)" }}>
+        <div className="rounded-[26px] bg-[#f9e7ef] p-2 shadow-[0_16px_34px_-18px_rgba(219,39,119,0.3)]">
+          <div className="h-16 w-16 rounded-[20px] bg-gradient-to-b from-white/80 to-rose-100/80 p-2">
+            <div className="h-full w-full rounded-full bg-gradient-to-br from-sky-200 via-violet-200 to-rose-300" />
+          </div>
         </div>
       </div>
-      <div className="floating hidden xl:block" style={{ right: "14.8rem", top: "13.7rem", transform: "rotate(-6deg)", animationDelay: "1.8s" }}>
-        <div className="rounded-3xl border border-emerald-100 bg-[#e7f7ef] px-3 py-2 shadow-[0_16px_34px_-18px_rgba(16,185,129,0.35)]">
-          <p className="text-[10px] text-emerald-700">Cleaned rows</p>
-          <p className="text-xs font-semibold text-emerald-800">98.4% quality</p>
+      <div className="floating hidden xl:block" style={{ right: "12rem", top: "4.4rem", animationDelay: "2.3s" }}>
+        <div className="rounded-[26px] bg-[#eaf3ff] p-2 shadow-[0_16px_34px_-18px_rgba(59,130,246,0.35)]">
+          <div className="h-16 w-16 rounded-[20px] bg-gradient-to-b from-white/80 to-sky-100/80 p-2">
+            <div className="h-full w-full rounded-full bg-gradient-to-br from-violet-200 via-sky-200 to-fuchsia-200" />
+          </div>
+        </div>
+      </div>
+      <div className="floating hidden xl:block" style={{ right: "2.6rem", top: "21.2rem", animationDelay: "2.1s", transform: "rotate(8deg)" }}>
+        <div className="rounded-[26px] bg-[#fff6d8] p-2 shadow-[0_16px_34px_-18px_rgba(245,158,11,0.35)]">
+          <div className="h-16 w-16 rounded-[20px] bg-gradient-to-b from-white/80 to-amber-100/80 p-2">
+            <div className="h-full w-full rounded-full bg-gradient-to-br from-amber-200 via-orange-200 to-rose-300" />
+          </div>
         </div>
       </div>
 
-      <div className="floating hidden xl:block" style={{ left: "2.1rem", top: "24.7rem", transform: "rotate(-8deg)", animationDelay: "2.6s" }}>
-        <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_16px_34px_-18px_rgba(15,23,42,0.35)]">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-rose-200 via-orange-100 to-yellow-100" />
-        </div>
-      </div>
-      <div className="floating hidden xl:block" style={{ right: "2.2rem", top: "14rem", transform: "rotate(12deg)", animationDelay: "1.1s" }}>
-        <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_16px_34px_-18px_rgba(15,23,42,0.35)]">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-sky-200 via-violet-200 to-fuchsia-100" />
-        </div>
-      </div>
-
-      <svg className="pointer-events-none absolute left-[10rem] top-[10.5rem] hidden h-44 w-56 xl:block" viewBox="0 0 220 160">
+      <svg className="pointer-events-none absolute left-[10rem] top-[10.8rem] hidden h-44 w-56 xl:block" viewBox="0 0 220 160">
         <path
           d="M10,10 C80,20 95,56 120,86 C140,108 170,128 208,146"
           fill="none"
@@ -287,7 +289,7 @@ function HeroFloatingSet() {
           strokeWidth="2"
         />
       </svg>
-      <svg className="pointer-events-none absolute right-[6.6rem] top-[11.4rem] hidden h-52 w-60 xl:block" viewBox="0 0 240 170">
+      <svg className="pointer-events-none absolute right-[6.5rem] top-[11.2rem] hidden h-52 w-60 xl:block" viewBox="0 0 240 170">
         <path
           d="M8,162 C52,140 78,122 98,96 C118,72 150,42 232,12"
           fill="none"
