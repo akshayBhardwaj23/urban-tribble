@@ -136,12 +136,12 @@ Almost all analytics **reload Parquet**, not the original Excel, so cleaning ste
 
 ### 7.1 Upload → dataset (happy path)
 
-**API:** `POST /api/uploads/` (multipart: `file`, `description`).
+**API:** `POST /api/uploads/` (multipart: `file`, `description`). Responses: **413** over size cap, **429** when rate-limited.
 
 **Steps (`backend/routes/uploads.py`):**
 
-1. Validate extension against `settings.ALLOWED_EXTENSIONS` (`.xlsx`, `.xls`, `.csv`, `.tsv`).
-2. Create `Upload` row (`processing`), stream bytes to `{upload_id}{ext}`.
+1. Per-user **rate limit** (`upload_rate_limit`), then validate extension against `settings.ALLOWED_EXTENSIONS` (`.xlsx`, `.xls`, `.csv`, `.tsv`).
+2. Create `Upload` row (`processing`), stream bytes to `{upload_id}{ext}` with a hard stop at `MAX_FILE_SIZE_MB` (discard row + file if exceeded).
 3. `FileProcessor.read` → Pandas DataFrame.
 4. `DataCleaner.clean` → cleaned `df` + `clean_report` (steps, shapes).
 5. `ColumnDetector.detect` → `metadata` (lists: `date_columns`, `revenue_columns`, `category_columns`, `numeric_columns`, `text_columns`).
@@ -206,11 +206,12 @@ Almost all analytics **reload Parquet**, not the original Excel, so cleaning ste
 
 **Flow (`services/query_engine.py`):**
 
-1. Load Parquet(s); build schema description for the model.
-2. **Pass 1:** Model returns JSON with `pandas_code` assigning to `result`.
-3. **Safety:** forbidden tokens (`import`, `exec`, etc.) rejected; code run in restricted namespace with **`SAFE_BUILTINS`** + `df` (or multiple `df_*` / `datasets` dict for workspace).
-4. **Pass 2:** Model explains result JSON → `answer` and optional `chart_data`.
-5. Messages appended to **`chat_messages`** (user + assistant).
+1. Load prior **`chat_messages`** for this thread (single-dataset vs workspace threads are separated: workspace user lines are stored with prefix **`[All Datasets] `** on the anchor dataset). Up to **12** prior (user, assistant) pairs feed into the model as conversation context.
+2. Load Parquet(s); build schema description for the model.
+3. **Pass 1:** Model returns JSON with `pandas_code` assigning to `result` (messages include prior Q&A + fresh schema block on the latest user turn).
+4. **Safety:** forbidden tokens (`import`, `exec`, etc.) rejected; code run in restricted namespace with **`SAFE_BUILTINS`** + `df` (or multiple `df_*` / `datasets` dict for workspace).
+5. **Pass 2:** Model explains result JSON → `answer` and optional `chart_data` (includes a trimmed slice of prior turns).
+6. New user + assistant rows appended to **`chat_messages`**.
 
 If no API key, chat degrades (engine checks `self.client`).
 
@@ -222,7 +223,7 @@ If no API key, chat degrades (engine checks `self.client`).
 |-----------|--------|--------|----------------|
 | **AIAnalyzer** | `data_summary` dict, `schema_json` dict, optional text | Single JSON object (briefing) | One structured JSON response |
 | **DashboardPlanner** | DataFrame + metadata + stats (+ description) | `dashboard_plan_json` | When `OPENAI_API_KEY` is set, calls chat completions (`OPENAI_MODEL`) for KPI/chart JSON; otherwise **heuristic** plan in code |
-| **QueryEngine** | Question + DataFrame(s) + schema | `answer`, optional `chart_data` | **Two-step:** codegen JSON → execute → explain JSON |
+| **QueryEngine** | Question + DataFrame(s) + schema + optional **chat history** | `answer`, optional `chart_data` | **Two-step:** codegen JSON → execute → explain JSON; both steps see prior turns |
 | **Forecaster** | DataFrame + columns | Historical fit + forward points + stats | **No LLM**; numeric linear regression |
 
 Prompt tone for briefing is controlled in **`backend/services/ai_analyzer.py`** (`SYSTEM_PROMPT`).
@@ -247,13 +248,13 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/api/uploads/` | Multipart upload + process |
+| POST | `/api/uploads/` | Multipart upload + process; **413** if file exceeds `MAX_FILE_SIZE_MB`; **429** if per-user rate limits exceeded |
 | GET | `/api/uploads/{id}` | Metadata |
 | GET | `/api/datasets` | List in workspace |
 | GET | `/api/datasets/{id}` | Schema, summary, cleaning report |
 | PATCH | `/api/datasets/{id}` | Classification + primary columns + segments |
 | GET | `/api/datasets/{id}/preview` | Sample rows |
-| POST | `/api/datasets/{id}/append` | Append compatible file; rewrite Parquet |
+| POST | `/api/datasets/{id}/append` | Append compatible file; rewrite Parquet; same **413** / **429** rules as `POST /api/uploads/` |
 | DELETE | `/api/datasets/{id}` | Remove dataset + related rows/files per route logic |
 
 ### Analysis & dashboards
@@ -274,8 +275,9 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/api/chat` | Single dataset |
-| POST | `/api/chat/workspace` | Multi-dataset |
+| POST | `/api/chat` | Single dataset; uses prior non–workspace messages on same `dataset_id` |
+| POST | `/api/chat/workspace` | Multi-dataset; prior turns stored on first dataset with `[All Datasets] ` user prefix |
+| GET | `/api/chat/history/{dataset_id}` | Optional query `workspace=true` for workspace-only thread; requires workspace membership |
 
 ### Other
 
@@ -327,7 +329,9 @@ State: **TanStack Query** caches server data; **WorkspaceContext** holds profile
 | `UPLOAD_DIR` | Where originals + Parquet live |
 | `OPENAI_API_KEY` | If empty: briefing uses **fallback** JSON; chat/query planner disabled or degraded |
 | `OPENAI_MODEL` | Chat model id |
-| `MAX_FILE_SIZE_MB` | Defined in settings; frontend dropzone also caps size (~50MB)—align if you add strict server-side checks |
+| `MAX_FILE_SIZE_MB` | **20** by default; server streams uploads and rejects larger bodies with **413**; frontend `upload-config.ts` should stay in sync |
+| `UPLOAD_RATE_BURST_PER_MINUTE` | Max uploads per user per rolling minute (default **5**); **429** when exceeded |
+| `UPLOAD_RATE_MAX_PER_HOUR` | Max uploads per user per rolling hour (default **30**); **429** when exceeded |
 | `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
 | `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
 
@@ -339,7 +343,7 @@ Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH
 
 - **Multi-tenant isolation** beyond workspace id + owner check (no row-level security in DB).
 - **PDF or Google Sheets** ingest (not in `ALLOWED_EXTENSIONS`).
-- **Production hardening** (rate limits, API auth tokens, virus scan, etc.)—evaluate before public launch.
+- **Production hardening beyond current upload limits** (API tokens vs header email, virus scan, Redis-backed rate limits for multi-worker, reverse-proxy `limit_req`)—evaluate before a wide public launch.
 
 ---
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -13,7 +12,9 @@ QUERY_SYSTEM_PROMPT = """You are a data analyst assistant. The user will ask a q
 
 You will receive:
 1. The DataFrame schema (column names, types, sample values)
-2. The user's question
+2. The user's question (and possibly earlier Q&A in the same thread)
+
+Follow-up questions may refer to prior answers (e.g. "break that down by region", "what about last quarter"). Use the conversation when the latest question is ambiguous.
 
 Respond with ONLY a JSON object:
 {
@@ -33,7 +34,9 @@ MULTI_DF_SYSTEM_PROMPT = """You are a data analyst assistant. The user has MULTI
 
 You will receive:
 1. Schema info for each DataFrame (name, columns, types, sample rows)
-2. The user's question
+2. The user's question (and possibly earlier Q&A in the same thread)
+
+Follow-up questions may refer to prior answers. Use the conversation when the latest question is ambiguous.
 
 Each DataFrame is available as a variable named by its sanitized dataset name (e.g. `df_sales`, `df_expenses`).
 A dict called `datasets` maps dataset names to their DataFrames: datasets["sales"] = df_sales, etc.
@@ -56,6 +59,8 @@ Rules:
 - If the question spans multiple datasets, merge or concatenate as needed"""
 
 EXPLAIN_SYSTEM_PROMPT = """You are a friendly business data analyst. Given a user's question about their data and the computed result, provide a clear, concise natural language answer.
+
+If there is prior conversation, keep answers consistent with what was already said when relevant.
 
 Be specific with numbers. If the result contains data suitable for a chart, also return chart configuration.
 
@@ -100,20 +105,23 @@ class QueryEngine:
         df: pd.DataFrame,
         schema: Dict[str, Any],
         user_description: Optional[str] = None,
+        history: Optional[List[Tuple[str, str]]] = None,
     ) -> Dict[str, Any]:
         if not self.client:
             return self._fallback_answer(question, df, schema)
 
         schema_info = self._build_schema_info(df, schema, user_description)
-        pandas_code = self._generate_query(question, schema_info)
+        history = history or []
+        pandas_code = self._generate_query(question, schema_info, history)
         result = self._execute_query(pandas_code, df)
-        answer = self._explain_result(question, result, pandas_code)
+        answer = self._explain_result(question, result, pandas_code, history)
         return answer
 
     def ask_multi(
         self,
         question: str,
         dataframes: List[Tuple[str, pd.DataFrame, Dict[str, Any], Optional[str]]],
+        history: Optional[List[Tuple[str, str]]] = None,
     ) -> Dict[str, Any]:
         """Query across multiple named DataFrames.
 
@@ -123,9 +131,10 @@ class QueryEngine:
             return self._fallback_multi(question, dataframes)
 
         schema_info = self._build_multi_schema_info(dataframes)
-        pandas_code = self._generate_multi_query(question, schema_info)
+        history = history or []
+        pandas_code = self._generate_multi_query(question, schema_info, history)
         result = self._execute_multi_query(pandas_code, dataframes)
-        answer = self._explain_result(question, result, pandas_code)
+        answer = self._explain_result(question, result, pandas_code, history)
         return answer
 
     # ── single-df helpers ──
@@ -143,13 +152,44 @@ class QueryEngine:
         parts.append(f"Column metadata: {json.dumps(schema)}")
         return "\n\n".join(parts)
 
-    def _generate_query(self, question: str, schema_info: str) -> str:
+    def _messages_codegen_single(
+        self,
+        question: str,
+        schema_info: str,
+        history: List[Tuple[str, str]],
+    ) -> List[Dict[str, str]]:
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": QUERY_SYSTEM_PROMPT},
+        ]
+        for i, (uq, aa) in enumerate(history):
+            if i == 0:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"Schema:\n{schema_info}\n\nQuestion: {uq}",
+                    }
+                )
+            else:
+                messages.append({"role": "user", "content": uq})
+            messages.append({"role": "assistant", "content": aa})
+        messages.append(
+            {
+                "role": "user",
+                "content": f"Schema:\n{schema_info}\n\nQuestion: {question}",
+            }
+        )
+        return messages
+
+    def _generate_query(
+        self,
+        question: str,
+        schema_info: str,
+        history: List[Tuple[str, str]],
+    ) -> str:
+        messages = self._messages_codegen_single(question, schema_info, history)
         response = self.client.chat.completions.create(
             model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": QUERY_SYSTEM_PROMPT},
-                {"role": "user", "content": f"Schema:\n{schema_info}\n\nQuestion: {question}"},
-            ],
+            messages=messages,
             response_format={"type": "json_object"},
             temperature=0.1,
         )
@@ -202,13 +242,37 @@ class QueryEngine:
 
         return "\n\n".join(parts)
 
-    def _generate_multi_query(self, question: str, schema_info: str) -> str:
+    def _messages_codegen_multi(
+        self,
+        question: str,
+        schema_info: str,
+        history: List[Tuple[str, str]],
+    ) -> List[Dict[str, str]]:
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": MULTI_DF_SYSTEM_PROMPT},
+        ]
+        block = f"Available DataFrames:\n{schema_info}\n\nQuestion:"
+        for i, (uq, aa) in enumerate(history):
+            if i == 0:
+                messages.append(
+                    {"role": "user", "content": f"{block} {uq}"},
+                )
+            else:
+                messages.append({"role": "user", "content": uq})
+            messages.append({"role": "assistant", "content": aa})
+        messages.append({"role": "user", "content": f"{block} {question}"})
+        return messages
+
+    def _generate_multi_query(
+        self,
+        question: str,
+        schema_info: str,
+        history: List[Tuple[str, str]],
+    ) -> str:
+        messages = self._messages_codegen_multi(question, schema_info, history)
         response = self.client.chat.completions.create(
             model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": MULTI_DF_SYSTEM_PROMPT},
-                {"role": "user", "content": f"Available DataFrames:\n{schema_info}\n\nQuestion: {question}"},
-            ],
+            messages=messages,
             response_format={"type": "json_object"},
             temperature=0.1,
         )
@@ -251,16 +315,51 @@ class QueryEngine:
 
     # ── shared helpers ──
 
-    def _explain_result(self, question: str, result: Any, code: str) -> Dict[str, Any]:
+    def _explain_history_pairs(
+        self,
+        history: List[Tuple[str, str]],
+        max_pairs: int = 8,
+        max_assistant_chars: int = 6000,
+    ) -> List[Tuple[str, str]]:
+        """Recent turns for the explain pass; trim long assistant answers."""
+        if not history:
+            return []
+        sel = history[-max_pairs:]
+        out: List[Tuple[str, str]] = []
+        for uq, aa in sel:
+            if len(aa) > max_assistant_chars:
+                aa = aa[: max_assistant_chars - 1] + "…"
+            out.append((uq, aa))
+        return out
+
+    def _explain_result(
+        self,
+        question: str,
+        result: Any,
+        code: str,
+        history: Optional[List[Tuple[str, str]]] = None,
+    ) -> Dict[str, Any]:
+        history = history or []
+        hist_use = self._explain_history_pairs(history)
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": EXPLAIN_SYSTEM_PROMPT},
+        ]
+        for uq, aa in hist_use:
+            messages.append({"role": "user", "content": uq})
+            messages.append({"role": "assistant", "content": aa})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Question: {question}\n"
+                    f"Pandas code used: {code}\n"
+                    f"Result: {json.dumps(result, default=str)}"
+                ),
+            }
+        )
         response = self.client.chat.completions.create(
             model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": EXPLAIN_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Question: {question}\nPandas code used: {code}\nResult: {json.dumps(result, default=str)}",
-                },
-            ],
+            messages=messages,
             response_format={"type": "json_object"},
             temperature=0.3,
         )
