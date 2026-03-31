@@ -195,3 +195,65 @@
     box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
   }
 }
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(-10px) translateX(2px);
+  }
+}
+
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer utilities {
+  .floating {
+    position: absolute;
+    z-index: 20;
+    animation: landing-float 8s ease-in-out infinite;
+  }
+
+  .floating-a {
+    left: 3.5rem;
+    top: 12rem;
+  }
+
+  .floating-b {
+    right: 4rem;
+    top: 13rem;
+    animation-delay: 1.2s;
+  }
+
+  .floating-c {
+    right: 7rem;
+    top: 23rem;
+    animation-delay: 2s;
+  }
+
+  .floating-d {
+    left: 6rem;
+    top: 24rem;
+    animation-delay: 0.8s;
+  }
+
+  .floating-e {
+    right: 12rem;
+    top: 10rem;
+    animation-delay: 1.6s;
+  }
+
+  .fade-up {
+    animation: landing-fade-up 0.8s ease-out both;
+  }
+}
