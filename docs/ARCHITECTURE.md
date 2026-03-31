@@ -136,12 +136,12 @@ Almost all analytics **reload Parquet**, not the original Excel, so cleaning ste
 
 ### 7.1 Upload → dataset (happy path)
 
-**API:** `POST /api/uploads/` (multipart: `file`, `description`).
+**API:** `POST /api/uploads/` (multipart: `file`, `description`). Responses: **413** over size cap, **429** when rate-limited.
 
 **Steps (`backend/routes/uploads.py`):**
 
-1. Validate extension against `settings.ALLOWED_EXTENSIONS` (`.xlsx`, `.xls`, `.csv`, `.tsv`).
-2. Create `Upload` row (`processing`), stream bytes to `{upload_id}{ext}`.
+1. Per-user **rate limit** (`upload_rate_limit`), then validate extension against `settings.ALLOWED_EXTENSIONS` (`.xlsx`, `.xls`, `.csv`, `.tsv`).
+2. Create `Upload` row (`processing`), stream bytes to `{upload_id}{ext}` with a hard stop at `MAX_FILE_SIZE_MB` (discard row + file if exceeded).
 3. `FileProcessor.read` → Pandas DataFrame.
 4. `DataCleaner.clean` → cleaned `df` + `clean_report` (steps, shapes).
 5. `ColumnDetector.detect` → `metadata` (lists: `date_columns`, `revenue_columns`, `category_columns`, `numeric_columns`, `text_columns`).
@@ -247,13 +247,13 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/api/uploads/` | Multipart upload + process |
+| POST | `/api/uploads/` | Multipart upload + process; **413** if file exceeds `MAX_FILE_SIZE_MB`; **429** if per-user rate limits exceeded |
 | GET | `/api/uploads/{id}` | Metadata |
 | GET | `/api/datasets` | List in workspace |
 | GET | `/api/datasets/{id}` | Schema, summary, cleaning report |
 | PATCH | `/api/datasets/{id}` | Classification + primary columns + segments |
 | GET | `/api/datasets/{id}/preview` | Sample rows |
-| POST | `/api/datasets/{id}/append` | Append compatible file; rewrite Parquet |
+| POST | `/api/datasets/{id}/append` | Append compatible file; rewrite Parquet; same **413** / **429** rules as `POST /api/uploads/` |
 | DELETE | `/api/datasets/{id}` | Remove dataset + related rows/files per route logic |
 
 ### Analysis & dashboards
@@ -327,7 +327,9 @@ State: **TanStack Query** caches server data; **WorkspaceContext** holds profile
 | `UPLOAD_DIR` | Where originals + Parquet live |
 | `OPENAI_API_KEY` | If empty: briefing uses **fallback** JSON; chat/query planner disabled or degraded |
 | `OPENAI_MODEL` | Chat model id |
-| `MAX_FILE_SIZE_MB` | Defined in settings; frontend dropzone also caps size (~50MB)—align if you add strict server-side checks |
+| `MAX_FILE_SIZE_MB` | **20** by default; server streams uploads and rejects larger bodies with **413**; frontend `upload-config.ts` should stay in sync |
+| `UPLOAD_RATE_BURST_PER_MINUTE` | Max uploads per user per rolling minute (default **5**); **429** when exceeded |
+| `UPLOAD_RATE_MAX_PER_HOUR` | Max uploads per user per rolling hour (default **30**); **429** when exceeded |
 | `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
 | `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
 
@@ -339,7 +341,7 @@ Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH
 
 - **Multi-tenant isolation** beyond workspace id + owner check (no row-level security in DB).
 - **PDF or Google Sheets** ingest (not in `ALLOWED_EXTENSIONS`).
-- **Production hardening** (rate limits, API auth tokens, virus scan, etc.)—evaluate before public launch.
+- **Production hardening beyond current upload limits** (API tokens vs header email, virus scan, Redis-backed rate limits for multi-worker, reverse-proxy `limit_req`)—evaluate before a wide public launch.
 
 ---
 

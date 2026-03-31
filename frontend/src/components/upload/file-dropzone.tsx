@@ -15,6 +15,7 @@ import {
   isGuidedTemplate,
 } from "@/lib/analysis-templates";
 import { ExpectedInputsList } from "@/components/upload/expected-inputs-list";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_SIZE_MB } from "@/lib/upload-config";
 
 const ACCEPTED_TYPES = {
   "text/csv": [".csv"],
@@ -126,7 +127,7 @@ export function FileDropzone({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED_TYPES,
-    maxSize: 50 * 1024 * 1024,
+    maxSize: MAX_UPLOAD_BYTES,
     disabled: busy || phase === "processing",
   });
 
@@ -459,7 +460,7 @@ export function FileDropzone({
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
-          .xlsx, .xls, .csv, .tsv · up to 50MB per file
+          .xlsx, .xls, .csv, .tsv · up to {MAX_UPLOAD_SIZE_MB} MB per file
         </p>
       </div>
       </div>

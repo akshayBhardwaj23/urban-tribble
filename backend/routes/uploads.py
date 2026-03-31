@@ -1,6 +1,4 @@
 import json
-import os
-import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -15,6 +13,8 @@ from services.dashboard_planner import DashboardPlanner
 from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
 from services.ingestion_classifier import build_ingestion_profile
+from services.upload_io import save_upload_stream_limited
+from services.upload_rate_limit import check_upload_rate_limit
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
@@ -25,13 +25,15 @@ dashboard_planner = DashboardPlanner()
 
 
 @router.post("/")
-def create_upload(
+async def create_upload(
     file: UploadFile = File(...),
     description: str = Form(""),
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
+    check_upload_rate_limit(user.email)
+
     ext = Path(file.filename or "").suffix.lower()
     if ext not in settings.ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"File type {ext} not supported")
@@ -51,8 +53,16 @@ def create_upload(
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = upload_dir / f"{upload.id}{ext}"
 
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    ok = await save_upload_stream_limited(file, file_path, max_bytes)
+    if not ok:
+        file_path.unlink(missing_ok=True)
+        db.delete(upload)
+        db.commit()
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds maximum size of {settings.MAX_FILE_SIZE_MB} MB",
+        )
 
     upload.file_url = str(file_path)
 

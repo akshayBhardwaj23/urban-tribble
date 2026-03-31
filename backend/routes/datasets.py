@@ -1,5 +1,4 @@
 import json
-import shutil
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,6 +20,8 @@ from services.column_detector import ColumnDetector
 from services.dashboard_planner import DashboardPlanner
 from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
+from services.upload_io import save_upload_stream_limited
+from services.upload_rate_limit import check_upload_rate_limit
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
@@ -248,13 +249,14 @@ data_cleaner = DataCleaner()
 
 
 @router.post("/{dataset_id}/append")
-def append_to_dataset(
+async def append_to_dataset(
     dataset_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
+    check_upload_rate_limit(user.email)
     row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
     if not row:
         raise HTTPException(404, "Dataset not found")
@@ -271,10 +273,16 @@ def append_to_dataset(
     df_existing = pd.read_parquet(str(parquet_path))
 
     upload_dir = Path(settings.UPLOAD_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
     tmp_path = upload_dir / f"tmp_append_{dataset_id}{ext}"
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
     try:
-        with open(tmp_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+        ok = await save_upload_stream_limited(file, tmp_path, max_bytes)
+        if not ok:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum size of {settings.MAX_FILE_SIZE_MB} MB",
+            )
 
         df_new = file_processor.read(str(tmp_path))
     finally:
