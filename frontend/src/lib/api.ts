@@ -226,6 +226,13 @@ export const api = {
       }
     ),
 
+  getChatHistory: (datasetId: string, opts?: { workspace?: boolean }) => {
+    const q = opts?.workspace ? "?workspace=true" : "";
+    return request<
+      { id: string; role: string; content: string; created_at: string }[]
+    >(`/api/chat/history/${datasetId}${q}`);
+  },
+
   chatWorkspace: (question: string) =>
     request<{ answer: string; chart_data?: Record<string, unknown> }>(
       "/api/chat/workspace",

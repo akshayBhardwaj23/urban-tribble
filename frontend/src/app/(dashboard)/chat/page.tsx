@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 
 interface Message {
+  id?: string;
   role: "user" | "assistant";
   content: string;
 }
@@ -38,6 +39,30 @@ export default function ChatPage() {
       setMessages([]);
     }
   }, [datasets, selectedDataset]);
+
+  const { data: historyData } = useQuery({
+    queryKey: ["chat-history", selectedDataset, "dataset"],
+    queryFn: () => api.getChatHistory(selectedDataset!),
+    enabled: !!selectedDataset,
+  });
+
+  useEffect(() => {
+    if (!selectedDataset) {
+      setMessages([]);
+      return;
+    }
+    if (historyData === undefined) {
+      setMessages([]);
+      return;
+    }
+    setMessages(
+      historyData.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }))
+    );
+  }, [selectedDataset, historyData]);
 
   const chatMutation = useMutation({
     mutationFn: (question: string) => api.chat(selectedDataset!, question),
@@ -145,7 +170,7 @@ export default function ChatPage() {
                 <div className="space-y-4">
                   {messages.map((msg, i) => (
                     <div
-                      key={i}
+                      key={msg.id ?? `m-${i}`}
                       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       <div

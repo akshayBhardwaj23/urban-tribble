@@ -206,11 +206,12 @@ Almost all analytics **reload Parquet**, not the original Excel, so cleaning ste
 
 **Flow (`services/query_engine.py`):**
 
-1. Load Parquet(s); build schema description for the model.
-2. **Pass 1:** Model returns JSON with `pandas_code` assigning to `result`.
-3. **Safety:** forbidden tokens (`import`, `exec`, etc.) rejected; code run in restricted namespace with **`SAFE_BUILTINS`** + `df` (or multiple `df_*` / `datasets` dict for workspace).
-4. **Pass 2:** Model explains result JSON → `answer` and optional `chart_data`.
-5. Messages appended to **`chat_messages`** (user + assistant).
+1. Load prior **`chat_messages`** for this thread (single-dataset vs workspace threads are separated: workspace user lines are stored with prefix **`[All Datasets] `** on the anchor dataset). Up to **12** prior (user, assistant) pairs feed into the model as conversation context.
+2. Load Parquet(s); build schema description for the model.
+3. **Pass 1:** Model returns JSON with `pandas_code` assigning to `result` (messages include prior Q&A + fresh schema block on the latest user turn).
+4. **Safety:** forbidden tokens (`import`, `exec`, etc.) rejected; code run in restricted namespace with **`SAFE_BUILTINS`** + `df` (or multiple `df_*` / `datasets` dict for workspace).
+5. **Pass 2:** Model explains result JSON → `answer` and optional `chart_data` (includes a trimmed slice of prior turns).
+6. New user + assistant rows appended to **`chat_messages`**.
 
 If no API key, chat degrades (engine checks `self.client`).
 
@@ -222,7 +223,7 @@ If no API key, chat degrades (engine checks `self.client`).
 |-----------|--------|--------|----------------|
 | **AIAnalyzer** | `data_summary` dict, `schema_json` dict, optional text | Single JSON object (briefing) | One structured JSON response |
 | **DashboardPlanner** | DataFrame + metadata + stats (+ description) | `dashboard_plan_json` | When `OPENAI_API_KEY` is set, calls chat completions (`OPENAI_MODEL`) for KPI/chart JSON; otherwise **heuristic** plan in code |
-| **QueryEngine** | Question + DataFrame(s) + schema | `answer`, optional `chart_data` | **Two-step:** codegen JSON → execute → explain JSON |
+| **QueryEngine** | Question + DataFrame(s) + schema + optional **chat history** | `answer`, optional `chart_data` | **Two-step:** codegen JSON → execute → explain JSON; both steps see prior turns |
 | **Forecaster** | DataFrame + columns | Historical fit + forward points + stats | **No LLM**; numeric linear regression |
 
 Prompt tone for briefing is controlled in **`backend/services/ai_analyzer.py`** (`SYSTEM_PROMPT`).
@@ -274,8 +275,9 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/api/chat` | Single dataset |
-| POST | `/api/chat/workspace` | Multi-dataset |
+| POST | `/api/chat` | Single dataset; uses prior non–workspace messages on same `dataset_id` |
+| POST | `/api/chat/workspace` | Multi-dataset; prior turns stored on first dataset with `[All Datasets] ` user prefix |
+| GET | `/api/chat/history/{dataset_id}` | Optional query `workspace=true` for workspace-only thread; requires workspace membership |
 
 ### Other
 

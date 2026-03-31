@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useRef, useState, useEffect, useMemo } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
@@ -10,6 +10,7 @@ import { PRODUCT_NAME } from "@/lib/brand";
 const ALL_DATASETS_VALUE = "__all__";
 
 interface Message {
+  id?: string;
   role: "user" | "assistant";
   content: string;
 }
@@ -35,6 +36,35 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isAllDatasets = selectedDataset === ALL_DATASETS_VALUE;
+
+  const anchorId = useMemo(
+    () => (isAllDatasets ? datasets[0]?.id : selectedDataset),
+    [isAllDatasets, datasets, selectedDataset]
+  );
+
+  const { data: historyData } = useQuery({
+    queryKey: ["chat-history", anchorId, isAllDatasets ? "workspace" : "dataset"],
+    queryFn: () =>
+      api.getChatHistory(anchorId!, {
+        workspace: isAllDatasets,
+      }),
+    enabled: open && !!anchorId,
+  });
+
+  useEffect(() => {
+    if (!open || !anchorId) return;
+    if (historyData === undefined) {
+      setMessages([]);
+      return;
+    }
+    setMessages(
+      historyData.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }))
+    );
+  }, [open, anchorId, isAllDatasets, historyData]);
 
   const chatMutation = useMutation({
     mutationFn: (question: string) =>
@@ -79,6 +109,9 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
     setSelectedDataset(id);
     setMessages([]);
   };
+
+  const showEmptySuggestions =
+    messages.length === 0 && !chatMutation.isPending;
 
   const sendSuggestion = (text: string) => {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -205,7 +238,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
             ref={scrollRef}
             className="flex-1 min-h-0 overflow-y-auto px-4 py-3"
           >
-            {messages.length === 0 ? (
+            {showEmptySuggestions ? (
               <div className="flex items-center justify-center text-center py-8">
                 <div className="space-y-2 max-w-[280px]">
                   <p className="text-sm font-medium text-foreground">
@@ -233,7 +266,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
               <div className="space-y-3">
                 {messages.map((msg, i) => (
                   <div
-                    key={i}
+                    key={msg.id ?? `m-${i}`}
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
