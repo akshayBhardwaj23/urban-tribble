@@ -218,10 +218,24 @@
 }
 
 @layer utilities {
+  /* Position-only shell: keep width content-sized so xl decorations never stretch to full viewport.
+     Drift animation lives on .floating-drift (inner) so inline rotate() on .floating is not clobbered. */
   .floating {
     position: absolute;
-    z-index: 20;
+    z-index: 0;
+    width: max-content;
+    max-width: min(19rem, calc(100vw - 2.5rem));
+    pointer-events: none;
+  }
+
+  .floating-drift {
     animation: landing-float 8s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .floating-drift {
+      animation: none;
+    }
   }
 
   .floating-a {
