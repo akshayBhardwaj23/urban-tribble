@@ -22,6 +22,7 @@ from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
 from services.upload_io import save_upload_stream_limited
 from services.upload_rate_limit import check_upload_rate_limit
+from services.workspace_timeline import record_append_snapshot
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
@@ -323,6 +324,11 @@ async def append_to_dataset(
 
     db.commit()
     db.refresh(dataset)
+
+    try:
+        record_append_snapshot(db, workspace_id, dataset, upload)
+    except Exception:
+        pass
 
     return {
         "dataset_id": dataset.id,

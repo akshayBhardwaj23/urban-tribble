@@ -15,6 +15,15 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: List[str] = [".xlsx", ".xls", ".csv", ".tsv"]
     # Comma-separated. Browsers reject Access-Control-Allow-Origin: * when credentials are used.
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Product UI + future enforcement: free | starter | pro (override per account when billing ships)
+    SUBSCRIPTION_PLAN: str = "free"
+    # Resend (https://resend.com) — email OTP
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "Clarus <onboarding@resend.dev>"
+    # HMAC pepper for OTP hashes (set in production)
+    OTP_PEPPER: str = "dev-otp-pepper-change-in-production"
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_RESEND_SECONDS: int = 60
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

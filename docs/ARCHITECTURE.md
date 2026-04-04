@@ -114,6 +114,8 @@ ORM: `backend/models/models.py`.
 | **dashboards** | Table exists; not all features may be driven from UI—check routes if extending |
 | **chat_messages** | Persists `user` / `assistant` turns per `dataset_id` (even workspace chat stores under a dataset in multi-df path—see chat route) |
 | **dataset_relations** | Cross-dataset link metadata; **backend routes exist**; **frontend does not call relations APIs today** |
+| **workspace_recurring_summaries** | Workspace-scoped **weekly** / **monthly** executive digests: `period_start`/`period_end`, JSON **`content_json`** (headline, key changes, risk, opportunity, actions), **`email_html_snapshot`** + **`email_sent_at`** reserved for future transactional email (no sender implemented yet); unique on `(workspace_id, kind, period_start)` |
+| **workspace_timeline_snapshots** | Append-only **history** for the workspace: `event_type` (`upload` \| `briefing` \| `append`), optional **`ref_id`** / **`dataset_id`**, **`metrics_json`** (row totals + revenue KPI extracts), optional **`themes_json`** (briefing headlines / theme buckets for recurrence); one-time **backfill** on startup fills missing rows from existing uploads and `workspace_overview` analyses |
 
 **Migrations:** `main.py` lifespan runs `create_all` plus small SQLite `ALTER TABLE` backfills for `dashboard_plan_json` and `business_classification`, and a one-time heuristic to set `uploads.workspace_id` for legacy NULLs.
 
@@ -268,8 +270,13 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 | POST | `/api/analysis/overview/run` | Workspace briefing |
 | GET | `/api/analysis/overview/latest` | Latest workspace briefing |
 | POST | `/api/analysis/overview/forecast` | Workspace outlook chart data |
-| GET | `/api/dashboards/dataset/{dataset_id}` | KPIs + charts + timeframe |
-| GET | `/api/dashboards/overview` | Cross-dataset KPIs + charts list |
+| GET | `/api/dashboards/dataset/{dataset_id}` | KPIs + charts + timeframe + **`what_changed`** (current vs previous window; respects `last_n_days` / `start_date` / `end_date`) |
+| GET | `/api/dashboards/overview` | Cross-dataset KPIs + charts; **`what_changed`** …; **`alerts`** …; **`recommended_actions`** …; **`habit_hints`** …; **`usage`** (plan label, monthly analysis/upload meters, history-depth summary, soft upgrade **`nudges`**) |
+| GET | `/api/summaries/latest` | Active workspace; query `ensure` (default true) creates missing digests for **last full ISO week** and **prior calendar month**; returns stored **`weekly`** / **`monthly`** payloads + email-prep fields |
+| GET | `/api/summaries/history?kind=&limit=` | Past stored summaries for comparison |
+| POST | `/api/summaries/generate` | Body `{ "kind": "weekly"\|"monthly", "force": bool }` rebuilds the canonical period |
+| GET | `/api/workspace/timeline` | Timeline events (newest first), **`evolution`** (recurring briefing themes, improving KPIs vs prior snapshot), and **`digests`** (stored weekly/monthly summary headlines) |
+| GET | `/api/workspace/timeline/compare` | Query `from` / `to` snapshot ids → row delta + overlapping KPI % changes |
 
 ### Chat
 
@@ -288,6 +295,8 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`api` object).
 
+**Subscription UI (soft limits):** `SUBSCRIPTION_PLAN` in config (`free` \| `starter` \| `pro`, default `free`) drives **`usage`** on `GET /api/dashboards/overview`—monthly workspace briefing counts, completed uploads, history-depth copy vs timeline snapshots, and optional **`nudges`** (link to `/#pricing`). Caps live in `backend/services/subscription_usage.py`; hard billing enforcement is not wired yet.
+
 ---
 
 ## 10. Frontend map (routes → data)
@@ -297,7 +306,8 @@ The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`a
 | Landing | `/` | None (marketing) |
 | Login | `/login` | NextAuth |
 | Onboarding | `/onboarding` | `POST /api/workspaces` |
-| Overview | `/dashboard` | `GET /api/dashboards/overview`, `GET/POST` overview analysis & forecast |
+| Overview | `/dashboard` | `GET /api/dashboards/overview` (incl. `recommended_actions`, `usage`, `habit_hints`), `GET/POST` overview analysis & forecast, `GET /api/summaries/latest` |
+| History | `/history` | `GET /api/workspace/timeline`, `GET /api/workspace/timeline/compare` |
 | Upload | `/upload` | `POST /api/uploads/` |
 | Sources list | `/datasets` | `GET /api/datasets`, `DELETE` |
 | Dataset hub | `/datasets/[id]` | `GET` dataset, preview, `GET` dashboard data, `GET/POST` analysis, forecast, `PATCH` dataset |
@@ -334,6 +344,7 @@ State: **TanStack Query** caches server data; **WorkspaceContext** holds profile
 | `UPLOAD_RATE_MAX_PER_HOUR` | Max uploads per user per rolling hour (default **30**); **429** when exceeded |
 | `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
 | `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
+| `SUBSCRIPTION_PLAN` | `free` (default), `starter`, or `pro`—drives **`usage`** meters on the workspace overview (soft UI only until billing enforces) |
 
 Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`).
 

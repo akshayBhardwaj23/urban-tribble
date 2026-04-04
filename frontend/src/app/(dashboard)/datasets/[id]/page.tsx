@@ -40,6 +40,7 @@ import {
   buildDatasetDashboardTraceContext,
 } from "@/lib/traceability";
 import { TraceCollapsible } from "@/components/trust/analysis-trace";
+import { WhatChangedSection } from "@/components/dashboard/what-changed-section";
 import {
   buildHeuristicKpiDetails,
   buildStaticSummaryKpiDetails,
@@ -142,6 +143,7 @@ export default function DatasetPage() {
       queryClient.invalidateQueries({ queryKey: ["dataset", params.id] });
       queryClient.invalidateQueries({ queryKey: ["dataset-preview", params.id] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-data", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
     },
   });
 
@@ -455,6 +457,9 @@ export default function DatasetPage() {
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-4 mt-4">
+          {!dashboardData.isLoading && dashboardData.data?.what_changed ? (
+            <WhatChangedSection block={dashboardData.data.what_changed} />
+          ) : null}
           {dashboardData.isLoading ? (
             <div className="flex flex-col gap-4 w-full">
               {Array.from({ length: 4 }).map((_, i) => (

@@ -4,6 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeMenuCompact } from "@/components/theme-menu";
 import {
+  LandingFooterPrimaryCta,
+  LandingHeaderAuth,
+  LandingHeroPrimaryCta,
+  LandingPricingCta,
+} from "@/components/landing-auth";
+import {
   POSITIONING_LINE,
   PRODUCT_NAME,
   PRODUCT_TAGLINE,
@@ -128,17 +134,7 @@ export default function LandingPage() {
             >
               Pricing
             </Link>
-            <Link
-              href="/login"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Sign in
-            </Link>
-            <Link href="/login">
-              <Button size="sm" className="font-semibold">
-                Start free
-              </Button>
-            </Link>
+            <LandingHeaderAuth />
           </nav>
         </div>
       </header>
@@ -158,11 +154,7 @@ export default function LandingPage() {
           deserve a decision this week—not another pile of charts to interpret.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/login">
-            <Button size="lg" className="h-12 px-8 font-semibold">
-              Get clarity on my numbers
-            </Button>
-          </Link>
+          <LandingHeroPrimaryCta />
           <Link href="#how-it-works">
             <Button variant="outline" size="lg" className="h-12 px-8 font-semibold">
               See how it works
@@ -360,14 +352,11 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/login" className="mt-8 block">
-                    <Button
-                      className="w-full font-semibold"
-                      variant={tier.highlighted ? "default" : "outline"}
-                    >
-                      {tier.cta}
-                    </Button>
-                  </Link>
+                  <LandingPricingCta
+                    tierName={tier.name}
+                    cta={tier.cta}
+                    highlighted={tier.highlighted}
+                  />
                 </CardContent>
               </Card>
             ))}
@@ -390,11 +379,7 @@ export default function LandingPage() {
             sign in.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/login">
-              <Button size="lg" className="h-12 px-8 font-semibold">
-                Upload my first file
-              </Button>
-            </Link>
+            <LandingFooterPrimaryCta />
             <Link href="#how-it-works">
               <Button variant="outline" size="lg" className="h-12 px-8 font-semibold">
                 See the demo walkthrough

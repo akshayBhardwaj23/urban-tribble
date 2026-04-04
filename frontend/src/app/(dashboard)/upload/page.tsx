@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CalendarRange,
@@ -38,6 +39,7 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
 
 export default function UploadPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [flow, setFlow] = useState<FlowStep>("choose");
   const [guidedTemplate, setGuidedTemplate] = useState<AnalysisTemplate | null>(
     null
@@ -61,13 +63,16 @@ export default function UploadPage() {
 
   const handleContinue = useCallback(
     (datasetIds: string[]) => {
+      void queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
+      void queryClient.invalidateQueries({ queryKey: ["overview"] });
+      void queryClient.invalidateQueries({ queryKey: ["datasets"] });
       if (datasetIds.length === 1) {
         router.push(`/datasets/${datasetIds[0]}`);
       } else {
         router.push("/datasets");
       }
     },
-    [router]
+    [router, queryClient]
   );
 
   const goChoose = useCallback(() => {

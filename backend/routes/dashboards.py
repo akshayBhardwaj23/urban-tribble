@@ -25,6 +25,15 @@ from services.dashboard_executor import (
     fallback_ui_kpis,
     legacy_charts,
 )
+from services.period_change_summary import (
+    build_what_changed_for_dataframe,
+    build_workspace_what_changed,
+)
+from services.workspace_alerts import build_workspace_alerts
+from services.workspace_query import latest_workspace_overview_analysis
+from services.workspace_recommended_actions import build_recommended_actions
+from services.workspace_habit_hints import build_workspace_habit_hints
+from services.subscription_usage import build_workspace_usage_payload
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
@@ -82,13 +91,14 @@ def get_dashboard_data(
         raise HTTPException(404, "Dataset not found")
     dataset, upload = row
 
-    df = _load_cleaned_df(upload)
+    df_full = _load_cleaned_df(upload)
     metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
+    df = df_full
 
     date_bounds: dict[str, Optional[str]] = {"min": None, "max": None}
-    _bounds_col = resolve_date_column(df, metadata)
-    if _bounds_col and _bounds_col in df.columns:
-        _bts = pd.to_datetime(df[_bounds_col], errors="coerce").dropna()
+    _bounds_col = resolve_date_column(df_full, metadata)
+    if _bounds_col and _bounds_col in df_full.columns:
+        _bts = pd.to_datetime(df_full[_bounds_col], errors="coerce").dropna()
         if len(_bts) > 0:
             date_bounds = {
                 "min": _bts.min().normalize().strftime("%Y-%m-%d"),
@@ -104,7 +114,7 @@ def get_dashboard_data(
     ):
         start_ts_explicit, end_ts_explicit = end_ts_explicit, start_ts_explicit
 
-    date_col = resolve_date_column(df, metadata)
+    date_col = resolve_date_column(df_full, metadata)
     start_ts: Optional[pd.Timestamp] = None
     end_ts: Optional[pd.Timestamp] = None
 
@@ -118,11 +128,18 @@ def get_dashboard_data(
         start_ts, end_ts = start_ts_explicit, end_ts_explicit
 
     timeframe_requested = start_ts is not None or end_ts is not None
+    what_changed = build_what_changed_for_dataframe(
+        df_full,
+        metadata,
+        start_ts=start_ts if last_n_days is None else None,
+        end_ts=end_ts if last_n_days is None else None,
+        last_n_days=last_n_days,
+    )
     timeframe_applied = False
     active_start: Optional[str] = None
     active_end: Optional[str] = None
     if timeframe_requested and date_col:
-        df = _filter_df_by_date_range(df, date_col, start_ts, end_ts)
+        df = _filter_df_by_date_range(df_full, date_col, start_ts, end_ts)
         timeframe_applied = True
         if start_ts is not None:
             active_start = start_ts.strftime("%Y-%m-%d")
@@ -183,6 +200,7 @@ def get_dashboard_data(
             "timeframe": timeframe_meta,
             "date_bounds": date_bounds,
             "filtered_row_count": len(df),
+            "what_changed": what_changed,
         }
 
     charts = legacy_charts(
@@ -203,6 +221,7 @@ def get_dashboard_data(
         "timeframe": timeframe_meta,
         "date_bounds": date_bounds,
         "filtered_row_count": len(df),
+        "what_changed": what_changed,
     }
 
 
@@ -212,8 +231,9 @@ def get_overview(
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     """Workspace-level overview aggregating data from all datasets."""
-    _, workspace_id = ws
+    user, workspace_id = ws
     all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
+    usage_payload = build_workspace_usage_payload(db, user, workspace_id)
 
     if not all_datasets:
         return {
@@ -222,6 +242,19 @@ def get_overview(
             "kpis": [],
             "charts": [],
             "datasets": [],
+            "what_changed": {
+                "available": False,
+                "period_description": "",
+                "items": [],
+                "highlights": [],
+                "cross_metric_note": None,
+            },
+            "alerts": [],
+            "recommended_actions": [],
+            "habit_hints": build_workspace_habit_hints(
+                db, workspace_id, has_datasets=False
+            ),
+            "usage": usage_payload,
         }
 
     total_rows = sum(up.row_count or 0 for _, up in all_datasets)
@@ -315,10 +348,38 @@ def get_overview(
         for ds, up in all_datasets
     ]
 
+    what_changed = build_workspace_what_changed(all_datasets, _load_cleaned_df)
+    analysis = latest_workspace_overview_analysis(db, workspace_id)
+    analysis_obj = None
+    if analysis and analysis.result_json:
+        try:
+            analysis_obj = json.loads(analysis.result_json)
+        except json.JSONDecodeError:
+            analysis_obj = None
+    alerts = build_workspace_alerts(
+        what_changed,
+        all_datasets,
+        _load_cleaned_df,
+        analysis_obj,
+    )
+    recommended_actions = build_recommended_actions(
+        analysis_obj,
+        alerts,
+        what_changed,
+    )
+    habit_hints = build_workspace_habit_hints(
+        db, workspace_id, has_datasets=True
+    )
+
     return {
         "total_datasets": len(all_datasets),
         "total_rows": total_rows,
         "kpis": kpis[:8],
         "charts": all_charts[:6],
         "datasets": datasets_list,
+        "what_changed": what_changed,
+        "alerts": alerts,
+        "recommended_actions": recommended_actions,
+        "habit_hints": habit_hints,
+        "usage": usage_payload,
     }

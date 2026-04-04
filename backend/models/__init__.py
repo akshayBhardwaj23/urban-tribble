@@ -5,6 +5,8 @@ from models.models import (
     Dataset,
     DatasetRelation,
     Upload,
+    WorkspaceRecurringSummary,
+    WorkspaceTimelineSnapshot,
 )
 
 __all__ = [
@@ -14,4 +16,6 @@ __all__ = [
     "Dashboard",
     "ChatMessage",
     "DatasetRelation",
+    "WorkspaceRecurringSummary",
+    "WorkspaceTimelineSnapshot",
 ]

@@ -15,6 +15,7 @@ from services.file_processor import FileProcessor
 from services.ingestion_classifier import build_ingestion_profile
 from services.upload_io import save_upload_stream_limited
 from services.upload_rate_limit import check_upload_rate_limit
+from services.workspace_timeline import record_upload_snapshot
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
@@ -112,6 +113,11 @@ async def create_upload(
     db.commit()
     db.refresh(upload)
     db.refresh(dataset)
+
+    try:
+        record_upload_snapshot(db, workspace_id, upload, dataset)
+    except Exception:
+        pass
 
     return {
         "id": upload.id,

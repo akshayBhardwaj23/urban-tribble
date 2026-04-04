@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Workspace
+from utils.email_norm import user_by_email_ci
 
 
 def get_current_user(
@@ -21,8 +22,7 @@ def get_current_user(
     if not x_user_email:
         return None
 
-    user = db.query(User).filter(User.email == x_user_email).first()
-    return user
+    return user_by_email_ci(db, x_user_email)
 
 
 def require_user(

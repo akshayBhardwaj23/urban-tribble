@@ -4,9 +4,21 @@ import enum
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 
 from database import Base
+
+
+class LoginOtpChallenge(Base):
+    """One active email OTP per send; replaced on resend."""
+
+    __tablename__ = "login_otp_challenges"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    email = Column(String, nullable=False, index=True)
+    code_hash = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class User(Base):
@@ -107,3 +119,46 @@ class DatasetRelation(Base):
     target_column = Column(String, nullable=False)
     relation_type = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class WorkspaceTimelineSnapshot(Base):
+    """Point-in-time workspace metrics (and optional briefing themes) for history / comparison."""
+
+    __tablename__ = "workspace_timeline_snapshots"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False, index=True)
+    event_type = Column(String(32), nullable=False)
+    ref_id = Column(String, nullable=True, index=True)
+    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)
+    display_label = Column(String(512), nullable=False)
+    metrics_json = Column(Text, nullable=False)
+    themes_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class WorkspaceRecurringSummary(Base):
+    """Stored executive summaries for weekly / monthly digests (UI + future email)."""
+
+    __tablename__ = "workspace_recurring_summaries"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "kind",
+            "period_start",
+            name="uq_workspace_recurring_summary_period",
+        ),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False, index=True)
+    kind = Column(String(16), nullable=False)  # "weekly" | "monthly"
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    period_label = Column(String(255), nullable=False)
+    content_json = Column(Text, nullable=False)
+    email_html_snapshot = Column(Text, nullable=True)
+    email_sent_at = Column(DateTime, nullable=True)
+    email_scheduled = Column(String(32), nullable=True)  # future: queued | skipped
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

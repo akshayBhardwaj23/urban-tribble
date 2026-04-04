@@ -9,3 +9,5 @@ pydantic-settings
 sqlalchemy
 pyarrow
 python-dotenv
+httpx
+email-validator

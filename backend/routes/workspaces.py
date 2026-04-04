@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Workspace
+from utils.email_norm import user_by_email_ci
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
@@ -25,7 +26,7 @@ def create_workspace(
     if not x_user_email:
         raise HTTPException(401, "Authentication required")
 
-    user = db.query(User).filter(User.email == x_user_email).first()
+    user = user_by_email_ci(db, x_user_email)
     if not user:
         raise HTTPException(404, "User not found")
 
@@ -53,7 +54,7 @@ def list_workspaces(
     if not x_user_email:
         raise HTTPException(401, "Authentication required")
 
-    user = db.query(User).filter(User.email == x_user_email).first()
+    user = user_by_email_ci(db, x_user_email)
     if not user:
         raise HTTPException(404, "User not found")
 
@@ -81,7 +82,7 @@ def activate_workspace(
     if not x_user_email:
         raise HTTPException(401, "Authentication required")
 
-    user = db.query(User).filter(User.email == x_user_email).first()
+    user = user_by_email_ci(db, x_user_email)
     if not user:
         raise HTTPException(404, "User not found")
 

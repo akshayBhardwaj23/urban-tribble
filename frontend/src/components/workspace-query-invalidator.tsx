@@ -7,6 +7,9 @@ import { useWorkspace } from "@/lib/workspace-context";
 const INVALIDATE_PREFIXES = new Set([
   "overview",
   "overview-analysis",
+  "summaries-latest",
+  "workspace-timeline",
+  "workspace-compare",
   "datasets",
   "datasets-list",
   "dataset",

@@ -46,6 +46,21 @@ import {
   workspaceRunBriefingInvite,
 } from "@/lib/analysis-fallback-copy";
 import { KpiDetailsSheet } from "@/components/dashboard/kpi-details-sheet";
+import { WhatChangedSection } from "@/components/dashboard/what-changed-section";
+import { LatestSummaryCard } from "@/components/dashboard/latest-summary-card";
+import { AlertsSignalsSection } from "@/components/dashboard/alerts-signals-section";
+import { RecommendedActionsSection } from "@/components/dashboard/recommended-actions-section";
+import { WorkspaceUsageStrip } from "@/components/dashboard/workspace-usage-strip";
+
+function formatWorkspaceActivity(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(d);
+}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -152,6 +167,7 @@ export default function OverviewPage() {
     mutationFn: () => api.runOverviewAnalysis(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["overview-analysis"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
     },
   });
 
@@ -170,6 +186,8 @@ export default function OverviewPage() {
       setAppendTarget(null);
       queryClient.invalidateQueries({ queryKey: ["overview"] });
       queryClient.invalidateQueries({ queryKey: ["overview-analysis"] });
+      queryClient.invalidateQueries({ queryKey: ["summaries-latest"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
     },
   });
 
@@ -294,6 +312,8 @@ export default function OverviewPage() {
   }
 
   if (!data || data.total_datasets === 0) {
+    const emptyHints = data?.habit_hints;
+    const emptyUpdated = formatWorkspaceActivity(emptyHints?.last_activity_at);
     return (
       <div className="space-y-6 max-w-6xl">
         <div>
@@ -303,7 +323,25 @@ export default function OverviewPage() {
           <p className="text-sm text-muted-foreground mt-1">
             What moved, what it may imply, and what to do next—across your sources.
           </p>
+          {emptyHints && (
+            <div className="mt-3 space-y-1.5 text-xs text-muted-foreground max-w-xl leading-relaxed">
+              {emptyUpdated && (
+                <p>
+                  <span className="font-medium text-slate-600 dark:text-slate-400">
+                    Last updated
+                  </span>
+                  {" · "}
+                  {emptyUpdated}
+                </p>
+              )}
+              <p>{emptyHints.next_check_suggestion}</p>
+              {emptyHints.gentle_nudge ? (
+                <p className="text-slate-500 dark:text-slate-500">{emptyHints.gentle_nudge}</p>
+              ) : null}
+            </div>
+          )}
         </div>
+        <WorkspaceUsageStrip usage={data?.usage} className="max-w-6xl" />
         <Card className="border-slate-200/80 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-14 text-center">
             <p className="text-sm text-muted-foreground mb-4 max-w-md">
@@ -334,11 +372,13 @@ export default function OverviewPage() {
     overviewAnalysis.isLoading || runOverviewAnalysis.isPending;
 
   const noInsightCopy = WORKSPACE_NO_BRIEFING_YET;
+  const habits = data.habit_hints;
+  const lastUpdatedLabel = formatWorkspaceActivity(habits?.last_activity_at);
 
   return (
     <div className="space-y-10 max-w-6xl pb-10">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             Overview
           </h1>
@@ -346,41 +386,109 @@ export default function OverviewPage() {
             {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
             · {data.total_rows.toLocaleString()} rows · Briefing first, then charts
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {data.datasets.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-lg"
-              onClick={() => {
-                const ds = data.datasets[0];
-                setAppendTarget({ id: ds.id, name: ds.name });
-              }}
-            >
-              Add rows
-            </Button>
+          {habits && (
+            <div className="mt-3 space-y-1.5 max-w-2xl">
+              {lastUpdatedLabel ? (
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Last updated
+                  </span>
+                  {" · "}
+                  <time dateTime={habits.last_activity_at ?? undefined}>
+                    {lastUpdatedLabel}
+                  </time>
+                </p>
+              ) : null}
+              {habits.activity_nudge ? (
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
+                  {habits.activity_nudge}
+                </p>
+              ) : null}
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-medium text-slate-600 dark:text-slate-400">
+                  Next check
+                </span>
+                {" · "}
+                {habits.next_check_suggestion}
+              </p>
+              {habits.gentle_nudge ? (
+                <p className="text-xs text-muted-foreground/90 leading-relaxed">
+                  {habits.gentle_nudge}
+                </p>
+              ) : null}
+            </div>
           )}
-          <Link href="/upload">
-            <Button size="sm" className="rounded-lg">
-              Import data
+        </div>
+        <div className="flex flex-col gap-2 shrink-0 sm:items-end">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            {data.datasets.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg"
+                onClick={() => {
+                  const ds = data.datasets[0];
+                  setAppendTarget({ id: ds.id, name: ds.name });
+                }}
+              >
+                Add rows
+              </Button>
+            )}
+            <Link href="/history">
+              <Button size="sm" variant="outline" className="rounded-lg">
+                History
+              </Button>
+            </Link>
+            <Link href="/upload">
+              <Button size="sm" className="rounded-lg">
+                Import data
+              </Button>
+            </Link>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="rounded-lg"
+              onClick={() => runOverviewAnalysis.mutate()}
+              disabled={analysisBusy}
+            >
+              {runOverviewAnalysis.isPending
+                ? "Running briefing…"
+                : analysisReady
+                  ? "Re-run briefing"
+                  : "Run workspace briefing"}
             </Button>
-          </Link>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="rounded-lg"
-            onClick={() => runOverviewAnalysis.mutate()}
-            disabled={analysisBusy}
-          >
-            {runOverviewAnalysis.isPending
-              ? "Running briefing…"
-              : analysisReady
-                ? "Re-run briefing"
-                : "Run workspace briefing"}
-          </Button>
+          </div>
+          {habits?.briefing_cta_context ? (
+            <p className="text-[11px] text-muted-foreground sm:text-right max-w-md sm:max-w-[18rem] leading-snug">
+              <span className="font-medium text-slate-600 dark:text-slate-400">
+                Briefing
+              </span>
+              {" · "}
+              {habits.briefing_cta_context}
+            </p>
+          ) : null}
         </div>
       </header>
+
+      <WorkspaceUsageStrip usage={data.usage} className="max-w-6xl" />
+
+      <LatestSummaryCard className="max-w-6xl" />
+
+      <AlertsSignalsSection
+        alerts={data.alerts ?? []}
+        briefingReady={analysisReady}
+        className="max-w-6xl"
+      />
+
+      <RecommendedActionsSection
+        items={data.recommended_actions ?? []}
+        briefingAvailable={analysisReady}
+        onRunBriefing={() => runOverviewAnalysis.mutate()}
+        briefingBusy={analysisBusy}
+        className="max-w-6xl"
+      />
+
+      <WhatChangedSection block={data.what_changed} className="max-w-6xl" />
 
       {/* 1. Top summary */}
       <section className="space-y-3">

@@ -7,7 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
 from database import Base, SessionLocal, engine
-from routes import analysis, auth, chat, dashboards, datasets, relations, uploads, workspaces
+from routes import (
+    analysis,
+    auth,
+    chat,
+    dashboards,
+    datasets,
+    relations,
+    summaries,
+    uploads,
+    workspace_timeline,
+    workspaces,
+)
 from config import settings
 from schemas import HealthResponse
 
@@ -90,6 +101,20 @@ def _ensure_dataset_dashboard_plan_column() -> None:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN dashboard_plan_json TEXT"))
 
 
+def _backfill_workspace_timeline_snapshots() -> None:
+    from database import SessionLocal
+    from services.workspace_timeline import backfill_timeline_snapshots
+
+    db = SessionLocal()
+    try:
+        backfill_timeline_snapshots(db)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _ensure_dataset_business_classification_column() -> None:
     insp = inspect(engine)
     if not insp.has_table("datasets"):
@@ -106,6 +131,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _ensure_dataset_dashboard_plan_column()
     _ensure_dataset_business_classification_column()
     _backfill_upload_workspace_ids()
+    _backfill_workspace_timeline_snapshots()
     yield
 
 
@@ -127,6 +153,8 @@ app.include_router(analysis.router)
 app.include_router(dashboards.router)
 app.include_router(chat.router)
 app.include_router(relations.router)
+app.include_router(summaries.router)
+app.include_router(workspace_timeline.router)
 
 
 @app.get("/health", response_model=HealthResponse)

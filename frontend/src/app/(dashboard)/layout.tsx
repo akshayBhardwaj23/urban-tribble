@@ -11,6 +11,7 @@ import { PRODUCT_NAME } from "@/lib/brand";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "◈" },
+  { href: "/history", label: "History", icon: "⏱" },
   { href: "/upload", label: "Import", icon: "↑" },
   { href: "/datasets", label: "Sources", icon: "◫" },
 ];
@@ -45,7 +46,9 @@ export default function DashboardLayout({
               const active =
                 item.href === "/dashboard"
                   ? pathname === "/dashboard"
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  : item.href === "/history"
+                    ? pathname === "/history" || pathname.startsWith("/history/")
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}

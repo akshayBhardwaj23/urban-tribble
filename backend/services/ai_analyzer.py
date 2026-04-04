@@ -59,8 +59,8 @@ Good vs bad (match the good style):
 "executive_summary": 1-2 sentences. Net position + whether to act now, watch, or dig deeper. No bullets. Hedge only as much as your weakest material insight warrants—if several insights are Low confidence, keep the summary more cautious and name what data would tighten the read.
 
 "top_priorities": exactly 3 to 5 objects. Order by operational urgency (most urgent first). Each object:
-  {"kind": "risk|opportunity|inefficiency|anomaly|next_action", "priority": "high|medium|low", "title": "short decisive headline (max ~10 words)", "explanation": "one sentence: consequence or assigned move—no fluff"}
-  Cover the main downside, main upside, material cost or process drag if supported, worst data/trust issue if any, and exactly one next_action for the single most important move. Do not paste the executive_summary.
+  {"kind": "risk|opportunity|inefficiency|anomaly|next_action", "priority": "high|medium|low", "title": "short decisive headline (max ~10 words)", "explanation": "one sentence naming something a human can do this week—lead with the owner or lever (e.g. cut/reallocate/audit/compare), not abstract impact only"}
+  Cover the main downside, main upside, material cost or process drag if supported, worst data/trust issue if any, and exactly one next_action for the single most important move. For kind=next_action, title must read as a verb-first command (e.g. "Review top 3 campaigns by spend"). Do not paste the executive_summary.
 
 "key_metrics": 3-8 objects: {"label", "value" (formatted string), "trend": "up|down|stable", "note": "one line: how this figure should change a hire, budget, cut, or reallocation decision—not repeating the label", optional "trace": {"file_name", "sheet_name", "columns_used": ["col_a"], "date_range", "row_count", "caveats": ["string"]}}
 
@@ -82,7 +82,7 @@ Vary angles when the data allows: growth vs margin, concentration, cost creep, c
 
 "anomalies": {"description", "severity": "high|medium|low"} for issues that distort KPIs or decisions.
 
-"recommendations": 0-4 cross-cutting moves not duplicated in an insight's recommended_action; [] if none.
+"recommendations": 0-4 cross-cutting moves not duplicated in an insight's recommended_action; each string must start with an imperative the operator can execute (e.g. "Reallocate budget toward…", "Investigate… before…"); [] if none.
 
 Valid JSON only."""
 

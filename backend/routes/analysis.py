@@ -17,6 +17,7 @@ from services.workspace_query import (
     get_dataset_upload_in_workspace,
     latest_workspace_overview_analysis,
 )
+from services.workspace_timeline import record_briefing_snapshot
 from services.ai_analyzer import AIAnalyzer
 from services.forecaster import Forecaster
 
@@ -207,6 +208,11 @@ def run_overview_analysis(
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
+
+    try:
+        record_briefing_snapshot(db, workspace_id, analysis, result)
+    except Exception:
+        pass
 
     return {
         "id": analysis.id,

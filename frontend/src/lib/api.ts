@@ -2,6 +2,161 @@ import type { IngestionProfile } from "@/lib/ingestion";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+/** Stored executive digest (weekly / monthly); HTML snapshot reserved for future email. */
+export type RecurringSummaryContent = {
+  headline: string;
+  key_changes: string[];
+  biggest_risk: string;
+  biggest_opportunity: string;
+  recommended_actions: string[];
+  meta?: {
+    period_kind?: string;
+    period_label?: string;
+    what_changed_available?: boolean;
+    generated_at?: string;
+  };
+};
+
+/** Actionable workspace alert (thresholds, data scans, briefing). */
+export type WorkspaceAlert = {
+  id: string;
+  title: string;
+  detail: string;
+  category: "risk" | "opportunity" | "data_issue" | "efficiency";
+  priority: "high" | "medium" | "low";
+  source: "signal" | "briefing" | "data_quality";
+};
+
+/** Prioritized operator move from briefing + signals (overview API). */
+export type WorkspaceRecommendedAction = {
+  id: string;
+  action: string;
+  priority: "high" | "medium" | "low";
+  source: string;
+};
+
+/** Retention / rhythm copy for the overview (last activity, when to check again). */
+export type WorkspaceUsageMeterDetail = {
+  used: number;
+  limit: number;
+  remaining: number;
+  pct: number;
+  approaching: boolean;
+  at_limit: boolean;
+};
+
+export type WorkspaceUsageNudge = {
+  tone: string;
+  message: string;
+  href: string;
+};
+
+/** Plan + monthly meters for subtle subscription-aware UI. */
+export type WorkspaceUsage = {
+  plan_id: string;
+  plan_label: string;
+  period_start: string;
+  period_end: string;
+  limits: {
+    analyses_per_month: number | null;
+    uploads_per_month: number | null;
+    history_periods: number;
+  };
+  usage: {
+    analyses_this_month: number;
+    uploads_this_month: number;
+    timeline_snapshots: number;
+  };
+  history: {
+    periods_cap: number;
+    snapshots_recorded: number;
+    periods_highlighted: number;
+    summary: string;
+  };
+  meters: {
+    analyses: WorkspaceUsageMeterDetail | null;
+    uploads: WorkspaceUsageMeterDetail | null;
+  };
+  nudges: WorkspaceUsageNudge[];
+};
+
+export type WorkspaceHabitHints = {
+  last_activity_at: string | null;
+  last_briefing_at: string | null;
+  last_data_change_at: string | null;
+  days_since_activity: number | null;
+  days_since_briefing: number | null;
+  days_since_data_change: number | null;
+  next_check_suggestion: string;
+  briefing_cta_context: string;
+  activity_nudge: string | null;
+  gentle_nudge: string | null;
+};
+
+/** Point-in-time workspace snapshot (import, briefing, append). */
+export type WorkspaceTimelineEvent = {
+  id: string;
+  event_type: string;
+  ref_id: string | null;
+  dataset_id: string | null;
+  display_label: string;
+  metrics: {
+    workspace_row_total: number;
+    dataset_count: number;
+    kpis: { label: string; value: number; dataset_name?: string }[];
+    snapshot_quality?: string;
+    focus_dataset?: string;
+  };
+  themes: {
+    insight_headlines?: string[];
+    priority_titles?: string[];
+    executive_snippet?: string;
+    buckets?: string[];
+  } | null;
+  created_at: string | null;
+};
+
+export type WorkspaceDigestStub = {
+  id: string;
+  kind: string;
+  period_label: string;
+  headline: string;
+  created_at: string | null;
+};
+
+export type WorkspaceCompareResult = {
+  from_snapshot_id: string | undefined;
+  to_snapshot_id: string | undefined;
+  from_label: string | undefined;
+  to_label: string | undefined;
+  workspace_row_delta: number;
+  workspace_row_previous: number;
+  workspace_row_current: number;
+  kpi_changes: {
+    label: string;
+    dataset_name?: string;
+    previous_value: number;
+    current_value: number;
+    delta_pct: number;
+    direction: string;
+  }[];
+};
+
+export type RecurringSummaryRecord = {
+  id: string;
+  workspace_id: string;
+  kind: string;
+  period_start: string;
+  period_end: string;
+  period_label: string;
+  content: RecurringSummaryContent;
+  email_ready: boolean;
+  email_sent_at: string | null;
+  email_scheduled: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 let _userEmail: string | null = null;
 
 export function setApiUserEmail(email: string | null) {
@@ -213,6 +368,35 @@ export const api = {
       };
       /** Min/max calendar dates in the primary date column (full file, for preset anchors). */
       date_bounds?: { min: string | null; max: string | null };
+      what_changed: {
+        available: boolean;
+        period_description: string;
+        items: {
+          label: string;
+          direction: string;
+          arrow: string;
+          delta_pct: number | null;
+          previous_value: number;
+          current_value: number;
+          explanation: string;
+          higher_is_better?: boolean;
+          is_favorable?: boolean;
+          source_dataset?: string;
+        }[];
+        highlights: {
+          label: string;
+          direction: string;
+          arrow: string;
+          delta_pct: number | null;
+          previous_value: number;
+          current_value: number;
+          explanation: string;
+          higher_is_better?: boolean;
+          is_favorable?: boolean;
+          source_dataset?: string;
+        }[];
+        cross_metric_note?: string | null;
+      };
     }>(`/api/dashboards/dataset/${datasetId}${qs ? `?${qs}` : ""}`);
   },
 
@@ -283,6 +467,39 @@ export const api = {
         column_count: number | null;
         created_at: string;
       }[];
+      what_changed: {
+        available: boolean;
+        period_description: string;
+        items: {
+          label: string;
+          direction: string;
+          arrow: string;
+          delta_pct: number | null;
+          previous_value: number;
+          current_value: number;
+          explanation: string;
+          higher_is_better?: boolean;
+          is_favorable?: boolean;
+          source_dataset?: string;
+        }[];
+        highlights: {
+          label: string;
+          direction: string;
+          arrow: string;
+          delta_pct: number | null;
+          previous_value: number;
+          current_value: number;
+          explanation: string;
+          higher_is_better?: boolean;
+          is_favorable?: boolean;
+          source_dataset?: string;
+        }[];
+        cross_metric_note?: string | null;
+      };
+      alerts: WorkspaceAlert[];
+      recommended_actions: WorkspaceRecommendedAction[];
+      habit_hints: WorkspaceHabitHints;
+      usage: WorkspaceUsage;
     }>("/api/dashboards/overview"),
 
   runOverviewAnalysis: () =>
@@ -357,4 +574,47 @@ export const api = {
         periods: periods ?? 90,
       }),
     }),
+
+  getSummariesLatest: (opts?: { ensure?: boolean }) => {
+    const q = new URLSearchParams();
+    if (opts?.ensure === false) q.set("ensure", "false");
+    const qs = q.toString();
+    return request<{
+      weekly: RecurringSummaryRecord | null;
+      monthly: RecurringSummaryRecord | null;
+    }>(`/api/summaries/latest${qs ? `?${qs}` : ""}`);
+  },
+
+  getSummariesHistory: (kind: "weekly" | "monthly", limit = 12) =>
+    request<{ kind: string; items: RecurringSummaryRecord[] }>(
+      `/api/summaries/history?kind=${kind}&limit=${limit}`
+    ),
+
+  generateSummary: (body: { kind: "weekly" | "monthly"; force?: boolean }) =>
+    request<RecurringSummaryRecord>("/api/summaries/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: body.kind, force: body.force ?? false }),
+    }),
+
+  getWorkspaceTimeline: () =>
+    request<{
+      events: WorkspaceTimelineEvent[];
+      evolution: {
+        recurring: {
+          theme_key: string;
+          theme_label: string;
+          briefings_in_window: number;
+          window_size: number;
+          narrative: string;
+        }[];
+        improving: { theme_key: string; narrative: string }[];
+      };
+      digests: WorkspaceDigestStub[];
+    }>("/api/workspace/timeline"),
+
+  compareWorkspaceSnapshots: (fromId: string, toId: string) =>
+    request<WorkspaceCompareResult>(
+      `/api/workspace/timeline/compare?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}`
+    ),
 };
