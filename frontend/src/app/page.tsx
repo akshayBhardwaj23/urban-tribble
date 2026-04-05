@@ -9,7 +9,12 @@ import {
   LandingHeroPrimaryCta,
   LandingPricingCta,
 } from "@/components/landing-auth";
-import { PRODUCT_NAME } from "@/lib/brand";
+import {
+  POSITIONING_LINE,
+  PRODUCT_NAME,
+  PRODUCT_TAGLINE,
+} from "@/lib/brand";
+import { cn } from "@/lib/utils";
 
 const serif = DM_Serif_Display({ subsets: ["latin"], weight: "400" });
 
@@ -60,9 +65,14 @@ const pricingTiers = [
   },
 ];
 
-function Tag({ children }: { children: ReactNode }) {
+function Tag({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <span className="inline-flex rounded-full border border-slate-300/80 bg-white/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.19em] text-slate-600 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">
+    <span
+      className={cn(
+        "inline-flex rounded-full border border-slate-300/80 bg-white/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.19em] text-slate-600 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300",
+        className,
+      )}
+    >
       {children}
     </span>
   );
@@ -621,7 +631,11 @@ export default function LandingPage() {
 
           <section className="relative pt-14 md:pt-16">
             <div className="mx-auto max-w-5xl text-center lg:max-w-4xl">
-              <Tag>AI Business Analyst</Tag>
+              <div className="fade-up flex justify-center px-2">
+                <Tag className="max-w-xl text-balance normal-case text-[11px] font-semibold leading-snug tracking-[0.04em] text-slate-600 dark:text-slate-300 md:max-w-2xl md:px-4 md:py-2">
+                  {POSITIONING_LINE}
+                </Tag>
+              </div>
               <h1 className={`${serif.className} fade-up mt-7 text-slate-900 dark:text-white`}>
                 <span className="block text-5xl leading-[0.9] md:text-6xl">Turn</span>
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-10">Business Data</span>
@@ -632,9 +646,10 @@ export default function LandingPage() {
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-16">Decisions</span>
               </h1>
               <p className="fade-up mx-auto mt-7 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
-                Upload Excel and CSV files, auto-generate dashboards, get AI
-                summaries, compare periods, forecast trends, and ask questions in
-                one premium business workspace.
+                <span className="font-semibold text-slate-800 dark:text-slate-100">{PRODUCT_TAGLINE}</span>{" "}
+                Upload Excel and CSV, auto-build dashboards and AI summaries, compare periods,
+                forecast trends, and ask questions in plain language—one workspace you use as your
+                numbers evolve, not a one-off file drop.
               </p>
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
                 <LandingHeroPrimaryCta />
@@ -644,6 +659,10 @@ export default function LandingPage() {
                   </Button>
                 </Link>
               </div>
+              <p className="fade-up mx-auto mt-5 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Free to start, no card on the free tier. Add workspaces as you grow—your data stays
+                in your account.
+              </p>
             </div>
 
             <div className="relative mx-auto mt-14 max-w-5xl">
