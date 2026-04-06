@@ -9,7 +9,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-fraunces);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -123,9 +123,18 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-inter), system-ui, sans-serif;
   }
   html {
     @apply font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  [data-dashboard-heading="true"] {
+    font-family: var(--font-fraunces), var(--font-inter), system-ui, sans-serif;
+    letter-spacing: -0.03em;
   }
 }
 
@@ -174,7 +183,7 @@
   }
 
   .dashboard-hero-card {
-    @apply relative overflow-hidden rounded-[2rem] border border-white/70 bg-white/78 px-6 py-6 shadow-[0_24px_55px_-32px_rgba(120,93,64,0.28),0_10px_28px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl md:px-7 md:py-7;
+    @apply relative overflow-hidden rounded-[2.15rem] border border-white/75 bg-white/80 px-6 py-6 shadow-[0_28px_70px_-36px_rgba(120,93,64,0.3),0_14px_36px_-24px_rgba(15,23,42,0.18)] backdrop-blur-xl md:px-8 md:py-8;
   }
 
   .dashboard-hero-card::before {
@@ -194,11 +203,11 @@
   }
 
   .dashboard-surface {
-    @apply rounded-[2rem] border border-white/70 bg-white/80 shadow-[0_24px_48px_-32px_rgba(15,23,42,0.18),0_8px_20px_-16px_rgba(148,113,74,0.18)] backdrop-blur-xl;
+    @apply rounded-[2rem] border border-white/75 bg-white/82 shadow-[0_26px_60px_-34px_rgba(15,23,42,0.2),0_10px_28px_-18px_rgba(148,113,74,0.18)] backdrop-blur-xl;
   }
 
   .dashboard-surface-muted {
-    @apply rounded-[1.75rem] border border-white/65 bg-white/62 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.16)] backdrop-blur-lg;
+    @apply rounded-[1.75rem] border border-white/70 bg-white/66 shadow-[0_22px_46px_-34px_rgba(15,23,42,0.16)] backdrop-blur-lg;
   }
 
   .dashboard-inner-accent {
@@ -208,7 +217,7 @@
   }
 
   .dashboard-section-label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500;
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500;
   }
 
   .dashboard-subtle-copy {
@@ -216,7 +225,7 @@
   }
 
   .dashboard-kpi-card {
-    @apply rounded-[1.75rem] border border-white/75 bg-white/82 px-5 py-5 shadow-[0_18px_38px_-26px_rgba(15,23,42,0.18)] backdrop-blur-xl;
+    @apply rounded-[1.85rem] border border-white/80 bg-white/84 px-5 py-5 shadow-[0_22px_46px_-28px_rgba(15,23,42,0.18)] backdrop-blur-xl;
   }
 
   .dashboard-table-shell {
@@ -224,7 +233,7 @@
   }
 
   .dashboard-chip {
-    @apply inline-flex items-center rounded-full border border-white/70 bg-white/82 px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)];
+    @apply inline-flex items-center rounded-full border border-white/75 bg-white/84 px-3 py-1 text-[11px] font-semibold tracking-[0.1em] text-slate-600 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.2)];
   }
 
   .dashboard-empty-card {
@@ -267,7 +276,12 @@
   }
 
   .dark .dashboard-hero-card {
-    @apply border-white/10 bg-[rgba(15,23,42,0.62)] shadow-[0_28px_60px_-34px_rgba(0,0,0,0.65),0_12px_28px_-18px_rgba(0,0,0,0.4)];
+    @apply border-white/10 bg-[rgba(15,23,42,0.68)] shadow-[0_30px_72px_-36px_rgba(0,0,0,0.68),0_16px_32px_-18px_rgba(0,0,0,0.42)];
+  }
+
+  .dashboard-canvas aside [href="/dashboard"],
+  .dashboard-canvas h1 {
+    text-wrap: balance;
   }
 
   .dark .dashboard-surface {

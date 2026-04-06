@@ -13,6 +13,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartFrame } from "@/components/charts/chart-frame";
 import {
   formatChartAxisDate,
   formatChartTooltipDate,
@@ -226,16 +227,17 @@ export function ForecastChart({
               chartHeightClassName
             )}
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={combined}
-                margin={{
-                  top: 8,
-                  right: 8,
-                  left: 0,
-                  bottom: fcBottom,
-                }}
-              >
+            <ChartFrame className="h-full" minHeight={320}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={combined}
+                  margin={{
+                    top: 8,
+                    right: 8,
+                    left: 0,
+                    bottom: fcBottom,
+                  }}
+                >
                 <defs>
                   <linearGradient id={gradActual} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.4} />
@@ -354,8 +356,9 @@ export function ForecastChart({
                   isAnimationActive={false}
                   activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "#ec4899" }}
                 />
-              </AreaChart>
-            </ResponsiveContainer>
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartFrame>
           </div>
         </CardContent>
       </Card>

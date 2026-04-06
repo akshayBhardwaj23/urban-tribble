@@ -23,6 +23,7 @@ import {
   formatChartAxisDate,
   formatChartTooltipDate,
 } from "@/lib/chart-dates";
+import { ChartFrame } from "@/components/charts/chart-frame";
 
 /** Reference-driven palette: vivid but still readable in app UI. */
 const REF_VIOLET = "#7c3aed";
@@ -543,11 +544,11 @@ export function AutoChart({
       </div>
       <div className="px-3 pb-3 pt-3 sm:px-4">
         <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.42))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.5),rgba(15,23,42,0.14))]">
-          <div className="h-[19rem] w-full min-h-[19rem]">
+          <ChartFrame className="h-[19rem]">
             <ResponsiveContainer width="100%" height="100%">
               {renderChart(prepared, safeId, accentIndex)}
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </div>
       </div>
     </div>

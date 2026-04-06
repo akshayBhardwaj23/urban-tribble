@@ -105,7 +105,7 @@ export default function HistoryPage() {
   return (
     <div className="dashboard-page max-w-5xl">
       <header className="dashboard-hero-card dashboard-inner-accent">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+        <h1 className="text-[2.2rem] font-semibold leading-none tracking-[-0.04em] text-slate-900 dark:text-slate-50">
           History
         </h1>
         <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
