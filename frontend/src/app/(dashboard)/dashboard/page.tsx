@@ -64,7 +64,7 @@ function formatWorkspaceActivity(iso: string | null | undefined): string | null 
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+    <h2 className="dashboard-section-label">
       {children}
     </h2>
   );
@@ -83,16 +83,14 @@ function BriefTile({
 }) {
   const border =
     variant === "risk"
-      ? "border-amber-200/80 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-950/20"
+      ? "border-amber-200/80 bg-[linear-gradient(135deg,rgba(255,247,230,0.96),rgba(255,255,255,0.85))] dark:border-amber-900/40 dark:bg-[linear-gradient(135deg,rgba(120,53,15,0.18),rgba(15,23,42,0.6))]"
       : variant === "opportunity"
-        ? "border-emerald-200/80 bg-emerald-50/35 dark:border-emerald-900/40 dark:bg-emerald-950/20"
-        : "border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/30";
+        ? "border-emerald-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(255,255,255,0.84))] dark:border-emerald-900/40 dark:bg-[linear-gradient(135deg,rgba(6,78,59,0.18),rgba(15,23,42,0.6))]"
+        : "border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.94),rgba(248,243,236,0.9))] dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(30,41,59,0.62),rgba(15,23,42,0.62))]";
   const showEmpty = !body.trim();
 
   return (
-    <div
-      className={`rounded-2xl border px-5 py-4 shadow-sm backdrop-blur-sm ${border}`}
-    >
+    <div className={`dashboard-kpi-card min-h-[10rem] ${border}`}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
         {title}
       </p>
@@ -376,97 +374,106 @@ export default function OverviewPage() {
   const lastUpdatedLabel = formatWorkspaceActivity(habits?.last_activity_at);
 
   return (
-    <div className="space-y-10 max-w-6xl pb-10">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Overview
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-            {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
-            · {data.total_rows.toLocaleString()} rows · Briefing first, then charts
-          </p>
-          {habits && (
-            <div className="mt-3 space-y-1.5 max-w-2xl">
-              {lastUpdatedLabel ? (
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    Last updated
+    <div className="dashboard-page">
+      <header className="dashboard-hero-card dashboard-inner-accent">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.8fr)] xl:items-start">
+          <div className="min-w-0">
+            <span className="dashboard-chip">Workspace overview</span>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+              Overview
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+              {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
+              · {data.total_rows.toLocaleString()} rows · Briefing first, then charts
+            </p>
+            {habits && (
+              <div className="mt-3 max-w-2xl space-y-1.5">
+                {lastUpdatedLabel ? (
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      Last updated
+                    </span>
+                    {" · "}
+                    <time dateTime={habits.last_activity_at ?? undefined}>
+                      {lastUpdatedLabel}
+                    </time>
+                  </p>
+                ) : null}
+                {habits.activity_nudge ? (
+                  <p className="text-xs leading-snug text-slate-600 dark:text-slate-400">
+                    {habits.activity_nudge}
+                  </p>
+                ) : null}
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <span className="font-medium text-slate-600 dark:text-slate-400">
+                    Next check
                   </span>
                   {" · "}
-                  <time dateTime={habits.last_activity_at ?? undefined}>
-                    {lastUpdatedLabel}
-                  </time>
+                  {habits.next_check_suggestion}
                 </p>
-              ) : null}
-              {habits.activity_nudge ? (
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
-                  {habits.activity_nudge}
-                </p>
-              ) : null}
-              <p className="text-xs text-muted-foreground leading-relaxed">
+                {habits.gentle_nudge ? (
+                  <p className="text-xs text-muted-foreground/90 leading-relaxed">
+                    {habits.gentle_nudge}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+          <div className="dashboard-surface-muted flex flex-col gap-4 p-4 md:p-5">
+            <div>
+              <p className="dashboard-section-label">Workspace actions</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Import, append, or refresh the operator read without changing your current view.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {data.datasets.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg"
+                  onClick={() => {
+                    const ds = data.datasets[0];
+                    setAppendTarget({ id: ds.id, name: ds.name });
+                  }}
+                >
+                  Add rows
+                </Button>
+              )}
+              <Link href="/history">
+                <Button size="sm" variant="outline" className="rounded-lg">
+                  History
+                </Button>
+              </Link>
+              <Link href="/upload">
+                <Button size="sm" className="rounded-lg">
+                  Import data
+                </Button>
+              </Link>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="rounded-lg"
+                onClick={() => runOverviewAnalysis.mutate()}
+                disabled={analysisBusy}
+              >
+                {runOverviewAnalysis.isPending
+                  ? "Running briefing…"
+                  : analysisReady
+                    ? "Re-run briefing"
+                    : "Run workspace briefing"}
+              </Button>
+            </div>
+            {habits?.briefing_cta_context ? (
+              <p className="text-[11px] leading-snug text-muted-foreground">
                 <span className="font-medium text-slate-600 dark:text-slate-400">
-                  Next check
+                  Briefing
                 </span>
                 {" · "}
-                {habits.next_check_suggestion}
+                {habits.briefing_cta_context}
               </p>
-              {habits.gentle_nudge ? (
-                <p className="text-xs text-muted-foreground/90 leading-relaxed">
-                  {habits.gentle_nudge}
-                </p>
-              ) : null}
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 shrink-0 sm:items-end">
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            {data.datasets.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-lg"
-                onClick={() => {
-                  const ds = data.datasets[0];
-                  setAppendTarget({ id: ds.id, name: ds.name });
-                }}
-              >
-                Add rows
-              </Button>
-            )}
-            <Link href="/history">
-              <Button size="sm" variant="outline" className="rounded-lg">
-                History
-              </Button>
-            </Link>
-            <Link href="/upload">
-              <Button size="sm" className="rounded-lg">
-                Import data
-              </Button>
-            </Link>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="rounded-lg"
-              onClick={() => runOverviewAnalysis.mutate()}
-              disabled={analysisBusy}
-            >
-              {runOverviewAnalysis.isPending
-                ? "Running briefing…"
-                : analysisReady
-                  ? "Re-run briefing"
-                  : "Run workspace briefing"}
-            </Button>
+            ) : null}
           </div>
-          {habits?.briefing_cta_context ? (
-            <p className="text-[11px] text-muted-foreground sm:text-right max-w-md sm:max-w-[18rem] leading-snug">
-              <span className="font-medium text-slate-600 dark:text-slate-400">
-                Briefing
-              </span>
-              {" · "}
-              {habits.briefing_cta_context}
-            </p>
-          ) : null}
         </div>
       </header>
 
@@ -546,7 +553,7 @@ export default function OverviewPage() {
           {metricSlots.map((slot) => (
             <div
               key={slot.key}
-              className="rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40"
+              className="dashboard-kpi-card min-h-[12.5rem]"
             >
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 {slot.label}
@@ -586,7 +593,7 @@ export default function OverviewPage() {
               </div>
             </div>
           ))}
-          <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="dashboard-kpi-card min-h-[12.5rem]">
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
               Record volume
             </p>
@@ -626,7 +633,7 @@ export default function OverviewPage() {
       {/* 3. Leadership briefing */}
       <section className="space-y-3">
         <SectionLabel>Operator summary</SectionLabel>
-        <div className="rounded-2xl border border-slate-200/80 bg-white/85 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40 overflow-hidden">
+        <div className="dashboard-surface overflow-hidden">
           <div className="grid divide-y divide-slate-100 dark:divide-slate-800 lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
             <div className="p-6 lg:p-7">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -644,7 +651,7 @@ export default function OverviewPage() {
                 )}
               </p>
             </div>
-            <div className="p-6 lg:p-7 bg-slate-50/50 dark:bg-slate-900/20">
+            <div className="dashboard-inner-accent p-6 lg:p-7">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 So what
               </p>
@@ -735,8 +742,8 @@ export default function OverviewPage() {
       {/* Planning + sources (secondary) — outlook full width so the chart reads clearly */}
       <section className="space-y-3">
         <SectionLabel>Outlook & sources</SectionLabel>
-        <div className="flex flex-col gap-6">
-          <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 md:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950/30 w-full">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.75fr)]">
+          <div className="dashboard-surface dashboard-inner-accent w-full p-6 md:p-8">
             <h3 className="text-sm font-semibold text-slate-900">Outlook</h3>
             <p className="text-xs text-slate-500 mt-1 mb-2 leading-relaxed max-w-3xl">
               Directional linear projection—not a forecast of record.{" "}
@@ -769,7 +776,7 @@ export default function OverviewPage() {
                 </label>
                 <select
                   id="outlook-horizon"
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 min-w-[11rem]"
+                  className="h-10 min-w-[11rem] rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
                   value={outlookPeriods}
                   onChange={(e) => setOutlookPeriods(Number(e.target.value))}
                 >
@@ -805,7 +812,7 @@ export default function OverviewPage() {
 
             {forecastMutation.data ? (
               <div className="space-y-4">
-                <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-300">
+                <div className="dashboard-surface-muted px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
                   <p className="font-medium text-slate-800 dark:text-slate-100">
                     What this chart uses
                   </p>
@@ -845,7 +852,7 @@ export default function OverviewPage() {
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/30 w-full lg:max-w-xl">
+          <div className="dashboard-surface w-full p-6">
             <h3 className="text-sm font-semibold text-slate-900">Sources</h3>
             <p className="text-xs text-slate-500 mt-1 mb-4">
               Open a source for preview, briefing detail, or to add rows.
@@ -853,7 +860,7 @@ export default function OverviewPage() {
             <ul className="space-y-2">
               {data.datasets.map((ds) => (
                 <li key={ds.id}>
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-transparent px-2 py-2 hover:border-slate-200 hover:bg-white/80 dark:hover:border-slate-700 dark:hover:bg-slate-900/40 transition-colors">
+                  <div className="flex items-center justify-between gap-2 rounded-2xl border border-transparent px-3 py-3 transition-colors hover:border-white/70 hover:bg-white/75 dark:hover:border-white/10 dark:hover:bg-slate-900/40">
                     <Link
                       href={`/datasets/${ds.id}`}
                       className="flex-1 min-w-0"
@@ -887,7 +894,7 @@ export default function OverviewPage() {
 
       {/* Full analysis (optional depth) */}
       {analysisReady && overviewAnalysis.data?.result_json && (
-        <details className="group rounded-2xl border border-slate-200/60 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/20">
+        <details className="group dashboard-surface">
           <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
             <span>Full briefing</span>
             <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">

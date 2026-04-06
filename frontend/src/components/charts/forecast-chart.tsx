@@ -163,8 +163,8 @@ export function ForecastChart({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 w-full">
-        <Card>
+      <div className="grid w-full gap-4 md:grid-cols-3">
+        <Card className="dashboard-surface dashboard-inner-accent border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Trend</p>
             <p className="text-lg font-semibold mt-1">
@@ -176,7 +176,7 @@ export function ForecastChart({
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="dashboard-surface border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Model Fit (R²)</p>
             <p className="text-lg font-semibold mt-1">
@@ -187,7 +187,7 @@ export function ForecastChart({
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="dashboard-surface border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Forecast Range</p>
             <p className="text-lg font-semibold mt-1">
@@ -200,8 +200,8 @@ export function ForecastChart({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="dashboard-surface dashboard-inner-accent overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+        <CardHeader className="border-b border-white/65 pb-5 dark:border-white/10">
           <CardTitle className="text-sm font-medium">
             {metricLabel} — Historical & forecast
           </CardTitle>
@@ -221,7 +221,7 @@ export function ForecastChart({
         <CardContent>
           <div
             className={cn(
-              "rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2",
+              "rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.7),rgba(255,255,255,0.38))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.42),rgba(15,23,42,0.12))]",
               chartHeightClassName
             )}
           >

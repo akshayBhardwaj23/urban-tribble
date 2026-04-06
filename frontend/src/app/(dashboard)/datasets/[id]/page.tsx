@@ -279,19 +279,20 @@ export default function DatasetPage() {
   const summary = data.data_summary as Record<string, unknown> | null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="dashboard-page">
+      <div className="dashboard-hero-card dashboard-inner-accent grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(16rem,0.85fr)] xl:items-start">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <span className="dashboard-chip">Source dashboard</span>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
             {data.name}
           </h1>
-          <p className="mt-1 text-sm font-medium text-slate-500">
+          <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-300">
             {summary?.rows ? `${summary.rows} rows` : ""}{" "}
             {summary?.columns ? `· ${summary.columns} columns` : ""} · Imported{" "}
             {new Date(data.created_at).toLocaleDateString()}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="dashboard-surface-muted flex flex-wrap items-center gap-2 p-4 md:p-5">
           <Button
             variant="outline"
             size="sm"
@@ -321,7 +322,7 @@ export default function DatasetPage() {
         </div>
       </div>
 
-      <div className="dashboard-glass-panel px-5 py-4">
+      <div className="dashboard-surface px-5 py-4">
         <TimeframeToolbar
           value={timeframe}
           onChange={setTimeframe}
@@ -333,7 +334,7 @@ export default function DatasetPage() {
       </div>
 
       {dashboardData.data?.dataset_brief ? (
-        <div className="dashboard-glass-panel px-5 py-4 text-sm leading-relaxed">
+        <div className="dashboard-surface dashboard-inner-accent px-5 py-4 text-sm leading-relaxed">
           <span className="font-bold uppercase tracking-wide text-slate-600">
             Source read
           </span>
@@ -467,7 +468,7 @@ export default function DatasetPage() {
               ))}
             </div>
           ) : (dashboardData.data?.charts?.length ?? 0) === 0 ? (
-            <Card>
+            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 No charts for this source with the current fields and time range. Adjust columns
                 or the range above and try again.
@@ -491,7 +492,7 @@ export default function DatasetPage() {
               traceContext={aiTraceContext}
             />
           ) : (
-            <Card>
+            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
                   {DATASET_ANALYSIS_EMPTY_INVITE}
@@ -522,7 +523,7 @@ export default function DatasetPage() {
                 valueColumn={forecastMutation.data.value_column}
               />
             ) : (
-              <Card>
+              <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <p className="text-sm text-muted-foreground mb-4">
                     Extends the historical series with a simple linear fit—helpful for planning,
@@ -545,7 +546,7 @@ export default function DatasetPage() {
               </Card>
             )
           ) : (
-            <Card>
+            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 Add at least one date field and one revenue or numeric amount to build a forecast.
               </CardContent>
@@ -554,7 +555,7 @@ export default function DatasetPage() {
         </TabsContent>
 
         <TabsContent value="data" className="mt-4">
-          <Card>
+          <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
             <CardHeader>
               <CardTitle className="text-base">
                 Row preview{" "}
@@ -574,7 +575,7 @@ export default function DatasetPage() {
                   Preview could not be loaded
                 </p>
               ) : (
-                <div className="overflow-auto rounded-md border max-h-96">
+                <div className="dashboard-table-shell max-h-96 overflow-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -611,7 +612,7 @@ export default function DatasetPage() {
 
         <TabsContent value="details" className="space-y-4 mt-4">
           {schema && (
-            <Card>
+            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
               <CardHeader>
                 <CardTitle className="text-base">Column roles</CardTitle>
               </CardHeader>
@@ -669,7 +670,7 @@ export default function DatasetPage() {
           )}
 
           {data.cleaned_report && data.cleaned_report.steps.length > 0 && (
-            <Card>
+            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
               <CardHeader>
                 <CardTitle className="text-base">File preparation</CardTitle>
               </CardHeader>

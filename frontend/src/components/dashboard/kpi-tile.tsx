@@ -37,10 +37,8 @@ export function DashboardKpiTile({
   return (
     <div
       className={cn(
-        "flex min-h-[5.5rem] items-center gap-4 rounded-3xl border border-border/80",
-        "bg-card/90 px-5 py-4 shadow-sm backdrop-blur-xl",
-        "transition-shadow hover:shadow-md",
-        "dark:border-border/60 dark:bg-card/70 dark:shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)]"
+        "dashboard-kpi-card flex min-h-[7rem] items-center gap-4",
+        "transition-shadow hover:shadow-[0_26px_46px_-32px_rgba(15,23,42,0.28)]"
       )}
     >
       <div
@@ -52,14 +50,14 @@ export function DashboardKpiTile({
         <Icon className="h-6 w-6 text-white drop-shadow-sm" strokeWidth={2.25} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
           {title}
         </p>
-        <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-foreground">
+        <p className="mt-1.5 text-[1.75rem] font-bold tracking-tight text-foreground tabular-nums">
           {value}
         </p>
         {subtitle ? (
-          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         ) : null}
         {details ? (
           <div className="mt-3 border-t border-border/60 pt-2">

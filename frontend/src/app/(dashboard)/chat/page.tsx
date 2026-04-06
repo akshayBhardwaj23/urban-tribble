@@ -88,8 +88,8 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-6rem)] max-w-3xl flex-col">
-      <div className="mb-4">
+    <div className="dashboard-page mx-auto flex h-[calc(100vh-6rem)] max-w-5xl flex-col">
+      <div className="dashboard-hero-card dashboard-inner-accent mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">Q&A on your data</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Questions in plain language, scoped to one source—the answers use what you imported,
@@ -99,7 +99,7 @@ export default function ChatPage() {
 
       {/* Dataset Selector */}
       {!selectedDataset ? (
-        <Card>
+        <Card className="dashboard-surface border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
           <CardHeader>
             <CardTitle className="text-base">Choose a source</CardTitle>
           </CardHeader>
@@ -120,7 +120,7 @@ export default function ChatPage() {
                   <button
                     key={ds.id}
                     onClick={() => setSelectedDataset(ds.id)}
-                    className="w-full text-left rounded-md border p-3 text-sm transition-colors hover:bg-accent"
+                    className="w-full rounded-2xl border border-white/70 bg-white/84 p-3 text-left text-sm transition-colors hover:bg-white dark:border-white/10 dark:bg-slate-900/70 dark:hover:bg-slate-900"
                   >
                     <p className="font-medium">{ds.name}</p>
                     <p className="text-xs text-muted-foreground">
@@ -154,7 +154,7 @@ export default function ChatPage() {
             </Button>
           </div>
 
-          <Card className="flex flex-1 flex-col overflow-hidden">
+          <Card className="dashboard-surface flex flex-1 flex-col overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
             <ScrollArea className="flex-1 p-4">
               {messages.length === 0 ? (
                 <div className="flex h-full items-center justify-center py-20 text-center">
@@ -174,10 +174,10 @@ export default function ChatPage() {
                       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[80%] rounded-lg px-4 py-2 text-sm whitespace-pre-wrap ${
+                        className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${
                           msg.role === "user"
                             ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
+                            : "bg-white/85 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.22)] dark:bg-slate-900"
                         }`}
                       >
                         {msg.content}

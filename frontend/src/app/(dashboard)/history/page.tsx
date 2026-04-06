@@ -103,8 +103,8 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="space-y-10 max-w-3xl pb-12">
-      <header>
+    <div className="dashboard-page max-w-5xl">
+      <header className="dashboard-hero-card dashboard-inner-accent">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
           History
         </h1>
@@ -137,7 +137,7 @@ export default function HistoryPage() {
           <Skeleton className="h-40 rounded-2xl" />
         </div>
       ) : isError ? (
-        <Card className="border-destructive/30">
+        <Card className="dashboard-surface border-destructive/30">
           <CardContent className="py-6 text-sm text-destructive">
             {error instanceof Error ? error.message : "Could not load history"}
           </CardContent>
@@ -184,7 +184,7 @@ export default function HistoryPage() {
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Compare snapshots
             </h2>
-            <Card className="shadow-sm">
+            <Card className="dashboard-surface overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
               <CardContent className="pt-5 space-y-4">
                 {defaultPair && (
                   <p className="text-xs text-muted-foreground">
@@ -247,7 +247,7 @@ export default function HistoryPage() {
                   </Button>
                 )}
                 {compareQuery.isSuccess && compareQuery.data && (
-                  <div className="rounded-xl border border-border/80 bg-muted/20 px-3 py-3 space-y-2 text-sm">
+                  <div className="dashboard-surface-muted space-y-2 px-3 py-3 text-sm">
                     <p className="font-medium text-foreground">
                       Rows: {compareQuery.data.workspace_row_previous.toLocaleString()} →{" "}
                       {compareQuery.data.workspace_row_current.toLocaleString()}
@@ -313,7 +313,7 @@ export default function HistoryPage() {
               Timeline
             </h2>
             {events.length === 0 ? (
-              <Card>
+              <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
                 <CardContent className="py-8 text-sm text-muted-foreground">
                   No snapshots yet. Import a file or run a workspace briefing—they are recorded
                   automatically from here on. Existing activity may appear after the next app

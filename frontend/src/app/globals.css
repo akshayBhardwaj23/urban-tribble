@@ -129,22 +129,23 @@
   }
 }
 
-/* HR-style glass dashboard shell (soft pastel + floating cards) */
+/* Premium dashboard shell (warm workspace + art-directed surfaces) */
 @layer components {
   .dashboard-canvas {
     background:
-      radial-gradient(ellipse 120% 80% at 100% -20%, oklch(0.92 0.06 320 / 0.45), transparent 50%),
-      radial-gradient(ellipse 100% 60% at -10% 100%, oklch(0.93 0.05 230 / 0.4), transparent 45%),
-      linear-gradient(165deg, oklch(0.985 0.008 280) 0%, oklch(0.98 0.006 260) 45%, oklch(0.975 0.01 220) 100%);
+      radial-gradient(ellipse 48rem 28rem at -4% -6%, rgba(246, 210, 166, 0.28), transparent 58%),
+      radial-gradient(ellipse 42rem 24rem at 100% 0%, rgba(212, 204, 255, 0.32), transparent 56%),
+      radial-gradient(ellipse 34rem 18rem at 50% 100%, rgba(255, 234, 208, 0.42), transparent 62%),
+      linear-gradient(180deg, #f6f0e7 0%, #f7f4ee 46%, #f2eee7 100%);
     min-height: 100%;
   }
 
   .dashboard-glass-panel {
-    @apply rounded-3xl border border-white/70 bg-white/70 shadow-[0_8px_32px_-12px_rgba(99,102,241,0.1),0_4px_20px_-8px_rgba(15,23,42,0.06)] backdrop-blur-xl;
+    @apply rounded-[2rem] border border-white/70 bg-white/78 shadow-[0_24px_55px_-32px_rgba(120,93,64,0.28),0_10px_28px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl;
   }
 
   .dashboard-pill-tabs {
-    @apply h-auto min-h-10 rounded-2xl border border-white/60 bg-white/55 p-1 shadow-sm backdrop-blur-md;
+    @apply h-auto min-h-11 rounded-[1.25rem] border border-white/70 bg-white/70 p-1 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.16)] backdrop-blur-md;
   }
 
   .dashboard-pill-tabs [data-slot="tabs-trigger"] {
@@ -159,29 +160,92 @@
 
   .dashboard-pill-tabs [data-slot="tabs-trigger"][data-active],
   .dashboard-pill-tabs [data-slot="tabs-trigger"][aria-selected="true"] {
-    background: white;
-    color: rgb(15 23 42);
-    box-shadow: 0 4px 14px -4px rgba(15, 23, 42, 0.12);
+    background: rgba(255, 255, 255, 0.96);
+    color: rgb(24 24 27);
+    box-shadow: 0 12px 28px -16px rgba(15, 23, 42, 0.22);
   }
 
   .dashboard-pill-tabs [data-slot="tabs-trigger"]::after {
     display: none !important;
   }
 
+  .dashboard-page {
+    @apply mx-auto max-w-7xl space-y-8 pb-12;
+  }
+
+  .dashboard-hero-card {
+    @apply relative overflow-hidden rounded-[2rem] border border-white/70 bg-white/78 px-6 py-6 shadow-[0_24px_55px_-32px_rgba(120,93,64,0.28),0_10px_28px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl md:px-7 md:py-7;
+  }
+
+  .dashboard-hero-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 12% 12%, rgba(255, 248, 239, 0.96), transparent 22rem),
+      radial-gradient(circle at 86% 12%, rgba(223, 216, 255, 0.26), transparent 20rem),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+    pointer-events: none;
+  }
+
+  .dashboard-hero-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dashboard-surface {
+    @apply rounded-[2rem] border border-white/70 bg-white/80 shadow-[0_24px_48px_-32px_rgba(15,23,42,0.18),0_8px_20px_-16px_rgba(148,113,74,0.18)] backdrop-blur-xl;
+  }
+
+  .dashboard-surface-muted {
+    @apply rounded-[1.75rem] border border-white/65 bg-white/62 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.16)] backdrop-blur-lg;
+  }
+
+  .dashboard-inner-accent {
+    background:
+      radial-gradient(circle at top right, rgba(255, 219, 176, 0.24), transparent 10rem),
+      radial-gradient(circle at bottom left, rgba(210, 204, 255, 0.22), transparent 11rem);
+  }
+
+  .dashboard-section-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500;
+  }
+
+  .dashboard-subtle-copy {
+    @apply text-sm leading-relaxed text-slate-500 dark:text-slate-300;
+  }
+
+  .dashboard-kpi-card {
+    @apply rounded-[1.75rem] border border-white/75 bg-white/82 px-5 py-5 shadow-[0_18px_38px_-26px_rgba(15,23,42,0.18)] backdrop-blur-xl;
+  }
+
+  .dashboard-table-shell {
+    @apply rounded-[1.5rem] border border-white/65 bg-white/74 shadow-[0_14px_30px_-22px_rgba(15,23,42,0.18)] backdrop-blur-lg;
+  }
+
+  .dashboard-chip {
+    @apply inline-flex items-center rounded-full border border-white/70 bg-white/82 px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-slate-600 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)];
+  }
+
+  .dashboard-empty-card {
+    @apply flex flex-col items-center justify-center rounded-[2rem] border border-white/70 bg-white/80 px-6 py-12 text-center shadow-[0_24px_48px_-32px_rgba(15,23,42,0.18),0_8px_20px_-16px_rgba(148,113,74,0.18)] backdrop-blur-xl;
+  }
+
   /* Dark mode: same glass structure, tuned for contrast on oklch dark tokens */
   .dark .dashboard-canvas {
     background:
-      radial-gradient(ellipse 120% 80% at 100% -20%, oklch(0.28 0.07 300 / 0.35), transparent 52%),
-      radial-gradient(ellipse 100% 60% at -10% 100%, oklch(0.26 0.06 240 / 0.32), transparent 48%),
-      linear-gradient(165deg, oklch(0.16 0.02 280) 0%, oklch(0.15 0.02 260) 45%, oklch(0.14 0.02 220) 100%);
+      radial-gradient(ellipse 48rem 28rem at -8% -10%, rgba(94, 66, 141, 0.34), transparent 58%),
+      radial-gradient(ellipse 42rem 22rem at 104% 0%, rgba(59, 102, 173, 0.3), transparent 56%),
+      radial-gradient(ellipse 36rem 18rem at 50% 100%, rgba(34, 73, 109, 0.22), transparent 62%),
+      linear-gradient(180deg, #111827 0%, #0f172a 48%, #0b1322 100%);
   }
 
   .dark .dashboard-glass-panel {
-    @apply rounded-3xl border border-white/10 bg-card/55 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.45),0_4px_20px_-8px_rgba(0,0,0,0.25)] backdrop-blur-xl;
+    @apply rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.62)] shadow-[0_28px_60px_-34px_rgba(0,0,0,0.65),0_12px_28px_-18px_rgba(0,0,0,0.4)] backdrop-blur-xl;
   }
 
   .dark .dashboard-pill-tabs {
-    @apply h-auto min-h-10 rounded-2xl border border-white/10 bg-card/50 p-1 shadow-md backdrop-blur-md;
+    @apply h-auto min-h-11 rounded-[1.25rem] border border-white/10 bg-[rgba(15,23,42,0.58)] p-1 shadow-md backdrop-blur-md;
   }
 
   .dark .dashboard-pill-tabs [data-slot="tabs-trigger"] {
@@ -190,9 +254,50 @@
 
   .dark .dashboard-pill-tabs [data-slot="tabs-trigger"][data-active],
   .dark .dashboard-pill-tabs [data-slot="tabs-trigger"][aria-selected="true"] {
-    background: oklch(0.22 0.02 260);
-    color: oklch(0.96 0.01 260);
-    box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+    background: rgba(36, 51, 84, 0.95);
+    color: oklch(0.98 0.005 260);
+    box-shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.48);
+  }
+
+  .dark .dashboard-hero-card::before {
+    background:
+      radial-gradient(circle at 12% 12%, rgba(53, 74, 120, 0.34), transparent 22rem),
+      radial-gradient(circle at 86% 10%, rgba(109, 76, 173, 0.28), transparent 20rem),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+  }
+
+  .dark .dashboard-hero-card {
+    @apply border-white/10 bg-[rgba(15,23,42,0.62)] shadow-[0_28px_60px_-34px_rgba(0,0,0,0.65),0_12px_28px_-18px_rgba(0,0,0,0.4)];
+  }
+
+  .dark .dashboard-surface {
+    @apply border-white/10 bg-[rgba(15,23,42,0.66)] shadow-[0_28px_60px_-34px_rgba(0,0,0,0.62),0_10px_24px_-18px_rgba(0,0,0,0.36)];
+  }
+
+  .dark .dashboard-surface-muted {
+    @apply border-white/10 bg-[rgba(15,23,42,0.54)] shadow-[0_22px_46px_-34px_rgba(0,0,0,0.52)];
+  }
+
+  .dark .dashboard-inner-accent {
+    background:
+      radial-gradient(circle at top right, rgba(118, 92, 196, 0.22), transparent 12rem),
+      radial-gradient(circle at bottom left, rgba(56, 129, 180, 0.16), transparent 12rem);
+  }
+
+  .dark .dashboard-kpi-card {
+    @apply border-white/10 bg-[rgba(15,23,42,0.64)] shadow-[0_22px_42px_-28px_rgba(0,0,0,0.52)];
+  }
+
+  .dark .dashboard-table-shell {
+    @apply border-white/10 bg-[rgba(15,23,42,0.56)] shadow-[0_18px_36px_-26px_rgba(0,0,0,0.5)];
+  }
+
+  .dark .dashboard-chip {
+    @apply border-white/10 bg-[rgba(30,41,59,0.78)] text-slate-200 shadow-[0_12px_22px_-18px_rgba(0,0,0,0.42)];
+  }
+
+  .dark .dashboard-empty-card {
+    @apply border-white/10 bg-[rgba(15,23,42,0.66)] shadow-[0_28px_60px_-34px_rgba(0,0,0,0.62),0_10px_24px_-18px_rgba(0,0,0,0.36)];
   }
 }
 

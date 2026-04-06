@@ -15,6 +15,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Label,
 } from "recharts";
 import { cn } from "@/lib/utils";
 import {
@@ -23,17 +24,17 @@ import {
 } from "@/lib/chart-dates";
 
 /** HR / admin dashboard palette (bars & pie) */
-const HR_ORANGE = "#FF7A45";
-const HR_BLUE = "#4F7CFF";
-const HR_PURPLE = "#9B7EDE";
-const HR_TEAL = "#3ECFC0";
-const HR_PINK = "#F472B6";
-const HR_AMBER = "#FBBF24";
+const HR_ORANGE = "#f59e0b";
+const HR_BLUE = "#6366f1";
+const HR_PURPLE = "#8b5cf6";
+const HR_TEAL = "#14b8a6";
+const HR_PINK = "#ec4899";
+const HR_AMBER = "#fb923c";
 
 const BAR_PALETTE = [HR_ORANGE, HR_BLUE, HR_TEAL, HR_PURPLE, HR_PINK, HR_AMBER];
 
 /** SaaS area charts — Stripe / Notion vibe */
-const SAAS_GRID = "rgba(226, 232, 240, 0.55)";
+const SAAS_GRID = "rgba(148, 163, 184, 0.22)";
 const CHART_MUTED = "#64748b";
 
 const tickStyle = {
@@ -366,13 +367,13 @@ function getSaaSPalette(accentIndex: number, kind: "line" | "area") {
 
 function tooltipShell(): CSSProperties {
   return {
-    borderRadius: 12,
-    border: "1px solid rgba(226, 232, 240, 0.95)",
+    borderRadius: 16,
+    border: "1px solid rgba(255, 255, 255, 0.82)",
     boxShadow:
-      "0 18px 50px -16px rgba(15, 23, 42, 0.15), 0 4px 16px -4px rgba(15, 23, 42, 0.08)",
-    background: "rgba(255, 255, 255, 0.98)",
+      "0 24px 60px -20px rgba(15, 23, 42, 0.16), 0 8px 18px -8px rgba(15, 23, 42, 0.08)",
+    background: "rgba(252, 248, 243, 0.96)",
     backdropFilter: "blur(12px)",
-    padding: "12px 14px",
+    padding: "13px 15px",
     minWidth: 160,
   };
 }
@@ -465,8 +466,7 @@ export function AutoChart({
     return (
       <div
         className={cn(
-          "flex flex-col rounded-[28px] border border-border/80 bg-card p-6",
-          "shadow-sm dark:border-border/60 dark:bg-card/80"
+          "dashboard-surface flex flex-col p-6"
         )}
       >
         <h3 className="text-sm font-semibold text-foreground">{chart.title}</h3>
@@ -482,17 +482,15 @@ export function AutoChart({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-[28px] border border-border/80 bg-card",
-        "shadow-sm transition-shadow duration-300 hover:shadow-md",
-        "dark:border-border/60 dark:bg-card/80 dark:hover:shadow-lg"
+        "dashboard-surface dashboard-inner-accent flex flex-col overflow-hidden transition-shadow duration-300 hover:shadow-[0_28px_54px_-34px_rgba(15,23,42,0.3)]"
       )}
     >
-      <div className="border-b border-border px-5 pb-3 pt-5">
-        <h3 className="text-[13px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+      <div className="border-b border-white/65 px-5 pb-4 pt-5 dark:border-white/10">
+        <h3 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           {chart.title}
         </h3>
         {insight.line1 ? (
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-3 max-w-2xl space-y-1.5">
             <p className="text-[13px] font-medium leading-snug text-foreground">
               {insight.line1}
             </p>
@@ -502,10 +500,14 @@ export function AutoChart({
           </div>
         ) : null}
       </div>
-      <div className="h-72 w-full min-h-[18rem] px-2 pb-3 pt-2 sm:px-4">
+      <div className="px-3 pb-3 pt-3 sm:px-4">
+        <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.68),rgba(255,255,255,0.38))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.42),rgba(15,23,42,0.12))]">
+          <div className="h-[19rem] w-full min-h-[19rem]">
         <ResponsiveContainer width="100%" height="100%">
           {renderChart(prepared, safeId, accentIndex)}
         </ResponsiveContainer>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -698,8 +700,8 @@ function renderChart(
           />
           <Bar
             dataKey="value"
-            barSize={14}
-            radius={[0, 12, 12, 0]}
+            barSize={16}
+            radius={[0, 14, 14, 0]}
             isAnimationActive={false}
           >
             {data.map((_, i) => (
@@ -710,6 +712,7 @@ function renderChart(
       );
 
     case "pie":
+      const pieTotal = data.reduce((sum, slice) => sum + slice.value, 0);
       return (
         <PieChart margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
           <Pie
@@ -720,17 +723,12 @@ function renderChart(
             cy="48%"
             innerRadius="52%"
             outerRadius="78%"
-            paddingAngle={3}
-            cornerRadius={6}
-            stroke="rgba(255,255,255,0.95)"
+            paddingAngle={2}
+            cornerRadius={8}
+            stroke="rgba(255,255,255,0.92)"
             strokeWidth={3}
-            label={({ name, percent }) =>
-              `${String(name).slice(0, 10)}${String(name).length > 10 ? "…" : ""} ${(((percent ?? 0) as number) * 100).toFixed(0)}%`
-            }
-            labelLine={{
-              stroke: SAAS_GRID,
-              strokeWidth: 1,
-            }}
+            label={false}
+            labelLine={false}
             isAnimationActive={false}
           >
             {data.map((_, i) => (
@@ -740,10 +738,44 @@ function renderChart(
                 opacity={0.92}
               />
             ))}
+            <Label
+              position="center"
+              content={() => (
+                <text textAnchor="middle" dominantBaseline="middle">
+                  <tspan x="50%" y="46%" className="fill-slate-500 text-[11px] font-semibold">
+                    Total
+                  </tspan>
+                  <tspan x="50%" y="58%" className="fill-slate-900 text-[18px] font-semibold dark:fill-slate-100">
+                    {formatTooltip(pieTotal)}
+                  </tspan>
+                </text>
+              )}
+            />
           </Pie>
           <Tooltip formatter={formatTooltip} contentStyle={tooltipShell()} />
           <Legend
-            wrapperStyle={{ fontSize: 11, fontWeight: 600, color: CHART_MUTED }}
+            verticalAlign="bottom"
+            align="center"
+            wrapperStyle={{ paddingTop: 10 }}
+            content={({ payload }) => {
+              if (!payload?.length) return null;
+              return (
+                <ul className="flex list-none flex-wrap justify-center gap-2 px-2 pt-2">
+                  {payload.map((entry, i) => (
+                    <li
+                      key={i}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/86 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.25)] dark:border-white/10 dark:bg-slate-900/75 dark:text-slate-200"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: entry.color ?? "#64748b" }}
+                      />
+                      {entry.value}
+                    </li>
+                  ))}
+                </ul>
+              );
+            }}
           />
         </PieChart>
       );

@@ -96,7 +96,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
     <section className={className}>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <h2 className="dashboard-section-label">
             Latest summary
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
@@ -117,7 +117,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
         </div>
       </div>
 
-      <Card className="border-slate-200/90 shadow-sm dark:border-slate-800 overflow-hidden">
+      <Card className="dashboard-surface dashboard-inner-accent overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
         <CardContent className="p-0">
           {showSkeleton ? (
             <div className="p-6 space-y-4">
@@ -130,17 +130,17 @@ export function LatestSummaryCard({ className }: { className?: string }) {
             </div>
           ) : (
             <Tabs defaultValue="weekly">
-              <div className="flex flex-col gap-3 border-b border-slate-200/80 bg-slate-50/50 px-4 py-3 dark:bg-slate-950/40 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-b border-white/65 bg-white/35 px-4 py-3 dark:border-white/10 dark:bg-slate-950/20 sm:flex-row sm:items-center sm:justify-between">
                 <TabsList variant="line" className="bg-transparent p-0 h-auto gap-1">
                   <TabsTrigger
                     value="weekly"
-                    className="rounded-md px-3 py-1.5 text-xs data-active:bg-white data-active:shadow-sm dark:data-active:bg-slate-900"
+                    className="rounded-full px-3 py-1.5 text-xs data-active:bg-white data-active:shadow-sm dark:data-active:bg-slate-900"
                   >
                     Weekly
                   </TabsTrigger>
                   <TabsTrigger
                     value="monthly"
-                    className="rounded-md px-3 py-1.5 text-xs data-active:bg-white data-active:shadow-sm dark:data-active:bg-slate-900"
+                    className="rounded-full px-3 py-1.5 text-xs data-active:bg-white data-active:shadow-sm dark:data-active:bg-slate-900"
                   >
                     Monthly
                   </TabsTrigger>
