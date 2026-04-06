@@ -295,7 +295,7 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`api` object).
 
-**Subscription UI (soft limits):** `SUBSCRIPTION_PLAN` in config (`free` \| `starter` \| `pro`, default `free`) drives **`usage`** on `GET /api/dashboards/overview`—monthly workspace briefing counts, completed uploads, history-depth copy vs timeline snapshots, and optional **`nudges`** (link to `/#pricing`). Caps live in `backend/services/subscription_usage.py`; hard billing enforcement is not wired yet.
+**Subscription UI (soft limits):** `SUBSCRIPTION_PLAN` in config (`free` \| `starter` \| `pro`, default `free`) drives **`usage`** on `GET /api/dashboards/overview`—monthly workspace briefing counts, completed uploads, history-depth copy vs timeline snapshots, and optional **`nudges`** (link to `/pricing`). Caps in `backend/services/subscription_usage.py` align with marketing on **`/pricing`**; hard billing enforcement is not wired yet.
 
 ---
 
@@ -303,7 +303,7 @@ The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`a
 
 | Area | Route(s) | Primary APIs |
 |------|-----------|----------------|
-| Landing | `/` | None (marketing) |
+| Landing | `/`, `/pricing` | None (marketing) |
 | Login | `/login` | NextAuth |
 | Onboarding | `/onboarding` | `POST /api/workspaces` |
 | Overview | `/dashboard` | `GET /api/dashboards/overview` (incl. `recommended_actions`, `usage`, `habit_hints`), `GET/POST` overview analysis & forecast, `GET /api/summaries/latest` |

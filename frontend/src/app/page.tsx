@@ -7,7 +7,6 @@ import {
   LandingFooterPrimaryCta,
   LandingHeaderAuth,
   LandingHeroPrimaryCta,
-  LandingPricingCta,
 } from "@/components/landing-auth";
 import {
   POSITIONING_LINE,
@@ -19,51 +18,6 @@ import { cn } from "@/lib/utils";
 const serif = DM_Serif_Display({ subsets: ["latin"], weight: "400" });
 
 const trustLogos = ["ATLAS", "LINEAR", "NOTIONX", "OGILVY", "SONY", "TESCO"];
-
-const pricingTiers = [
-  {
-    name: "Free",
-    price: "₹0",
-    period: "forever",
-    features: [
-      "3 file uploads / month",
-      "Cleaning and structure",
-      "Core views from your metrics",
-      "Single workspace",
-    ],
-    cta: "Start free",
-    featured: false,
-  },
-  {
-    name: "Pro",
-    price: "₹999",
-    period: "/month",
-    features: [
-      "Unlimited uploads",
-      "Full analyst briefing",
-      "Natural-language Q&A on your data",
-      "Forecasting + trend analysis",
-      "Multi-workspace support",
-      "Priority support",
-    ],
-    cta: "Start free trial",
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    features: [
-      "Everything in Pro",
-      "Team workspaces",
-      "Leadership-ready reporting",
-      "Priority support",
-      "Security and compliance controls",
-    ],
-    cta: "Contact sales",
-    featured: false,
-  },
-];
 
 function Tag({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -481,7 +435,7 @@ function Footer() {
           <Link href="#features" className="hover:text-slate-900 dark:hover:text-white">
             Features
           </Link>
-          <Link href="#pricing" className="hover:text-slate-900 dark:hover:text-white">
+          <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
             Pricing
           </Link>
           <Link href="#cta" className="hover:text-slate-900 dark:hover:text-white">
@@ -538,58 +492,27 @@ function FeatureGrid() {
   );
 }
 
-function PricingSection() {
+function PricingTeaser() {
   return (
-    <section id="pricing" className="mx-auto w-full max-w-6xl px-6 py-28">
-      <div className="text-center fade-up">
+    <section id="pricing" className="mx-auto w-full max-w-6xl px-6 py-24">
+      <div className="fade-up rounded-[34px] border border-slate-200 bg-white/90 px-8 py-14 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/70 md:px-14">
         <Tag>Pricing</Tag>
-        <h2 className={`${serif.className} mt-4 text-4xl text-slate-900 dark:text-white md:text-5xl`}>
-          Choose the plan that fits your team
+        <h2
+          className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
+        >
+          Free, Starter, and Pro
         </h2>
-        <p className="mx-auto mt-3 max-w-2xl text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-          Start free, scale when needed, and unlock a complete AI business
-          analyst experience.
+        <p className="mx-auto mt-4 max-w-xl text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+          Compare plans, limits, and FAQ in one place. Start free; upgrade when you want continuous
+          monitoring and deeper insights.
         </p>
-      </div>
-      <div className="mt-12 grid gap-6 md:grid-cols-3">
-        {pricingTiers.map((tier) => (
-          <div
-            key={tier.name}
-            className={`group relative rounded-3xl border p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-              tier.featured
-                ? "border-violet-300 bg-white ring-2 ring-violet-200 dark:border-violet-400 dark:bg-slate-900 dark:ring-violet-900/80"
-                : "border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/80"
-            }`}
-          >
-            {tier.featured && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-                Most popular
-              </span>
-            )}
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">{tier.name}</p>
-            <div className="mt-3 flex items-end gap-1">
-              <p className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                {tier.price}
-              </p>
-              {tier.period && (
-                <p className="pb-1 text-sm text-slate-500 dark:text-slate-400">{tier.period}</p>
-              )}
-            </div>
-            <ul className="mt-5 space-y-2.5">
-              {tier.features.map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <span className="mt-0.5 text-violet-600 dark:text-violet-400">✓</span>
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-            <LandingPricingCta
-              tierName={tier.name}
-              cta={tier.cta}
-              highlighted={tier.featured}
-            />
-          </div>
-        ))}
+        <div className="mt-10">
+          <Link href="/pricing">
+            <Button size="lg" className="h-12 rounded-xl px-8 font-semibold">
+              View plans
+            </Button>
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -612,7 +535,7 @@ export default function LandingPage() {
               <Link href="#features" className="hover:text-slate-900 dark:hover:text-white">
                 Features
               </Link>
-              <Link href="#pricing" className="hover:text-slate-900 dark:hover:text-white">
+              <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
                 Pricing
               </Link>
               <Link href="#cta" className="hover:text-slate-900 dark:hover:text-white">
@@ -784,7 +707,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <PricingSection />
+      <PricingTeaser />
 
       <section id="cta" className="mx-auto max-w-6xl px-6 py-24">
         <div className="fade-up rounded-[34px] border border-slate-200 bg-gradient-to-r from-[#eaf3ff] via-[#ede7ff] to-[#f9e7ef] px-8 py-14 text-center shadow-sm dark:border-slate-700 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:px-14">

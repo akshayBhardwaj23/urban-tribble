@@ -18,21 +18,21 @@ _PLAN_LABELS = {
     "pro": "Pro",
 }
 
-# None = unlimited for that meter
+# None = unlimited for that meter. Aligns with marketing on /pricing.
 _CAPS: dict[str, dict[str, Optional[int]]] = {
     "free": {
-        "analyses_per_month": 10,
-        "uploads_per_month": 5,
-        "history_periods": 3,
+        "analyses_per_month": 2,
+        "uploads_per_month": 2,
+        "history_periods": 0,
     },
     "starter": {
-        "analyses_per_month": 50,
-        "uploads_per_month": 25,
-        "history_periods": 8,
+        "analyses_per_month": 15,
+        "uploads_per_month": 10,
+        "history_periods": 3,
     },
     "pro": {
         "analyses_per_month": None,
-        "uploads_per_month": None,
+        "uploads_per_month": 30,
         "history_periods": 24,
     },
 }
@@ -118,8 +118,9 @@ def build_workspace_usage_payload(
     uploads_used = _count_workspace_uploads_this_month(db, workspace_id, month_start)
     snapshots = _count_timeline_snapshots(db, workspace_id)
 
-    hist_cap = caps.get("history_periods") or 3
-    periods_highlight = min(snapshots, hist_cap) if snapshots else 0
+    hp = caps.get("history_periods")
+    hist_cap = 0 if hp == 0 else (hp if hp is not None else 3)
+    periods_highlight = min(snapshots, hist_cap) if snapshots and hist_cap > 0 else 0
 
     meter_a = _meter(analyses_used, caps.get("analyses_per_month"))
     meter_u = _meter(uploads_used, caps.get("uploads_per_month"))
@@ -132,7 +133,7 @@ def build_workspace_usage_payload(
                 f"You've used {analyses_used}/{meter_a['limit']} workspace analyses "
                 f"this month—higher plans include more monthly runs."
             ),
-            "href": "/#pricing",
+            "href": "/pricing",
         })
     if meter_u and meter_u["approaching"] and len(nudges) < 2:
         nudges.append({
@@ -141,15 +142,23 @@ def build_workspace_usage_payload(
                 f"You've used {uploads_used}/{meter_u['limit']} uploads "
                 f"this month on {_PLAN_LABELS.get(plan, plan)}."
             ),
-            "href": "/#pricing",
+            "href": "/pricing",
         })
-    if plan == "free" and snapshots > hist_cap and len(nudges) < 2:
+    if plan == "free" and hist_cap == 0 and len(nudges) < 2:
+        nudges.append({
+            "tone": "soft",
+            "message": (
+                "History and alerts are on paid plans—see Starter and Pro on the pricing page."
+            ),
+            "href": "/pricing",
+        })
+    elif plan == "free" and snapshots > hist_cap and hist_cap > 0 and len(nudges) < 2:
         nudges.append({
             "tone": "soft",
             "message": (
                 "Upgrade to track more historical data—Pro keeps a longer comparison window."
             ),
-            "href": "/#pricing",
+            "href": "/pricing",
         })
     if plan == "free" and len(nudges) == 0:
         nudges.append({
@@ -157,13 +166,16 @@ def build_workspace_usage_payload(
             "message": (
                 "Pro unlocks higher monthly limits and deeper history for alerts and briefings."
             ),
-            "href": "/#pricing",
+            "href": "/pricing",
         })
 
-    history_summary = (
-        f"Tracking up to {hist_cap} comparison periods on {_PLAN_LABELS.get(plan, plan)}"
-        + (f" · {snapshots} checkpoints saved" if snapshots else "")
-    )
+    if hist_cap == 0:
+        history_summary = f"No period comparison on {_PLAN_LABELS.get(plan, plan)}"
+    else:
+        history_summary = (
+            f"Tracking up to {hist_cap} comparison periods on {_PLAN_LABELS.get(plan, plan)}"
+            + (f" · {snapshots} checkpoints saved" if snapshots else "")
+        )
 
     return {
         "plan_id": plan,
