@@ -379,7 +379,7 @@ export default function OverviewPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.8fr)] xl:items-start">
           <div className="min-w-0">
             <span className="dashboard-chip">Workspace overview</span>
-            <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+            <h1 className="mt-4 text-[2.35rem] font-semibold leading-none tracking-[-0.05em] text-slate-900 dark:text-slate-50">
               Overview
             </h1>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">

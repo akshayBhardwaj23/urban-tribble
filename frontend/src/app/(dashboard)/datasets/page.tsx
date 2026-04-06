@@ -49,7 +49,9 @@ export default function DatasetsPage() {
     <div className="dashboard-page">
       <div className="dashboard-hero-card dashboard-inner-accent flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sources</h1>
+          <h1 className="text-[2.15rem] font-semibold leading-none tracking-[-0.04em]">
+            Sources
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Files in this workspace—used for the overview, source views, and briefings.
           </p>

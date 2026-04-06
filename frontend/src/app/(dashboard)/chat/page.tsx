@@ -90,7 +90,9 @@ export default function ChatPage() {
   return (
     <div className="dashboard-page mx-auto flex h-[calc(100vh-6rem)] max-w-5xl flex-col">
       <div className="dashboard-hero-card dashboard-inner-accent mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Q&A on your data</h1>
+        <h1 className="text-[2.15rem] font-semibold leading-none tracking-[-0.04em]">
+          Q&A on your data
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Questions in plain language, scoped to one source—the answers use what you imported,
           not the open web.
