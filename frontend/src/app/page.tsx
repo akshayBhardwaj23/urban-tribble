@@ -641,7 +641,9 @@ export default function LandingPage() {
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-10">Business Data</span>
                 <span className="mt-1 block text-5xl leading-[0.9] md:text-6xl lg:-ml-8">into</span>
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-6">
-                  <span className="rounded-md bg-[#fff6d8] px-2">Confident</span>
+                  <span className="rounded-md bg-[#fff6d8] px-2 py-0.5 text-slate-900 dark:bg-violet-600 dark:text-white dark:shadow-[0_0_28px_-6px_rgba(139,92,246,0.55)]">
+                    Confident
+                  </span>
                 </span>
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-16">Decisions</span>
               </h1>
