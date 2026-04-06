@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
   Legend,
   Label,
+  LabelList,
 } from "recharts";
 import { cn } from "@/lib/utils";
 import {
@@ -23,19 +24,20 @@ import {
   formatChartTooltipDate,
 } from "@/lib/chart-dates";
 
-/** HR / admin dashboard palette (bars & pie) */
-const HR_ORANGE = "#f59e0b";
-const HR_BLUE = "#6366f1";
-const HR_PURPLE = "#8b5cf6";
-const HR_TEAL = "#14b8a6";
-const HR_PINK = "#ec4899";
-const HR_AMBER = "#fb923c";
+/** Reference-driven palette: vivid but still readable in app UI. */
+const REF_VIOLET = "#7c3aed";
+const REF_FUCHSIA = "#ec4899";
+const REF_SKY = "#06b6d4";
+const REF_BLUE = "#3b82f6";
+const REF_AMBER = "#f59e0b";
+const REF_LIME = "#84cc16";
 
-const BAR_PALETTE = [HR_ORANGE, HR_BLUE, HR_TEAL, HR_PURPLE, HR_PINK, HR_AMBER];
+const BAR_PALETTE = [REF_VIOLET, REF_FUCHSIA, REF_SKY, REF_BLUE, REF_AMBER, REF_LIME];
 
 /** SaaS area charts — Stripe / Notion vibe */
-const SAAS_GRID = "rgba(148, 163, 184, 0.22)";
+const SAAS_GRID = "rgba(148, 163, 184, 0.18)";
 const CHART_MUTED = "#64748b";
+const TRACK_FILL = "rgba(148, 163, 184, 0.13)";
 
 const tickStyle = {
   fill: CHART_MUTED,
@@ -344,25 +346,64 @@ function prepareChart(chart: ChartConfig): PreparedChart | null {
 }
 
 function getSaaSPalette(accentIndex: number, kind: "line" | "area") {
-  const violet = kind === "area" && accentIndex % 2 === 1;
-  if (violet) {
+  const variants = [
+    {
+      primary: REF_VIOLET,
+      primaryMid: "#a78bfa",
+      primaryStroke: "#6d28d9",
+      compare: REF_FUCHSIA,
+      compareMid: "#f9a8d4",
+      compareStroke: "#db2777",
+    },
+    {
+      primary: REF_SKY,
+      primaryMid: "#67e8f9",
+      primaryStroke: "#0891b2",
+      compare: REF_VIOLET,
+      compareMid: "#c4b5fd",
+      compareStroke: "#7c3aed",
+    },
+    {
+      primary: REF_AMBER,
+      primaryMid: "#fcd34d",
+      primaryStroke: "#d97706",
+      compare: REF_BLUE,
+      compareMid: "#93c5fd",
+      compareStroke: "#2563eb",
+    },
+  ];
+  const selected = variants[accentIndex % variants.length];
+  if (kind === "area") {
     return {
-      primary: "#5b21b6",
-      primaryMid: "#7c3aed",
-      primaryStroke: "#4c1d95",
-      compare: "#c2410c",
-      compareMid: "#fb923c",
-      compareStroke: "#ea580c",
+      ...selected,
+      primaryMid: selected.primaryMid,
     };
   }
-  return {
-    primary: "#312e81",
-    primaryMid: "#4f46e5",
-    primaryStroke: "#3730a3",
-    compare: "#ea580c",
-    compareMid: "#fdba74",
-    compareStroke: "#f97316",
-  };
+  return selected;
+}
+
+function LegendPills({
+  payload,
+}: {
+  payload?: ReadonlyArray<{ value?: string | number; color?: string }>;
+}) {
+  if (!payload?.length) return null;
+  return (
+    <ul className="flex list-none flex-wrap justify-center gap-2 px-2 pt-2">
+      {payload.map((entry, i) => (
+        <li
+          key={i}
+          className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/86 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.25)] dark:border-white/10 dark:bg-slate-900/75 dark:text-slate-200"
+        >
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: entry.color ?? "#64748b" }}
+          />
+          {entry.value}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function tooltipShell(): CSSProperties {
@@ -501,11 +542,11 @@ export function AutoChart({
         ) : null}
       </div>
       <div className="px-3 pb-3 pt-3 sm:px-4">
-        <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.68),rgba(255,255,255,0.38))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.42),rgba(15,23,42,0.12))]">
+        <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.42))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.5),rgba(15,23,42,0.14))]">
           <div className="h-[19rem] w-full min-h-[19rem]">
-        <ResponsiveContainer width="100%" height="100%">
-          {renderChart(prepared, safeId, accentIndex)}
-        </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              {renderChart(prepared, safeId, accentIndex)}
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
@@ -592,25 +633,7 @@ function renderDualArea(
           const sorted = [...payload].sort(
             (a, b) => order.indexOf(String(a.value)) - order.indexOf(String(b.value))
           );
-          return (
-            <ul className="flex list-none flex-wrap justify-center gap-5 pt-1">
-              {sorted.map((entry, i) => (
-                <li key={i} className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <span
-                    className="inline-block h-0 w-4"
-                    style={{
-                      borderTopWidth: 2,
-                      borderTopStyle: String(entry.value).includes("Previous")
-                        ? "dashed"
-                        : "solid",
-                      borderTopColor: entry.color ?? "#64748b",
-                    }}
-                  />
-                  {entry.value}
-                </li>
-              ))}
-            </ul>
-          );
+          return <LegendPills payload={sorted} />;
         }}
       />
       {/* Previous first so it renders behind */}
@@ -619,10 +642,10 @@ function renderDualArea(
         dataKey="yPrev"
         name="Previous period"
         stroke={p.compareStroke}
-        strokeWidth={2}
+        strokeWidth={2.25}
         strokeDasharray="6 5"
         fill={`url(#${idPrev})`}
-        fillOpacity={1}
+        fillOpacity={0.82}
         dot={false}
         activeDot={{
           r: 5,
@@ -637,7 +660,7 @@ function renderDualArea(
         dataKey="y"
         name="Current period"
         stroke={p.primaryStroke}
-        strokeWidth={2}
+        strokeWidth={2.6}
         fill={`url(#${idCur})`}
         fillOpacity={1}
         dot={false}
@@ -700,13 +723,21 @@ function renderChart(
           />
           <Bar
             dataKey="value"
-            barSize={16}
-            radius={[0, 14, 14, 0]}
+            barSize={18}
+            radius={[999, 999, 999, 999]}
+            background={{ fill: TRACK_FILL, radius: 999 }}
             isAnimationActive={false}
           >
             {data.map((_, i) => (
               <Cell key={i} fill={BAR_PALETTE[i % BAR_PALETTE.length]} />
             ))}
+            <LabelList
+              dataKey="value"
+              position="right"
+              offset={8}
+              className="fill-slate-500 text-[11px] font-medium"
+              formatter={(value: unknown) => formatTooltip(value)}
+            />
           </Bar>
         </BarChart>
       );
@@ -721,10 +752,10 @@ function renderChart(
             nameKey="name"
             cx="50%"
             cy="48%"
-            innerRadius="52%"
-            outerRadius="78%"
+            innerRadius="60%"
+            outerRadius="82%"
             paddingAngle={2}
-            cornerRadius={8}
+            cornerRadius={10}
             stroke="rgba(255,255,255,0.92)"
             strokeWidth={3}
             label={false}
@@ -742,10 +773,10 @@ function renderChart(
               position="center"
               content={() => (
                 <text textAnchor="middle" dominantBaseline="middle">
-                  <tspan x="50%" y="46%" className="fill-slate-500 text-[11px] font-semibold">
+                  <tspan x="50%" y="44%" fill="#64748b" fontSize="11" fontWeight="600">
                     Total
                   </tspan>
-                  <tspan x="50%" y="58%" className="fill-slate-900 text-[18px] font-semibold dark:fill-slate-100">
+                  <tspan x="50%" y="58%" fill="#0f172a" fontSize="18" fontWeight="700">
                     {formatTooltip(pieTotal)}
                   </tspan>
                 </text>
@@ -757,25 +788,7 @@ function renderChart(
             verticalAlign="bottom"
             align="center"
             wrapperStyle={{ paddingTop: 10 }}
-            content={({ payload }) => {
-              if (!payload?.length) return null;
-              return (
-                <ul className="flex list-none flex-wrap justify-center gap-2 px-2 pt-2">
-                  {payload.map((entry, i) => (
-                    <li
-                      key={i}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/86 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.25)] dark:border-white/10 dark:bg-slate-900/75 dark:text-slate-200"
-                    >
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: entry.color ?? "#64748b" }}
-                      />
-                      {entry.value}
-                    </li>
-                  ))}
-                </ul>
-              );
-            }}
+            content={({ payload }) => <LegendPills payload={payload} />}
           />
         </PieChart>
       );

@@ -141,6 +141,7 @@ export function ForecastChart({
 
   const gradActual = "fcActualGrad";
   const gradPred = "fcPredGrad";
+  const gradBand = "fcBandGrad";
 
   const metricLabel = valueColumn
     .replace(/_/g, " ")
@@ -221,7 +222,7 @@ export function ForecastChart({
         <CardContent>
           <div
             className={cn(
-              "rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.7),rgba(255,255,255,0.38))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.42),rgba(15,23,42,0.12))]",
+              "rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(255,255,255,0.42))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.48),rgba(15,23,42,0.14))]",
               chartHeightClassName
             )}
           >
@@ -237,16 +238,20 @@ export function ForecastChart({
               >
                 <defs>
                   <linearGradient id={gradActual} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(217, 91%, 59%)" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="hsl(217, 91%, 59%)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id={gradPred} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(189, 94%, 43%)" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="hsl(189, 94%, 43%)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#f472b6" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="#f472b6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id={gradBand} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.04} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid
-                  stroke="hsl(220, 13%, 91%)"
+                  stroke="rgba(148, 163, 184, 0.18)"
                   strokeDasharray="4 6"
                   vertical={false}
                   opacity={0.9}
@@ -285,12 +290,17 @@ export function ForecastChart({
                     String(name ?? ""),
                   ]}
                   contentStyle={{
-                    borderRadius: "10px",
-                    border: "1px solid hsl(220, 13%, 91%)",
-                    boxShadow: "0 10px 40px -12px rgba(15, 23, 42, 0.2)",
+                    borderRadius: "16px",
+                    border: "1px solid rgba(255,255,255,0.82)",
+                    background: "rgba(252,248,243,0.96)",
+                    boxShadow: "0 24px 60px -20px rgba(15, 23, 42, 0.16)",
                   }}
                 />
-                <Legend />
+                <Legend
+                  verticalAlign="bottom"
+                  align="center"
+                  wrapperStyle={{ paddingTop: 10 }}
+                />
                 {lastHistorical && (
                   <ReferenceLine
                     x={lastHistorical}
@@ -303,8 +313,8 @@ export function ForecastChart({
                   type="linear"
                   dataKey="upper"
                   stroke="none"
-                  fill="hsl(217, 91%, 59%)"
-                  fillOpacity={0.1}
+                  fill={`url(#${gradBand})`}
+                  fillOpacity={1}
                   name="Upper bound"
                   isAnimationActive={false}
                 />
@@ -312,7 +322,7 @@ export function ForecastChart({
                   type="linear"
                   dataKey="lower"
                   stroke="none"
-                  fill="hsl(0, 0%, 100%)"
+                  fill="rgba(255,255,255,0.9)"
                   fillOpacity={1}
                   name="Lower bound"
                   isAnimationActive={false}
@@ -320,7 +330,7 @@ export function ForecastChart({
                 <Area
                   type="monotone"
                   dataKey="actual"
-                  stroke="hsl(217, 91%, 52%)"
+                  stroke="#06b6d4"
                   strokeWidth={2.5}
                   fill={`url(#${gradActual})`}
                   fillOpacity={1}
@@ -328,12 +338,12 @@ export function ForecastChart({
                   name="Actual"
                   connectNulls={false}
                   isAnimationActive={false}
-                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "hsl(217, 91%, 59%)" }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "#06b6d4" }}
                 />
                 <Area
                   type="monotone"
                   dataKey="predicted"
-                  stroke="hsl(189, 94%, 38%)"
+                  stroke="#ec4899"
                   strokeWidth={2.5}
                   strokeDasharray="6 5"
                   fill={`url(#${gradPred})`}
@@ -342,7 +352,7 @@ export function ForecastChart({
                   name="Forecast"
                   connectNulls={false}
                   isAnimationActive={false}
-                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "hsl(189, 94%, 43%)" }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "#ec4899" }}
                 />
               </AreaChart>
             </ResponsiveContainer>
