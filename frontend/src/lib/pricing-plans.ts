@@ -1,4 +1,4 @@
-/** Marketing copy for `/pricing` — keep in sync with product limits in `subscription_usage.py` where enforced. */
+/** Marketing copy for `/pricing` — enforced caps live in `backend/services/subscription_usage.py` + route checks. */
 
 export type PricingPlan = {
   id: "free" | "starter" | "pro";

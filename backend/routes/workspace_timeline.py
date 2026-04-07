@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from deps import require_active_workspace
 from models.models import User, WorkspaceTimelineSnapshot
+from services.subscription_usage import assert_timeline_allowed
 from services.workspace_timeline import (
     compare_snapshots,
     list_recent_digests,
@@ -39,7 +40,8 @@ def get_workspace_timeline(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_timeline_allowed(db, user)
     rows = list_snapshots(db, workspace_id, limit)
     events_desc = [serialize_snapshot(r) for r in rows]
     chrono_asc = list(reversed(events_desc))
@@ -57,7 +59,8 @@ def compare_workspace_snapshots(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_timeline_allowed(db, user)
     if from_snapshot_id == to_snapshot_id:
         raise HTTPException(400, "Choose two different snapshots")
     ra = _get_snapshot_row(db, workspace_id, from_snapshot_id)

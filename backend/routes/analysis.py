@@ -18,6 +18,11 @@ from services.workspace_query import (
     latest_workspace_overview_analysis,
 )
 from services.workspace_timeline import record_briefing_snapshot
+from services.subscription_usage import (
+    assert_analysis_allowed,
+    get_effective_plan,
+    trim_free_analysis_result,
+)
 from services.ai_analyzer import AIAnalyzer
 from services.forecaster import Forecaster
 
@@ -44,7 +49,8 @@ def run_analysis(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, wid = ws
+    user, wid = ws
+    assert_analysis_allowed(db, user, wid)
     row = get_dataset_upload_in_workspace(db, req.dataset_id, wid)
     if not row:
         raise HTTPException(404, "Dataset not found")
@@ -55,6 +61,8 @@ def run_analysis(
     user_description = upload.user_description if upload else None
 
     result = ai_analyzer.analyze(data_summary, column_metadata, user_description)
+    if get_effective_plan(db, user) == "free":
+        result = trim_free_analysis_result(result)
 
     analysis = Analysis(
         dataset_id=dataset.id,
@@ -166,7 +174,8 @@ def run_overview_analysis(
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     """AI analysis across all datasets in the workspace."""
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_analysis_allowed(db, user, workspace_id)
     all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     if not all_datasets:
         raise HTTPException(404, "No datasets found")
@@ -197,6 +206,8 @@ def run_overview_analysis(
         combined_summary, combined_metadata,
         f"Workspace with {len(all_datasets)} business datasets",
     )
+    if get_effective_plan(db, user) == "free":
+        result = trim_free_analysis_result(result)
 
     first_ds = all_datasets[0][0]
     analysis = Analysis(

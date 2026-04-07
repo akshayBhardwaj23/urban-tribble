@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
-import { Button } from "@/components/ui/button";
+import { PricingTierCTA } from "@/components/pricing/pricing-tier-cta";
 import { LandingHeaderAuth } from "@/components/landing-auth";
 import { ThemeMenuCompact } from "@/components/theme-menu";
 import { PRODUCT_NAME } from "@/lib/brand";
@@ -219,20 +219,11 @@ export default function PricingPage() {
                 ) : null}
 
                 <div className={cn("mt-8", featured && "mt-10")}>
-                  <Link href="/login" className="block">
-                    <Button
-                      className={cn(
-                        "min-h-12 w-full rounded-xl font-semibold",
-                        featured
-                          ? "h-12 text-base shadow-lg shadow-violet-600/25 dark:shadow-violet-900/40"
-                          : "h-12 text-[15px]",
-                      )}
-                      size="lg"
-                      variant={featured ? "default" : "outline"}
-                    >
-                      {plan.cta}
-                    </Button>
-                  </Link>
+                  <PricingTierCTA
+                    planId={plan.id}
+                    cta={plan.cta}
+                    featured={featured}
+                  />
                 </div>
               </article>
             );

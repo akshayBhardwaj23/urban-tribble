@@ -1,4 +1,4 @@
-"""Plan caps + monthly usage for subscription-aware UI (limits enforced later via billing)."""
+"""Per-user plan caps, usage meters, and enforcement helpers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,20 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import settings
-from models.models import Analysis, Dataset, Upload, UploadStatus, User, WorkspaceTimelineSnapshot
+from models.models import (
+    Analysis,
+    ChatMessage,
+    Dataset,
+    Upload,
+    UploadStatus,
+    User,
+    Workspace,
+    WorkspaceTimelineSnapshot,
+)
+from services.plan_limits import raise_plan_limit
+
+PLAN_IDS = frozenset({"free", "starter", "pro"})
+_ANALYSIS_TYPES_FOR_CAP = ("overview", "workspace_overview")
 
 _PLAN_LABELS = {
     "free": "Free",
@@ -18,24 +31,75 @@ _PLAN_LABELS = {
     "pro": "Pro",
 }
 
-# None = unlimited for that meter. Aligns with marketing on /pricing.
-_CAPS: dict[str, dict[str, Optional[int]]] = {
-    "free": {
-        "analyses_per_month": 2,
-        "uploads_per_month": 2,
-        "history_periods": 0,
-    },
-    "starter": {
-        "analyses_per_month": 15,
-        "uploads_per_month": 10,
-        "history_periods": 3,
-    },
-    "pro": {
-        "analyses_per_month": None,
-        "uploads_per_month": 30,
-        "history_periods": 24,
-    },
+# Lifetime totals (free tier) — uploads & AI analyses across all owned workspaces.
+_FREE_LIFETIME = {"uploads": 2, "analyses": 2}
+
+# Per-calendar-month caps for starter/pro (per workspace for uploads & analyses).
+_MONTHLY_CAPS = {
+    "starter": {"uploads": 10, "analyses": 15},
+    "pro": {"uploads": 30, "analyses": None},
 }
+
+_HISTORY_PERIODS = {"free": 0, "starter": 3, "pro": 24}
+
+_WORKSPACES_MAX = {"free": 1, "starter": 1, "pro": 5}
+
+# Max user-authored chat messages: lifetime (free) or per UTC calendar month (starter/pro).
+_CHAT_USER_CAPS = {"free": 3, "starter": 50, "pro": 200}
+
+
+def get_effective_plan(_db: Session, user: User) -> str:
+    force = (getattr(settings, "FORCE_SUBSCRIPTION_PLAN", None) or "").strip().lower()
+    if force in PLAN_IDS:
+        return force
+    raw = (getattr(user, "subscription_plan", None) or "free").strip().lower()
+    return raw if raw in PLAN_IDS else "free"
+
+
+def plan_features(plan: str) -> dict[str, Any]:
+    p = plan if plan in PLAN_IDS else "free"
+    return {
+        "timeline": p != "free",
+        "what_changed": p != "free",
+        "alerts": p == "pro",
+        "weekly_summary": p == "pro",
+        "monthly_summary": p != "free",
+        "full_briefing": p != "free",
+    }
+
+
+def workspaces_max_for(plan: str) -> int:
+    return _WORKSPACES_MAX.get(plan if plan in PLAN_IDS else "free", 1)
+
+
+def history_periods_cap(plan: str) -> int:
+    return int(_HISTORY_PERIODS.get(plan if plan in PLAN_IDS else "free", 0))
+
+
+def empty_what_changed() -> dict[str, Any]:
+    return {
+        "available": False,
+        "period_description": "",
+        "items": [],
+        "highlights": [],
+        "cross_metric_note": None,
+    }
+
+
+def trim_free_analysis_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Shorter Free-tier briefing without re-calling the model."""
+    out = dict(result)
+    for key, n in (
+        ("top_priorities", 2),
+        ("key_metrics", 4),
+        ("insights", 2),
+        ("anomalies", 2),
+        ("recommendations", 2),
+    ):
+        v = out.get(key)
+        if isinstance(v, list) and len(v) > n:
+            out[key] = v[:n]
+    return out
 
 
 def _month_start_utc(now: Optional[datetime] = None) -> datetime:
@@ -43,23 +107,45 @@ def _month_start_utc(now: Optional[datetime] = None) -> datetime:
     return datetime(n.year, n.month, 1)
 
 
-def _effective_plan_id() -> str:
-    raw = (getattr(settings, "SUBSCRIPTION_PLAN", None) or "free").lower().strip()
-    return raw if raw in _CAPS else "free"
-
-
-def _count_workspace_briefings_this_month(
+def _count_workspace_analyses_this_month(
     db: Session, workspace_id: str, month_start: datetime
 ) -> int:
-    n = db.query(func.count(Analysis.id))
-    n = n.join(Dataset, Analysis.dataset_id == Dataset.id)
-    n = n.join(Upload, Dataset.upload_id == Upload.id)
+    q = db.query(func.count(Analysis.id))
+    q = q.join(Dataset, Analysis.dataset_id == Dataset.id)
+    q = q.join(Upload, Dataset.upload_id == Upload.id)
     return int(
-        n.filter(
+        q.filter(
             Upload.workspace_id == workspace_id,
-            Analysis.type == "workspace_overview",
+            Analysis.type.in_(_ANALYSIS_TYPES_FOR_CAP),
             Analysis.created_at >= month_start,
         ).scalar()
+        or 0
+    )
+
+
+def _count_user_analyses_all_time(db: Session, user_id: str) -> int:
+    q = db.query(func.count(Analysis.id))
+    q = q.join(Dataset, Analysis.dataset_id == Dataset.id)
+    q = q.join(Upload, Dataset.upload_id == Upload.id)
+    q = q.join(Workspace, Upload.workspace_id == Workspace.id)
+    return int(
+        q.filter(
+            Workspace.owner_id == user_id,
+            Analysis.type.in_(_ANALYSIS_TYPES_FOR_CAP),
+        ).scalar()
+        or 0
+    )
+
+
+def _count_user_completed_uploads_all_time(db: Session, user_id: str) -> int:
+    return int(
+        db.query(func.count(Upload.id))
+        .join(Workspace, Upload.workspace_id == Workspace.id)
+        .filter(
+            Workspace.owner_id == user_id,
+            Upload.status == UploadStatus.completed,
+        )
+        .scalar()
         or 0
     )
 
@@ -79,10 +165,36 @@ def _count_workspace_uploads_this_month(
     )
 
 
+def _count_user_chat_user_messages(
+    db: Session,
+    user_id: str,
+    month_start: Optional[datetime] = None,
+) -> int:
+    q = (
+        db.query(func.count(ChatMessage.id))
+        .join(Dataset, ChatMessage.dataset_id == Dataset.id)
+        .join(Upload, Dataset.upload_id == Upload.id)
+        .join(Workspace, Upload.workspace_id == Workspace.id)
+        .filter(Workspace.owner_id == user_id, ChatMessage.role == "user")
+    )
+    if month_start is not None:
+        q = q.filter(ChatMessage.created_at >= month_start)
+    return int(q.scalar() or 0)
+
+
 def _count_timeline_snapshots(db: Session, workspace_id: str) -> int:
     return int(
         db.query(func.count(WorkspaceTimelineSnapshot.id))
         .filter(WorkspaceTimelineSnapshot.workspace_id == workspace_id)
+        .scalar()
+        or 0
+    )
+
+
+def _owned_workspace_count(db: Session, user_id: str) -> int:
+    return int(
+        db.query(func.count(Workspace.id))
+        .filter(Workspace.owner_id == user_id)
         .scalar()
         or 0
     )
@@ -107,31 +219,50 @@ def build_workspace_usage_payload(
     user: User,
     workspace_id: str,
 ) -> dict[str, Any]:
-    _ = user.id  # future: per-account plan from billing
-    plan = _effective_plan_id()
-    caps = _CAPS[plan]
+    plan = get_effective_plan(db, user)
     month_start = _month_start_utc()
     last_day = monthrange(month_start.year, month_start.month)[1]
     month_end = datetime(month_start.year, month_start.month, last_day) + timedelta(days=1)
-
-    analyses_used = _count_workspace_briefings_this_month(db, workspace_id, month_start)
-    uploads_used = _count_workspace_uploads_this_month(db, workspace_id, month_start)
+    hist_cap = history_periods_cap(plan)
     snapshots = _count_timeline_snapshots(db, workspace_id)
 
-    hp = caps.get("history_periods")
-    hist_cap = 0 if hp == 0 else (hp if hp is not None else 3)
-    periods_highlight = min(snapshots, hist_cap) if snapshots and hist_cap > 0 else 0
+    if plan == "free":
+        analyses_used = _count_user_analyses_all_time(db, user.id)
+        uploads_used = _count_user_completed_uploads_all_time(db, user.id)
+        analyses_limit = _FREE_LIFETIME["analyses"]
+        uploads_limit = _FREE_LIFETIME["uploads"]
+        meter_period_label = "lifetime (Free)"
+        analyses_label = "analyses (lifetime)"
+        uploads_label = "uploads (lifetime)"
+    else:
+        analyses_used = _count_workspace_analyses_this_month(db, workspace_id, month_start)
+        uploads_used = _count_workspace_uploads_this_month(db, workspace_id, month_start)
+        caps = _MONTHLY_CAPS.get(plan, _MONTHLY_CAPS["starter"])
+        analyses_limit = caps["analyses"]
+        uploads_limit = caps["uploads"]
+        meter_period_label = "this month"
+        analyses_label = "analyses this month"
+        uploads_label = "uploads this month"
 
-    meter_a = _meter(analyses_used, caps.get("analyses_per_month"))
-    meter_u = _meter(uploads_used, caps.get("uploads_per_month"))
+    periods_highlight = min(snapshots, hist_cap) if snapshots and hist_cap > 0 else 0
+    meter_a = _meter(analyses_used, analyses_limit)
+    meter_u = _meter(uploads_used, uploads_limit)
+
+    chat_cap = _CHAT_USER_CAPS.get(plan, 3)
+    chat_used = (
+        _count_user_chat_user_messages(db, user.id, None)
+        if plan == "free"
+        else _count_user_chat_user_messages(db, user.id, month_start)
+    )
+    meter_chat = _meter(chat_used, chat_cap)
 
     nudges: list[dict[str, str]] = []
     if meter_a and meter_a["approaching"]:
         nudges.append({
             "tone": "approaching" if meter_a["at_limit"] else "soft",
             "message": (
-                f"You've used {analyses_used}/{meter_a['limit']} workspace analyses "
-                f"this month—higher plans include more monthly runs."
+                f"You've used {analyses_used}/{meter_a['limit']} {analyses_label}—"
+                f"higher plans include more runs."
             ),
             "href": "/pricing",
         })
@@ -139,8 +270,16 @@ def build_workspace_usage_payload(
         nudges.append({
             "tone": "approaching" if meter_u["at_limit"] else "soft",
             "message": (
-                f"You've used {uploads_used}/{meter_u['limit']} uploads "
-                f"this month on {_PLAN_LABELS.get(plan, plan)}."
+                f"You've used {uploads_used}/{meter_u['limit']} {uploads_label} "
+                f"on {_PLAN_LABELS.get(plan, plan)}."
+            ),
+            "href": "/pricing",
+        })
+    if meter_chat and meter_chat["approaching"] and len(nudges) < 2:
+        nudges.append({
+            "tone": "approaching" if meter_chat["at_limit"] else "soft",
+            "message": (
+                f"Chat: {chat_used}/{meter_chat['limit']} messages ({meter_period_label.strip('()')})."
             ),
             "href": "/pricing",
         })
@@ -152,19 +291,17 @@ def build_workspace_usage_payload(
             ),
             "href": "/pricing",
         })
-    elif plan == "free" and snapshots > hist_cap and hist_cap > 0 and len(nudges) < 2:
+    elif plan == "starter" and len(nudges) < 2:
         nudges.append({
-            "tone": "soft",
-            "message": (
-                "Upgrade to track more historical data—Pro keeps a longer comparison window."
-            ),
+            "tone": "whisper",
+            "message": "Pro adds weekly summaries, alerts, and more workspaces.",
             "href": "/pricing",
         })
     if plan == "free" and len(nudges) == 0:
         nudges.append({
             "tone": "whisper",
             "message": (
-                "Pro unlocks higher monthly limits and deeper history for alerts and briefings."
+                "Upgrade for monthly data limits, history, and full AI briefings."
             ),
             "href": "/pricing",
         })
@@ -180,17 +317,20 @@ def build_workspace_usage_payload(
     return {
         "plan_id": plan,
         "plan_label": _PLAN_LABELS.get(plan, plan.title()),
+        "meter_period_label": meter_period_label,
         "period_start": month_start.date().isoformat(),
         "period_end": month_end.date().isoformat(),
         "limits": {
-            "analyses_per_month": caps.get("analyses_per_month"),
-            "uploads_per_month": caps.get("uploads_per_month"),
+            "analyses_cap": analyses_limit,
+            "uploads_cap": uploads_limit,
             "history_periods": hist_cap,
+            "chat_messages_cap": chat_cap,
         },
         "usage": {
-            "analyses_this_month": analyses_used,
-            "uploads_this_month": uploads_used,
+            "analyses_count": analyses_used,
+            "uploads_count": uploads_used,
             "timeline_snapshots": snapshots,
+            "chat_user_messages": chat_used,
         },
         "history": {
             "periods_cap": hist_cap,
@@ -201,6 +341,116 @@ def build_workspace_usage_payload(
         "meters": {
             "analyses": meter_a,
             "uploads": meter_u,
+            "chat": meter_chat,
         },
         "nudges": nudges[:2],
     }
+
+
+def assert_upload_allowed(db: Session, user: User, workspace_id: str) -> None:
+    plan = get_effective_plan(db, user)
+    if plan == "free":
+        used = _count_user_completed_uploads_all_time(db, user.id)
+        lim = _FREE_LIFETIME["uploads"]
+        if used >= lim:
+            raise_plan_limit(
+                plan,
+                "uploads",
+                f"Free plan allows {lim} data uploads total. Upgrade for more.",
+            )
+        return
+    caps = _MONTHLY_CAPS.get(plan)
+    if not caps:
+        return
+    lim = caps["uploads"]
+    month_start = _month_start_utc()
+    used = _count_workspace_uploads_this_month(db, workspace_id, month_start)
+    if used >= lim:
+        raise_plan_limit(
+            plan,
+            "uploads",
+            f"You've reached {lim} uploads this month on your plan.",
+        )
+
+
+def assert_analysis_allowed(db: Session, user: User, workspace_id: str) -> None:
+    plan = get_effective_plan(db, user)
+    if plan == "free":
+        used = _count_user_analyses_all_time(db, user.id)
+        lim = _FREE_LIFETIME["analyses"]
+        if used >= lim:
+            raise_plan_limit(
+                plan,
+                "analyses",
+                f"Free plan allows {lim} analysis runs total. Upgrade for more.",
+            )
+        return
+    caps = _MONTHLY_CAPS.get(plan)
+    if not caps:
+        return
+    lim = caps["analyses"]
+    if lim is None:
+        return
+    month_start = _month_start_utc()
+    used = _count_workspace_analyses_this_month(db, workspace_id, month_start)
+    if used >= lim:
+        raise_plan_limit(
+            plan,
+            "analyses",
+            f"You've reached {lim} analysis runs this month for this workspace.",
+        )
+
+
+def assert_workspace_create_allowed(db: Session, user: User) -> None:
+    plan = get_effective_plan(db, user)
+    mx = workspaces_max_for(plan)
+    n = _owned_workspace_count(db, user.id)
+    if n >= mx:
+        raise_plan_limit(
+            plan,
+            "workspaces",
+            f"Your plan allows up to {mx} workspace(s). Upgrade to add more.",
+        )
+
+
+def assert_timeline_allowed(db: Session, user: User) -> None:
+    plan = get_effective_plan(db, user)
+    if not plan_features(plan)["timeline"]:
+        raise_plan_limit(
+            plan,
+            "timeline",
+            "Timeline and history views require Starter or Pro.",
+        )
+
+
+def assert_summary_allowed(db: Session, user: User, kind: str) -> None:
+    plan = get_effective_plan(db, user)
+    feats = plan_features(plan)
+    if kind == "weekly" and not feats["weekly_summary"]:
+        raise_plan_limit(
+            plan,
+            "weekly_summary",
+            "Weekly summaries are available on Pro.",
+        )
+    if kind == "monthly" and not feats["monthly_summary"]:
+        raise_plan_limit(
+            plan,
+            "monthly_summary",
+            "Monthly summaries require a paid plan.",
+        )
+
+
+def assert_chat_allowed(db: Session, user: User) -> None:
+    plan = get_effective_plan(db, user)
+    cap = _CHAT_USER_CAPS.get(plan, 3)
+    if plan == "free":
+        used = _count_user_chat_user_messages(db, user.id, None)
+    else:
+        used = _count_user_chat_user_messages(db, user.id, _month_start_utc())
+    if used >= cap:
+        scope = "lifetime" if plan == "free" else "this month"
+        raise_plan_limit(
+            plan,
+            "chat",
+            f"Chat limit reached ({cap} messages {scope} on your plan).",
+        )

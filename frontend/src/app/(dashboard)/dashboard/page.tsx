@@ -22,7 +22,7 @@ import {
   type AnalysisResult,
 } from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
-import { api } from "@/lib/api";
+import { api, isApiPlanLimitError } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
   parseWorkspaceAnalysis,
@@ -680,6 +680,17 @@ export default function OverviewPage() {
           {runOverviewAnalysis.isError && (
             <p className="px-6 py-3 text-sm text-destructive border-t border-slate-100 dark:border-slate-800">
               {runOverviewAnalysis.error.message}
+              {isApiPlanLimitError(runOverviewAnalysis.error) ? (
+                <>
+                  {" "}
+                  <Link
+                    href="/pricing"
+                    className="font-medium text-destructive underline underline-offset-4"
+                  >
+                    View plans
+                  </Link>
+                </>
+              ) : null}
             </p>
           )}
         </div>

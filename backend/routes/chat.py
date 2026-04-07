@@ -17,6 +17,7 @@ from services.workspace_query import (
     get_dataset_upload_in_workspace,
 )
 from services.query_engine import QueryEngine
+from services.subscription_usage import assert_chat_allowed
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -118,7 +119,8 @@ def chat(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_chat_allowed(db, user)
     row = get_dataset_upload_in_workspace(db, req.dataset_id, workspace_id)
     if not row:
         raise HTTPException(404, "Dataset not found")
@@ -179,7 +181,8 @@ def workspace_chat(
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     """Chat across all datasets in the workspace."""
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_chat_allowed(db, user)
     all_pairs = dataset_upload_pairs_for_workspace(db, workspace_id).all()
 
     if not all_pairs:

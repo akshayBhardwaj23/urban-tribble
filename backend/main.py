@@ -10,6 +10,7 @@ from database import Base, SessionLocal, engine
 from routes import (
     analysis,
     auth,
+    billing,
     chat,
     dashboards,
     datasets,
@@ -125,11 +126,39 @@ def _ensure_dataset_business_classification_column() -> None:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN business_classification VARCHAR"))
 
 
+def _ensure_user_subscription_columns() -> None:
+    insp = inspect(engine)
+    if not insp.has_table("users"):
+        return
+    cols = {c["name"] for c in insp.get_columns("users")}
+    with engine.begin() as conn:
+        if "subscription_plan" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN subscription_plan VARCHAR DEFAULT 'free'"
+                )
+            )
+            conn.execute(text("UPDATE users SET subscription_plan = 'free' WHERE subscription_plan IS NULL"))
+        if "billing_provider" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN billing_provider VARCHAR"))
+        if "billing_customer_id" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN billing_customer_id VARCHAR"))
+        if "billing_subscription_id" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN billing_subscription_id VARCHAR"))
+        if "subscription_current_period_end" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN subscription_current_period_end DATETIME"
+                )
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Base.metadata.create_all(bind=engine)
     _ensure_dataset_dashboard_plan_column()
     _ensure_dataset_business_classification_column()
+    _ensure_user_subscription_columns()
     _backfill_upload_workspace_ids()
     _backfill_workspace_timeline_snapshots()
     yield
@@ -146,6 +175,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(billing.router)
 app.include_router(workspaces.router)
 app.include_router(uploads.router)
 app.include_router(datasets.router)

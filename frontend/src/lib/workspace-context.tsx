@@ -23,6 +23,8 @@ interface UserProfile {
   image: string | null;
   active_workspace_id: string | null;
   needs_onboarding: boolean;
+  subscription_plan?: string;
+  subscription_renews_at?: string | null;
   workspaces: Workspace[];
 }
 
@@ -111,7 +113,17 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Failed" }));
-        throw new Error(err.detail);
+        const d = err.detail;
+        if (
+          res.status === 403 &&
+          d &&
+          typeof d === "object" &&
+          !Array.isArray(d) &&
+          (d as { code?: string }).code === "plan_limit"
+        ) {
+          throw new Error(String((d as { message?: string }).message ?? "Plan limit"));
+        }
+        throw new Error(typeof d === "string" ? d : JSON.stringify(d));
       }
 
       const workspace: Workspace = await res.json();

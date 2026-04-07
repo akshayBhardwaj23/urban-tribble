@@ -286,6 +286,13 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 | POST | `/api/chat/workspace` | Multi-dataset; prior turns stored on first dataset with `[All Datasets] ` user prefix |
 | GET | `/api/chat/history/{dataset_id}` | Optional query `workspace=true` for workspace-only thread; requires workspace membership |
 
+### Billing (Razorpay)
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/api/billing/razorpay/checkout` | Body `{ "tier": "starter" \| "pro" }`; requires `X-User-Email`. Returns `{ short_url, subscription_id }` when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_PRO` are set. Otherwise **503**. |
+| POST | `/api/billing/razorpay/webhook` | **No auth.** Raw POST body + `X-Razorpay-Signature` (HMAC-SHA256 with `RAZORPAY_WEBHOOK_SECRET`). Use `X-Razorpay-Event-Id` (or payload `id`) for idempotency in `billing_webhook_events`. Subscription **activated** / **charged** / **resumed** (status `active`) sets `subscription_plan` from notes or plan id; **cancelled** / **completed** / **halted** / **expired** downgrades to `free`. |
+
 ### Other
 
 | Method | Path | Notes |
@@ -295,7 +302,7 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`api` object).
 
-**Subscription UI (soft limits):** `SUBSCRIPTION_PLAN` in config (`free` \| `starter` \| `pro`, default `free`) drives **`usage`** on `GET /api/dashboards/overview`—monthly workspace briefing counts, completed uploads, history-depth copy vs timeline snapshots, and optional **`nudges`** (link to `/pricing`). Caps in `backend/services/subscription_usage.py` align with marketing on **`/pricing`**; hard billing enforcement is not wired yet.
+**Subscriptions & enforcement:** Each `User` has `subscription_plan` (`free` \| `starter` \| `pro`, default `free`), migrated on startup via `main.py`. Billing fields: `billing_provider` (`razorpay` when using this integration), `billing_customer_id`, `billing_subscription_id`, `subscription_current_period_end` (from webhook `current_end` when present). Checkout is implemented in `backend/services/razorpay_service.py` + `routes/billing.py`; the **`/pricing`** page calls `POST /api/billing/razorpay/checkout` for paid tiers when the user is signed in. After payment, Razorpay sends webhooks to **`/api/billing/razorpay/webhook`** (public URL required—ngrok/Cloudflare Tunnel in dev). Env: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_PRO`, optional `RAZORPAY_SUBSCRIPTION_TOTAL_COUNT` (default 60 billing cycles). `FORCE_SUBSCRIPTION_PLAN` in backend `.env` overrides effective plan for QA (leave empty in production). Caps live in `backend/services/subscription_usage.py`: **Free** = lifetime uploads (2), analyses (2), chat user messages (3); **Starter/Pro** = monthly workspace meters and chat caps (50 / 200). **403** `plan_limit` shape is in `backend/services/plan_limits.py`. Overview feature gating: **Free** hides “what changed” and alerts; **Starter** has no weekly summaries or alerts; **Pro** is full. Timeline requires Starter+.
 
 ---
 
@@ -303,7 +310,7 @@ The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`a
 
 | Area | Route(s) | Primary APIs |
 |------|-----------|----------------|
-| Landing | `/`, `/pricing` | None (marketing) |
+| Landing | `/`, `/pricing` | `/pricing` paid CTAs → `POST /api/billing/razorpay/checkout` when logged in |
 | Login | `/login` | NextAuth |
 | Onboarding | `/onboarding` | `POST /api/workspaces` |
 | Overview | `/dashboard` | `GET /api/dashboards/overview` (incl. `recommended_actions`, `usage`, `habit_hints`), `GET/POST` overview analysis & forecast, `GET /api/summaries/latest` |

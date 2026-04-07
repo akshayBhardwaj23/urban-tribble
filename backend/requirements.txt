@@ -11,3 +11,4 @@ pyarrow
 python-dotenv
 httpx
 email-validator
+razorpay>=1.4.2,<3

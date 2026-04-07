@@ -52,3 +52,7 @@ docs/              Architecture documentation
 ```
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full system map: auth, storage, every major API, AI flows, and step-by-step examples.
+
+### Razorpay (optional)
+
+Subscriptions are wired to [Razorpay Plans](https://razorpay.com/docs/subscriptions/). In `backend/.env` set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_STARTER`, and `RAZORPAY_PLAN_PRO` (plan ids from the Razorpay Dashboard). Register the webhook URL `https://<your-api-host>/api/billing/razorpay/webhook` and enable subscription events. Without these variables, checkout returns **503** and the app stays plan-testable via `FORCE_SUBSCRIPTION_PLAN` or SQL.

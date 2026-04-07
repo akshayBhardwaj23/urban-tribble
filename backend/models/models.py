@@ -21,6 +21,15 @@ class LoginOtpChallenge(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class ProcessedBillingWebhookEvent(Base):
+    """Idempotency for Razorpay webhook deliveries (header event id or payload id)."""
+
+    __tablename__ = "billing_webhook_events"
+
+    event_id = Column(String, primary_key=True)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -30,6 +39,11 @@ class User(Base):
     image = Column(String, nullable=True)
     active_workspace_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    subscription_plan = Column(String, nullable=False, default="free")
+    billing_provider = Column(String, nullable=True)
+    billing_customer_id = Column(String, nullable=True)
+    billing_subscription_id = Column(String, nullable=True)
+    subscription_current_period_end = Column(DateTime, nullable=True)
 
 
 class Workspace(Base):
