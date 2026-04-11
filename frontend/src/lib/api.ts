@@ -115,6 +115,25 @@ export function isApiPlanLimitError(e: unknown): e is ApiPlanLimitError {
   return e instanceof ApiPlanLimitError;
 }
 
+/** Parse FastAPI 403 `plan_limit` from a `fetch` response body (non-`request()` calls). */
+export function planLimitErrorFromJson(
+  status: number,
+  body: { detail?: unknown }
+): ApiPlanLimitError | null {
+  const detail = body?.detail;
+  if (
+    status === 403 &&
+    detail &&
+    typeof detail === "object" &&
+    !Array.isArray(detail) &&
+    (detail as PlanLimitDetail).code === "plan_limit"
+  ) {
+    const pl = detail as PlanLimitDetail;
+    return new ApiPlanLimitError(pl, pl.message);
+  }
+  return null;
+}
+
 export type WorkspaceHabitHints = {
   last_activity_at: string | null;
   last_briefing_at: string | null;
@@ -245,6 +264,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ status: string }>("/health"),
+
+  getAuthMe: () =>
+    request<{
+      id: string;
+      email: string;
+      name: string | null;
+      image: string | null;
+      active_workspace_id: string | null;
+      subscription_plan?: string;
+      subscription_renews_at?: string | null;
+      workspaces: { id: string; name: string; created_at: string }[];
+    }>("/api/auth/me"),
 
   uploadFile: (file: File, description: string) => {
     const formData = new FormData();

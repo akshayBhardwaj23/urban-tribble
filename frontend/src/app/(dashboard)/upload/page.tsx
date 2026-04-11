@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CalendarRange,
@@ -18,8 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDropzone } from "@/components/upload/file-dropzone";
 import { ExpectedInputsList } from "@/components/upload/expected-inputs-list";
-import { api } from "@/lib/api";
+import { api, type PlanLimitDetail } from "@/lib/api";
 import type { UploadFileResult } from "@/components/upload/file-dropzone";
+import { useWorkspace } from "@/lib/workspace-context";
 import { cn } from "@/lib/utils";
 import {
   ANALYSIS_TEMPLATES,
@@ -40,14 +41,40 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
 export default function UploadPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
   const [flow, setFlow] = useState<FlowStep>("choose");
   const [guidedTemplate, setGuidedTemplate] = useState<AnalysisTemplate | null>(
     null
   );
 
+  const overviewEnabled =
+    !workspaceLoading && Boolean(activeWorkspace?.id);
+
+  const { data: overviewData } = useQuery({
+    queryKey: ["overview", activeWorkspace?.id ?? "none"],
+    queryFn: () => api.getOverview(),
+    enabled: overviewEnabled,
+  });
+
+  const uploadLimitCalloutDetail = useMemo((): PlanLimitDetail | null => {
+    const u = overviewData?.usage;
+    const mu = u?.meters?.uploads;
+    if (!u || !mu?.at_limit) return null;
+    const msg =
+      u.nudges.find((n) => /upload/i.test(n.message))?.message ??
+      `You've reached your plan's upload limit for ${u.meter_period_label}. Upgrade on the pricing page for more capacity.`;
+    return {
+      code: "plan_limit",
+      plan: u.plan_id,
+      limit: "uploads",
+      message: msg,
+    };
+  }, [overviewData]);
+
   const handleUpload = useCallback(
     async (file: File, description: string): Promise<UploadFileResult> => {
       const result = await api.uploadFile(file, description);
+      void queryClient.invalidateQueries({ queryKey: ["overview"] });
       return {
         dataset_id: result.dataset_id,
         ingestion: result.ingestion,
@@ -58,7 +85,7 @@ export default function UploadPage() {
         all_columns: result.all_columns,
       };
     },
-    []
+    [queryClient]
   );
 
   const handleContinue = useCallback(
@@ -288,6 +315,7 @@ export default function UploadPage() {
                     onUpload={handleUpload}
                     onContinue={handleContinue}
                     analysisTemplate={activeTemplate}
+                    uploadLimitCalloutDetail={uploadLimitCalloutDetail}
                   />
                 </CardContent>
               </Card>
@@ -337,6 +365,7 @@ export default function UploadPage() {
                     onUpload={handleUpload}
                     onContinue={handleContinue}
                     analysisTemplate={CUSTOM_ANALYSIS_TEMPLATE}
+                    uploadLimitCalloutDetail={uploadLimitCalloutDetail}
                   />
                 </CardContent>
               </Card>

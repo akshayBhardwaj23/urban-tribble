@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 
+import { planLimitErrorFromJson } from "@/lib/api";
+
 interface Workspace {
   id: string;
   name: string;
@@ -113,16 +115,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Failed" }));
+        const pl = planLimitErrorFromJson(res.status, err);
+        if (pl) throw pl;
         const d = err.detail;
-        if (
-          res.status === 403 &&
-          d &&
-          typeof d === "object" &&
-          !Array.isArray(d) &&
-          (d as { code?: string }).code === "plan_limit"
-        ) {
-          throw new Error(String((d as { message?: string }).message ?? "Plan limit"));
-        }
         throw new Error(typeof d === "string" ? d : JSON.stringify(d));
       }
 

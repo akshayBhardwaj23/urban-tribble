@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +13,7 @@ import { ThemeAppearanceSubmenu } from "@/components/theme-menu";
 
 export function UserMenu() {
   const { data: session } = useSession();
+  const router = useRouter();
 
   if (!session?.user) return null;
 
@@ -65,6 +67,13 @@ export function UserMenu() {
           <p className="text-sm font-medium truncate">{name}</p>
           <p className="text-xs text-muted-foreground truncate">{email}</p>
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/account")}>
+          Account & plan
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/pricing")}>
+          Pricing & upgrade
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <ThemeAppearanceSubmenu />
         <DropdownMenuSeparator />
