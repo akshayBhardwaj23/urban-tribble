@@ -125,11 +125,21 @@ export function PricingTierCTA({
           ? "Pro — monthly subscription (authorisation)"
           : "Starter — monthly subscription (authorisation)";
 
+      const userEmail = session.user.email ?? undefined;
+      const userName =
+        typeof session.user.name === "string" && session.user.name.trim()
+          ? session.user.name.trim()
+          : undefined;
+
       const rzp = new Ctor({
         key: key_id,
         subscription_id,
         name: PRODUCT_NAME,
         description,
+        prefill: {
+          ...(userEmail ? { email: userEmail } : {}),
+          ...(userName ? { name: userName } : {}),
+        },
         handler() {
           window.location.href = "/dashboard?subscription=started";
         },
@@ -149,6 +159,8 @@ export function PricingTierCTA({
       });
 
       rzp.open();
+      // Modal is open; re-enable the button so the label is not stuck on "Opening checkout…"
+      setBusy(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Checkout failed");
       setBusy(false);

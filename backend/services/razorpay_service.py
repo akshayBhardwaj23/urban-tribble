@@ -100,16 +100,19 @@ def create_subscription_checkout(db: Session, user: User, tier: str) -> dict[str
         raise RuntimeError("Razorpay is not configured")
 
     plan_id = _plan_id_for_tier(tier)
-    customer_id = _ensure_customer(db, user)
+    # Ensure Razorpay customer exists for support / future invoices (not required on subscription.create).
+    _ensure_customer(db, user)
     client = _client()
     now = int(time.time())
     expire_by = now + 7 * 86400
     total = max(1, int(settings.RAZORPAY_SUBSCRIPTION_TOTAL_COUNT))
 
+    # Do not pass customer_id here: linking a pre-created customer to a new subscription before
+    # mandate auth can trigger Razorpay "issue with the merchant" in Standard Checkout for some
+    # accounts. Customer is attached after authorisation; webhooks still resolve user via `notes`.
     sub = client.subscription.create(
         {
             "plan_id": plan_id,
-            "customer_id": customer_id,
             "total_count": total,
             "quantity": 1,
             "customer_notify": True,
