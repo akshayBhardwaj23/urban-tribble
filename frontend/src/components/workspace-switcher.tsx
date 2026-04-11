@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { useWorkspace } from "@/lib/workspace-context";
+import { isApiPlanLimitError, type PlanLimitDetail } from "@/lib/api";
+import { maxWorkspacesForPlan } from "@/lib/workspace-plan-limits";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,12 +23,20 @@ import { Input } from "@/components/ui/input";
 import { ChevronDown } from "lucide-react";
 
 export function WorkspaceSwitcher() {
-  const { activeWorkspace, workspaces, switchWorkspace, createWorkspace } =
+  const { activeWorkspace, workspaces, switchWorkspace, createWorkspace, profile } =
     useWorkspace();
   const showChevron = workspaces.length > 1;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createPlanLimit, setCreatePlanLimit] = useState<PlanLimitDetail | null>(
+    null
+  );
+
+  const plan = (profile?.subscription_plan ?? "free").toLowerCase();
+  const workspaceCap = maxWorkspacesForPlan(plan);
+  const atWorkspaceCap = workspaces.length >= workspaceCap;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,10 +44,19 @@ export function WorkspaceSwitcher() {
     if (!trimmed) return;
 
     setCreating(true);
+    setCreateError(null);
+    setCreatePlanLimit(null);
     try {
       await createWorkspace(trimmed);
       setNewName("");
       setDialogOpen(false);
+    } catch (err) {
+      if (isApiPlanLimitError(err)) {
+        setCreatePlanLimit(err.detail);
+        setCreateError(err.message);
+      } else {
+        setCreateError(err instanceof Error ? err.message : "Could not create workspace");
+      }
     } finally {
       setCreating(false);
     }
@@ -76,26 +96,64 @@ export function WorkspaceSwitcher() {
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+          <DropdownMenuItem
+            disabled={atWorkspaceCap}
+            onClick={() => {
+              if (!atWorkspaceCap) setDialogOpen(true);
+            }}
+            title={
+              atWorkspaceCap
+                ? `Your plan allows ${workspaceCap} workspace(s). Upgrade for more.`
+                : undefined
+            }
+          >
             New workspace
+            {atWorkspaceCap ? (
+              <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
+                Limit reached — see Plans
+              </span>
+            ) : null}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setCreateError(null);
+            setCreatePlanLimit(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New workspace</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="flex flex-col gap-4 mt-2">
+            {atWorkspaceCap ? (
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Your current plan allows up to {workspaceCap} workspace
+                {workspaceCap === 1 ? "" : "s"}. Upgrade to add more.
+              </p>
+            ) : null}
             <Input
               placeholder="Workspace name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               autoFocus
-              disabled={creating}
+              disabled={creating || atWorkspaceCap}
             />
-            <Button type="submit" disabled={creating || !newName.trim()}>
+            {createPlanLimit ? (
+              <PlanLimitCallout detail={createPlanLimit} />
+            ) : createError ? (
+              <p className="text-sm text-destructive">{createError}</p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={creating || !newName.trim() || atWorkspaceCap}
+            >
               {creating ? "Creating…" : "Create"}
             </Button>
           </form>

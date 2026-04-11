@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useDropzone } from "react-dropzone";
 import { ArrowRight, FileSpreadsheet, Sparkles, Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PlanLimitCallout } from "@/components/plan-limit-callout";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { isApiPlanLimitError, type PlanLimitDetail } from "@/lib/api";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { IngestionPipeline } from "@/components/upload/ingestion-pipeline";
@@ -41,6 +44,8 @@ interface FileEntry {
   description: string;
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
+  /** When upload failed with HTTP 403 plan_limit */
+  planLimitDetail?: PlanLimitDetail;
   result?: UploadFileResult;
 }
 
@@ -49,6 +54,8 @@ interface FileDropzoneProps {
   onContinue: (datasetIds: string[]) => void;
   /** Selected outcome on the upload page; shapes hints and optional context placeholders. */
   analysisTemplate?: AnalysisTemplate;
+  /** When overview usage shows uploads at plan cap; review step shows upgrade CTA. */
+  uploadLimitCalloutDetail?: PlanLimitDetail | null;
 }
 
 function OutcomeRibbon({ template }: { template: AnalysisTemplate }) {
@@ -89,6 +96,7 @@ export function FileDropzone({
   onUpload,
   onContinue,
   analysisTemplate = CUSTOM_ANALYSIS_TEMPLATE,
+  uploadLimitCalloutDetail = null,
 }: FileDropzoneProps) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [phase, setPhase] = useState<"configure" | "processing" | "review">(
@@ -188,10 +196,19 @@ export function FileDropzone({
         updateEntry(i, { status: "done", result });
         anySuccess = true;
       } catch (err) {
-        updateEntry(i, {
-          status: "error",
-          error: err instanceof Error ? err.message : "Upload failed",
-        });
+        if (isApiPlanLimitError(err)) {
+          updateEntry(i, {
+            status: "error",
+            error: err.message,
+            planLimitDetail: err.detail,
+          });
+        } else {
+          updateEntry(i, {
+            status: "error",
+            error: err instanceof Error ? err.message : "Upload failed",
+            planLimitDetail: undefined,
+          });
+        }
       }
     }
 
@@ -266,8 +283,25 @@ export function FileDropzone({
             </div>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Button type="button" variant="outline" size="sm" onClick={resetReviewAddMore}>
-              Add more files
+            <Link
+              href="/dashboard"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Workspace overview
+            </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={resetReviewAddMore}
+              disabled={Boolean(uploadLimitCalloutDetail)}
+              title={
+                uploadLimitCalloutDetail
+                  ? "Upload limit reached for your plan"
+                  : undefined
+              }
+            >
+              Import more files
             </Button>
             <Button
               type="button"
@@ -286,6 +320,10 @@ export function FileDropzone({
           </div>
         </div>
 
+        {uploadLimitCalloutDetail ? (
+          <PlanLimitCallout detail={uploadLimitCalloutDetail} />
+        ) : null}
+
         {!allFilesConfirmed && (
           <p className="text-xs text-muted-foreground text-center sm:text-left">
             Use the button on each card to confirm the read so briefings and charts match how you
@@ -299,10 +337,17 @@ export function FileDropzone({
             .map((e, idx) => (
               <div
                 key={`err-${e.file.name}-${idx}`}
-                className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm space-y-2"
               >
-                <span className="font-medium">{e.file.name}</span>
-                <span className="text-muted-foreground"> — {e.error}</span>
+                <div>
+                  <span className="font-medium">{e.file.name}</span>
+                  {e.planLimitDetail ? null : (
+                    <span className="text-muted-foreground"> — {e.error}</span>
+                  )}
+                </div>
+                {e.planLimitDetail ? (
+                  <PlanLimitCallout detail={e.planLimitDetail} />
+                ) : null}
               </div>
             ))}
 
@@ -349,7 +394,9 @@ export function FileDropzone({
                   <p className="text-xs text-muted-foreground">
                     {(entry.file.size / 1024).toFixed(1)} KB
                     {entry.status === "done" && " · Ready"}
-                    {entry.status === "error" && ` · ${entry.error}`}
+                    {entry.status === "error" &&
+                      !entry.planLimitDetail &&
+                      ` · ${entry.error}`}
                   </p>
                 </div>
               </div>
@@ -381,6 +428,9 @@ export function FileDropzone({
                 />
               </div>
             )}
+            {entry.status === "error" && entry.planLimitDetail ? (
+              <PlanLimitCallout detail={entry.planLimitDetail} compact />
+            ) : null}
           </div>
         ))}
 
