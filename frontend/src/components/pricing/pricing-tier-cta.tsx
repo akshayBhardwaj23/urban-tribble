@@ -9,6 +9,20 @@ import { cn } from "@/lib/utils";
 
 type PlanId = "free" | "starter" | "pro";
 
+/** Razorpay may return api.razorpay.com links that fail in-browser; checkout host serves the UI. */
+function normalizeRazorpayCheckoutUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "api.razorpay.com" && u.pathname.includes("/subscriptions/")) {
+      u.hostname = "checkout.razorpay.com";
+      return u.toString();
+    }
+  } catch {
+    /* ignore */
+  }
+  return url;
+}
+
 export function PricingTierCTA({
   planId,
   cta,
@@ -51,7 +65,7 @@ export function PricingTierCTA({
     try {
       setApiUserEmail(session.user.email);
       const { short_url } = await api.razorpayCheckout(planId);
-      window.location.href = short_url;
+      window.location.href = normalizeRazorpayCheckoutUrl(short_url);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Checkout failed");
       setBusy(false);

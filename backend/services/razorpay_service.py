@@ -7,6 +7,7 @@ import logging
 import time
 from datetime import datetime
 from typing import Any, Optional
+from urllib.parse import urlparse, urlunparse
 
 import razorpay
 from razorpay.errors import SignatureVerificationError
@@ -56,6 +57,18 @@ def _tier_from_razorpay_plan_id(plan_id: Optional[str]) -> Optional[str]:
     return None
 
 
+def _normalize_subscription_short_url(short_url: str) -> str:
+    """Razorpay sometimes returns ``api.razorpay.com`` ``short_url`` values that render
+    *Hosted page is not available* in a normal browser session. The subscription auth UI
+    is served from ``checkout.razorpay.com`` — swap the host when the path is a checkout link.
+    """
+    u = short_url.strip()
+    parsed = urlparse(u)
+    if parsed.netloc == "api.razorpay.com" and "/subscriptions/" in parsed.path:
+        return urlunparse(parsed._replace(netloc="checkout.razorpay.com"))
+    return u
+
+
 def _ensure_customer(db: Session, user: User) -> str:
     if user.billing_customer_id:
         return user.billing_customer_id
@@ -98,18 +111,25 @@ def create_subscription_checkout(db: Session, user: User, tier: str) -> dict[str
             "plan_id": plan_id,
             "customer_id": customer_id,
             "total_count": total,
-            "customer_notify": 1,
+            "quantity": 1,
+            "customer_notify": True,
             "expire_by": expire_by,
+            "notify_info": {
+                "notify_email": user.email,
+            },
             "notes": {
                 "clarus_user_id": str(user.id),
                 "clarus_plan": str(tier),
             },
         }
     )
-    short_url = sub.get("short_url")
+    raw_short = sub.get("short_url")
     sub_id = sub.get("id")
-    if not short_url or not sub_id:
+    if not raw_short or not sub_id:
         raise RuntimeError("Razorpay subscription.create missing short_url or id")
+    short_url = _normalize_subscription_short_url(str(raw_short))
+    if short_url != raw_short:
+        logger.info("Normalized Razorpay subscription short_url host for browser checkout")
 
     user.billing_subscription_id = sub_id
     user.billing_provider = "razorpay"
