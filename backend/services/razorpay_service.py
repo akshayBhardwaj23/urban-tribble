@@ -137,7 +137,12 @@ def create_subscription_checkout(db: Session, user: User, tier: str) -> dict[str
     db.commit()
     db.refresh(user)
 
-    return {"short_url": str(short_url), "subscription_id": str(sub_id)}
+    return {
+        "short_url": str(short_url),
+        "subscription_id": str(sub_id),
+        # Public key — required for Razorpay Standard Checkout (subscription auth); do not use short_url redirect alone.
+        "key_id": settings.RAZORPAY_KEY_ID.strip(),
+    }
 
 
 def verify_and_parse_webhook(raw_body: bytes, signature: str) -> dict[str, Any]:

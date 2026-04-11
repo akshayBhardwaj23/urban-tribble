@@ -30,7 +30,7 @@ def razorpay_checkout(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    """Create a Razorpay subscription and return the hosted `short_url` for payment."""
+    """Create a Razorpay subscription; returns `key_id` + `subscription_id` for Standard Checkout (and `short_url` fallback)."""
     if not razorpay_configured():
         raise HTTPException(
             503,

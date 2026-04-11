@@ -696,7 +696,11 @@ export const api = {
     ),
 
   razorpayCheckout: (tier: "starter" | "pro") =>
-    request<{ short_url: string; subscription_id: string }>(
+    request<{
+      short_url: string;
+      subscription_id: string;
+      key_id: string;
+    }>(
       "/api/billing/razorpay/checkout",
       {
         method: "POST",

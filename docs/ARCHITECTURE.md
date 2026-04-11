@@ -290,7 +290,7 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/api/billing/razorpay/checkout` | Body `{ "tier": "starter" \| "pro" }`; requires `X-User-Email`. Returns `{ short_url, subscription_id }` when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_PRO` are set. Otherwise **503**. |
+| POST | `/api/billing/razorpay/checkout` | Body `{ "tier": "starter" \| "pro" }`; requires `X-User-Email`. Returns `{ key_id, subscription_id, short_url }` (`key_id` + `subscription_id` drive Razorpay Standard Checkout on `/pricing`; `short_url` is fallback). Otherwise **503**. |
 | POST | `/api/billing/razorpay/webhook` | **No auth.** Raw POST body + `X-Razorpay-Signature` (HMAC-SHA256 with `RAZORPAY_WEBHOOK_SECRET`). Use `X-Razorpay-Event-Id` (or payload `id`) for idempotency in `billing_webhook_events`. Subscription **activated** / **charged** / **resumed** (status `active`) sets `subscription_plan` from notes or plan id; **cancelled** / **completed** / **halted** / **expired** downgrades to `free`. |
 
 ### Other
