@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +35,9 @@ import {
   TimeframeToolbar,
   type TimeframeValue,
 } from "@/components/dashboard/timeframe-toolbar";
-import { api } from "@/lib/api";
+import { PlanLimitCallout } from "@/components/plan-limit-callout";
+import { api, isApiPlanLimitError } from "@/lib/api";
+import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
   buildDatasetAiTraceContext,
@@ -64,13 +68,28 @@ function dashboardRequestToApi(
 export default function DatasetPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { activeWorkspace } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [appendDialogOpen, setAppendDialogOpen] = useState(false);
   const [timeframe, setTimeframe] = useState<TimeframeValue>({ preset: "all" });
+
+  const overviewEnabled =
+    !workspaceLoading && Boolean(activeWorkspace?.id);
+
+  const overviewQuery = useQuery({
+    queryKey: ["overview", activeWorkspace?.id ?? "none"],
+    queryFn: () => api.getOverview(),
+    enabled: overviewEnabled,
+  });
+
+  const analysesLimitDetail = useMemo(
+    () => analysesLimitDetailFromUsage(overviewQuery.data?.usage),
+    [overviewQuery.data?.usage]
+  );
+  const analysesAtLimit = Boolean(analysesLimitDetail);
 
   const dataset = useQuery({
     queryKey: ["dataset", params.id],
@@ -117,6 +136,28 @@ export default function DatasetPage() {
     mutationFn: () => api.runAnalysis(params.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["analysis", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["overview"] });
+      toast.success("Briefing finished", {
+        description: "Open the Briefing tab to read the full results.",
+      });
+    },
+    onError: (err) => {
+      if (isApiPlanLimitError(err)) {
+        toast.error("Analysis limit reached", {
+          description: err.detail.message,
+          action: {
+            label: "View plans",
+            onClick: () => {
+              window.location.assign("/pricing");
+            },
+          },
+        });
+      } else {
+        toast.error("Briefing could not run", {
+          description:
+            err instanceof Error ? err.message : "Something went wrong. Try again.",
+        });
+      }
     },
   });
 
@@ -303,7 +344,12 @@ export default function DatasetPage() {
             <Button
               size="sm"
               onClick={() => runAnalysis.mutate()}
-              disabled={runAnalysis.isPending}
+              disabled={runAnalysis.isPending || analysesAtLimit}
+              title={
+                analysesAtLimit
+                  ? "Your plan's analysis allowance is used up for this period."
+                  : undefined
+              }
             >
               {runAnalysis.isPending
                 ? "Running…"
@@ -320,6 +366,10 @@ export default function DatasetPage() {
           </Button>
         </div>
       </div>
+
+      {analysesLimitDetail && !analysis.data ? (
+        <PlanLimitCallout detail={analysesLimitDetail} />
+      ) : null}
 
       <div className="dashboard-glass-panel px-5 py-4">
         <TimeframeToolbar
@@ -496,17 +546,42 @@ export default function DatasetPage() {
                 <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
                   {DATASET_ANALYSIS_EMPTY_INVITE}
                 </p>
-                <Button
-                  onClick={() => runAnalysis.mutate()}
-                  disabled={runAnalysis.isPending}
-                >
-                  {runAnalysis.isPending
-                    ? "Running…"
-                    : "Run briefing"}
-                </Button>
+                {analysesLimitDetail ? (
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                    Briefings use an analysis run from your plan. Your allowance is full—see the
+                    notice under the page title, or{" "}
+                    <Link
+                      href="/pricing"
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
+                      view pricing
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <Button
+                    onClick={() => runAnalysis.mutate()}
+                    disabled={runAnalysis.isPending}
+                  >
+                    {runAnalysis.isPending
+                      ? "Running…"
+                      : "Run briefing"}
+                  </Button>
+                )}
                 {runAnalysis.isError && (
-                  <p className="text-sm text-destructive mt-2">
+                  <p className="text-sm text-destructive mt-2 max-w-md mx-auto">
                     {runAnalysis.error.message}
+                    {isApiPlanLimitError(runAnalysis.error) ? (
+                      <>
+                        {" "}
+                        <Link
+                          href="/pricing"
+                          className="font-medium underline underline-offset-4"
+                        >
+                          View plans
+                        </Link>
+                      </>
+                    ) : null}
                   </p>
                 )}
               </CardContent>

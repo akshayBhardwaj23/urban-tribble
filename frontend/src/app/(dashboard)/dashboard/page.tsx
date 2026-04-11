@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +24,7 @@ import {
 } from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
 import { api, isApiPlanLimitError } from "@/lib/api";
+import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
   parseWorkspaceAnalysis,
@@ -50,6 +52,7 @@ import { WhatChangedSection } from "@/components/dashboard/what-changed-section"
 import { LatestSummaryCard } from "@/components/dashboard/latest-summary-card";
 import { AlertsSignalsSection } from "@/components/dashboard/alerts-signals-section";
 import { RecommendedActionsSection } from "@/components/dashboard/recommended-actions-section";
+import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { WorkspaceUsageStrip } from "@/components/dashboard/workspace-usage-strip";
 
 function formatWorkspaceActivity(iso: string | null | undefined): string | null {
@@ -168,6 +171,29 @@ export default function OverviewPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["overview-analysis"] });
       queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["overview"] });
+      toast.success("Workspace briefing finished", {
+        description:
+          "Operator summary and charts below now reflect this run. Open Full briefing for more depth.",
+      });
+    },
+    onError: (err) => {
+      if (isApiPlanLimitError(err)) {
+        toast.error("Analysis limit reached", {
+          description: err.detail.message,
+          action: {
+            label: "View plans",
+            onClick: () => {
+              window.location.assign("/pricing");
+            },
+          },
+        });
+      } else {
+        toast.error("Briefing could not run", {
+          description:
+            err instanceof Error ? err.message : "Something went wrong. Try again.",
+        });
+      }
     },
   });
 
@@ -314,6 +340,9 @@ export default function OverviewPage() {
   if (!data || data.total_datasets === 0) {
     const emptyHints = data?.habit_hints;
     const emptyUpdated = formatWorkspaceActivity(emptyHints?.last_activity_at);
+    const emptyAnalysesCap = data
+      ? analysesLimitDetailFromUsage(data.usage)
+      : null;
     return (
       <div className="space-y-6 max-w-6xl">
         <div>
@@ -342,6 +371,9 @@ export default function OverviewPage() {
           )}
         </div>
         <WorkspaceUsageStrip usage={data?.usage} className="max-w-6xl" />
+        {emptyAnalysesCap ? (
+          <PlanLimitCallout detail={emptyAnalysesCap} className="max-w-6xl" />
+        ) : null}
         <Card className="border-slate-200/80 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-14 text-center">
             <p className="text-sm text-muted-foreground mb-4 max-w-md">
@@ -370,6 +402,10 @@ export default function OverviewPage() {
   const analysisReady = !!analysis;
   const analysisBusy =
     overviewAnalysis.isLoading || runOverviewAnalysis.isPending;
+
+  const analysesLimitDetail = analysesLimitDetailFromUsage(data.usage);
+  const analysesAtLimit = Boolean(analysesLimitDetail);
+  const briefingActionsDisabled = analysisBusy || analysesAtLimit;
 
   const noInsightCopy = WORKSPACE_NO_BRIEFING_YET;
   const habits = data.habit_hints;
@@ -449,7 +485,12 @@ export default function OverviewPage() {
               variant="secondary"
               className="rounded-lg"
               onClick={() => runOverviewAnalysis.mutate()}
-              disabled={analysisBusy}
+              disabled={briefingActionsDisabled}
+              title={
+                analysesAtLimit
+                  ? "Your plan's analysis allowance is used up for this period. Upgrade on Pricing to run more."
+                  : undefined
+              }
             >
               {runOverviewAnalysis.isPending
                 ? "Running briefing…"
@@ -472,6 +513,10 @@ export default function OverviewPage() {
 
       <WorkspaceUsageStrip usage={data.usage} className="max-w-6xl" />
 
+      {analysesLimitDetail ? (
+        <PlanLimitCallout detail={analysesLimitDetail} className="max-w-6xl" />
+      ) : null}
+
       <LatestSummaryCard className="max-w-6xl" />
 
       <AlertsSignalsSection
@@ -485,6 +530,7 @@ export default function OverviewPage() {
         briefingAvailable={analysisReady}
         onRunBriefing={() => runOverviewAnalysis.mutate()}
         briefingBusy={analysisBusy}
+        analysesCapDetail={analysesLimitDetail}
         className="max-w-6xl"
       />
 
@@ -912,7 +958,12 @@ export default function OverviewPage() {
                 size="sm"
                 className="rounded-lg mb-4"
                 onClick={() => runOverviewAnalysis.mutate()}
-                disabled={runOverviewAnalysis.isPending}
+                disabled={briefingActionsDisabled}
+                title={
+                  analysesAtLimit
+                    ? "Your plan's analysis allowance is used up for this period."
+                    : undefined
+                }
               >
                 {runOverviewAnalysis.isPending
                   ? "Running…"
