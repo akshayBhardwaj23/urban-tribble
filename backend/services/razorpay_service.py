@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import time
@@ -57,6 +59,21 @@ def _tier_from_razorpay_plan_id(plan_id: Optional[str]) -> Optional[str]:
     return None
 
 
+def verify_subscription_auth_signature(
+    razorpay_payment_id: str,
+    razorpay_subscription_id: str,
+    razorpay_signature: str,
+) -> bool:
+    """Razorpay Standard Checkout (subscription): HMAC-SHA256(payment_id|subscription_id, key_secret).
+
+    See https://razorpay.com/docs/payments/subscriptions/integration-guide/#payment-verification
+    """
+    secret = settings.RAZORPAY_KEY_SECRET.strip().encode("utf-8")
+    msg = f"{razorpay_payment_id}|{razorpay_subscription_id}".encode("utf-8")
+    digest = hmac.new(secret, msg, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(digest, razorpay_signature.strip())
+
+
 def _normalize_subscription_short_url(short_url: str) -> str:
     """Razorpay sometimes returns ``api.razorpay.com`` ``short_url`` values that render
     *Hosted page is not available* in a normal browser session. The subscription auth UI
@@ -110,16 +127,16 @@ def create_subscription_checkout(db: Session, user: User, tier: str) -> dict[str
     # Do not pass customer_id here: linking a pre-created customer to a new subscription before
     # mandate auth can trigger Razorpay "issue with the merchant" in Standard Checkout for some
     # accounts. Customer is attached after authorisation; webhooks still resolve user via `notes`.
+    # customer_notify=False: we open Standard Checkout in the app; Razorpay "complete payment"
+    # emails for a still-failing checkout confuse users (subscription is already in `created`).
+    # Set True + notify_info if you want Razorpay to email payment links instead of/in addition to Checkout.
     sub = client.subscription.create(
         {
             "plan_id": plan_id,
             "total_count": total,
             "quantity": 1,
-            "customer_notify": True,
+            "customer_notify": False,
             "expire_by": expire_by,
-            "notify_info": {
-                "notify_email": user.email,
-            },
             "notes": {
                 "clarus_user_id": str(user.id),
                 "clarus_plan": str(tier),
