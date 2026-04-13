@@ -30,9 +30,12 @@ function MiniMeter({ meter }: { meter: WorkspaceUsageMeterDetail }) {
 function MeterLine({
   label,
   meter,
+  periodLabel,
 }: {
   label: string;
   meter: WorkspaceUsageMeterDetail | null;
+  /** Shown after used/limit, e.g. "this month" or "lifetime (Free)" */
+  periodLabel: string;
 }) {
   if (!meter) {
     return (
@@ -48,7 +51,7 @@ function MeterLine({
         <span className="tabular-nums text-foreground/90 font-medium">
           {meter.used}/{meter.limit}
         </span>
-        <span className="text-muted-foreground/90"> this month</span>
+        <span className="text-muted-foreground/90"> {periodLabel}</span>
       </span>
       <MiniMeter meter={meter} />
     </span>
@@ -76,11 +79,27 @@ export function WorkspaceUsageStrip({
           <span className="rounded-md border border-border/70 bg-background/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/80">
             {usage.plan_label}
           </span>
-          <MeterLine label="Analyses" meter={usage.meters.analyses} />
+          <MeterLine
+            label="Analyses"
+            meter={usage.meters.analyses}
+            periodLabel={usage.meter_period_label}
+          />
           <span className="hidden sm:inline text-border/80" aria-hidden>
             ·
           </span>
-          <MeterLine label="Uploads" meter={usage.meters.uploads} />
+          <MeterLine
+            label="Uploads"
+            meter={usage.meters.uploads}
+            periodLabel={usage.meter_period_label}
+          />
+          <span className="hidden sm:inline text-border/80" aria-hidden>
+            ·
+          </span>
+          <MeterLine
+            label="Chat"
+            meter={usage.meters.chat}
+            periodLabel={usage.meter_period_label}
+          />
         </div>
         <p className="text-[11px] text-muted-foreground leading-snug sm:max-w-[20rem] sm:text-right">
           {usage.history.summary}

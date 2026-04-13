@@ -15,6 +15,14 @@ from utils.email_norm import normalize_email, user_by_email_ci
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _profile_billing_fields(user: User) -> dict:
+    end = user.subscription_current_period_end
+    return {
+        "subscription_plan": getattr(user, "subscription_plan", None) or "free",
+        "subscription_renews_at": end.isoformat() if end else None,
+    }
+
+
 class SyncUserRequest(BaseModel):
     email: str
     name: Optional[str] = None
@@ -63,6 +71,7 @@ def otp_verify(req: OtpVerifyRequest, db: Session = Depends(get_db)):
         "email": user.email,
         "name": user.name,
         "image": user.image,
+        **_profile_billing_fields(user),
     }
 
 
@@ -105,6 +114,7 @@ def sync_user(req: SyncUserRequest, db: Session = Depends(get_db)):
         "image": user.image,
         "active_workspace_id": user.active_workspace_id,
         "needs_onboarding": len(workspaces) == 0,
+        **_profile_billing_fields(user),
         "workspaces": [
             {"id": w.id, "name": w.name, "created_at": w.created_at.isoformat()}
             for w in workspaces
@@ -135,6 +145,7 @@ def get_me(
         "name": user.name,
         "image": user.image,
         "active_workspace_id": user.active_workspace_id,
+        **_profile_billing_fields(user),
         "workspaces": [
             {"id": w.id, "name": w.name, "created_at": w.created_at.isoformat()}
             for w in workspaces

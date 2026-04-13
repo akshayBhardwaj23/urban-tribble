@@ -15,6 +15,7 @@ from services.file_processor import FileProcessor
 from services.ingestion_classifier import build_ingestion_profile
 from services.upload_io import save_upload_stream_limited
 from services.upload_rate_limit import check_upload_rate_limit
+from services.subscription_usage import assert_upload_allowed
 from services.workspace_timeline import record_upload_snapshot
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
@@ -34,6 +35,7 @@ async def create_upload(
 ):
     user, workspace_id = ws
     check_upload_rate_limit(user.email)
+    assert_upload_allowed(db, user, workspace_id)
 
     ext = Path(file.filename or "").suffix.lower()
     if ext not in settings.ALLOWED_EXTENSIONS:

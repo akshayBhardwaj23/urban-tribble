@@ -52,3 +52,11 @@ docs/              Architecture documentation
 ```
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full system map: auth, storage, every major API, AI flows, and step-by-step examples.
+
+### Razorpay (optional)
+
+Subscriptions are wired to [Razorpay Plans](https://razorpay.com/docs/subscriptions/). In `backend/.env` set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_STARTER`, and `RAZORPAY_PLAN_PRO` (plan ids from the Razorpay Dashboard). Register the webhook URL `https://<your-api-host>/api/billing/razorpay/webhook` and enable subscription events. Without these variables, checkout returns **503** and the app stays plan-testable via `FORCE_SUBSCRIPTION_PLAN` or SQL.
+
+**Checkout UX:** The pricing page opens **Razorpay Standard Checkout** in a modal (`checkout.js`) using your public `key_id` and the new `subscription_id` (Razorpay’s documented flow). It only falls back to redirecting via `short_url` if the script cannot load.
+
+**If checkout shows “This payment has failed due to an issue with the merchant”** (inside the Razorpay modal), that message comes from Razorpay’s servers, not the app. Typical causes: **(1)** Razorpay account not fully **activated / KYC-complete** for the mode you are using; **(2)** **`RAZORPAY_KEY_ID` / secret** are **test** but **plans** (`RAZORPAY_PLAN_*`) were created in **live** (or the opposite); **(3)** plan id wrong, plan **paused**, or **currency** does not match your account; **(4)** Subscriptions product not enabled for the merchant (Dashboard → **Subscriptions** / support). After fixing Dashboard or `.env`, redeploy the API and try again. Razorpay support can confirm hidden account flags for subscription checkout in production.

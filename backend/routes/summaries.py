@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from deps import require_active_workspace
 from models.models import User
+from services.subscription_usage import assert_summary_allowed, get_effective_plan, plan_features
 from services.recurring_summary import (
     ensure_summary_for_period,
     list_summary_history,
@@ -31,15 +32,21 @@ def get_latest_summaries(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
+    plan = get_effective_plan(db, user)
+    feats = plan_features(plan)
     weekly = None
     monthly = None
     if ensure:
-        weekly = ensure_summary_for_period(db, workspace_id, "weekly")
-        monthly = ensure_summary_for_period(db, workspace_id, "monthly")
+        if feats["weekly_summary"]:
+            weekly = ensure_summary_for_period(db, workspace_id, "weekly")
+        if feats["monthly_summary"]:
+            monthly = ensure_summary_for_period(db, workspace_id, "monthly")
     else:
-        weekly = latest_stored_summary(db, workspace_id, "weekly")
-        monthly = latest_stored_summary(db, workspace_id, "monthly")
+        if feats["weekly_summary"]:
+            weekly = latest_stored_summary(db, workspace_id, "weekly")
+        if feats["monthly_summary"]:
+            monthly = latest_stored_summary(db, workspace_id, "monthly")
     return {
         "weekly": serialize_summary_row(weekly) if weekly else None,
         "monthly": serialize_summary_row(monthly) if monthly else None,
@@ -55,7 +62,8 @@ def get_summary_history(
 ):
     if kind not in ("weekly", "monthly"):
         raise HTTPException(400, "kind must be weekly or monthly")
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_summary_allowed(db, user, kind)
     rows = list_summary_history(db, workspace_id, kind, limit)
     return {"kind": kind, "items": [serialize_summary_row(r) for r in rows]}
 
@@ -68,7 +76,8 @@ def generate_summary(
 ):
     if body.kind not in ("weekly", "monthly"):
         raise HTTPException(400, "kind must be weekly or monthly")
-    _, workspace_id = ws
+    user, workspace_id = ws
+    assert_summary_allowed(db, user, body.kind)
     row = ensure_summary_for_period(
         db,
         workspace_id,

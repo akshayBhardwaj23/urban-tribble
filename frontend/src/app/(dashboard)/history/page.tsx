@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { api, type WorkspaceTimelineEvent } from "@/lib/api";
+import { api, isApiPlanLimitError, type WorkspaceTimelineEvent } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace-context";
 
 function fmtNum(n: number): string {
@@ -90,6 +91,18 @@ export default function HistoryPage() {
       <div className="space-y-6 max-w-3xl">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (isError && isApiPlanLimitError(error)) {
+    return (
+      <div className="max-w-lg space-y-4 rounded-2xl border border-border/80 bg-muted/20 p-6">
+        <h1 className="text-lg font-semibold text-foreground">History & timeline</h1>
+        <p className="text-sm text-muted-foreground leading-relaxed">{error.message}</p>
+        <Link href="/pricing" className={cn(buttonVariants({ variant: "default" }))}>
+          View plans
+        </Link>
       </div>
     );
   }

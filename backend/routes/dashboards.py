@@ -33,7 +33,12 @@ from services.workspace_alerts import build_workspace_alerts
 from services.workspace_query import latest_workspace_overview_analysis
 from services.workspace_recommended_actions import build_recommended_actions
 from services.workspace_habit_hints import build_workspace_habit_hints
-from services.subscription_usage import build_workspace_usage_payload
+from services.subscription_usage import (
+    build_workspace_usage_payload,
+    empty_what_changed,
+    get_effective_plan,
+    plan_features,
+)
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
@@ -85,7 +90,7 @@ def get_dashboard_data(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
-    _, workspace_id = ws
+    user, workspace_id = ws
     row = get_dataset_upload_in_workspace(db, dataset_id, workspace_id)
     if not row:
         raise HTTPException(404, "Dataset not found")
@@ -128,12 +133,17 @@ def get_dashboard_data(
         start_ts, end_ts = start_ts_explicit, end_ts_explicit
 
     timeframe_requested = start_ts is not None or end_ts is not None
-    what_changed = build_what_changed_for_dataframe(
-        df_full,
-        metadata,
-        start_ts=start_ts if last_n_days is None else None,
-        end_ts=end_ts if last_n_days is None else None,
-        last_n_days=last_n_days,
+    feats_ds = plan_features(get_effective_plan(db, user))
+    what_changed = (
+        build_what_changed_for_dataframe(
+            df_full,
+            metadata,
+            start_ts=start_ts if last_n_days is None else None,
+            end_ts=end_ts if last_n_days is None else None,
+            last_n_days=last_n_days,
+        )
+        if feats_ds["what_changed"]
+        else empty_what_changed()
     )
     timeframe_applied = False
     active_start: Optional[str] = None
@@ -234,6 +244,8 @@ def get_overview(
     user, workspace_id = ws
     all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     usage_payload = build_workspace_usage_payload(db, user, workspace_id)
+    plan = get_effective_plan(db, user)
+    feats = plan_features(plan)
 
     if not all_datasets:
         return {
@@ -255,6 +267,7 @@ def get_overview(
                 db, workspace_id, has_datasets=False
             ),
             "usage": usage_payload,
+            "plan_features": feats,
         }
 
     total_rows = sum(up.row_count or 0 for _, up in all_datasets)
@@ -348,7 +361,11 @@ def get_overview(
         for ds, up in all_datasets
     ]
 
-    what_changed = build_workspace_what_changed(all_datasets, _load_cleaned_df)
+    what_changed = (
+        build_workspace_what_changed(all_datasets, _load_cleaned_df)
+        if feats["what_changed"]
+        else empty_what_changed()
+    )
     analysis = latest_workspace_overview_analysis(db, workspace_id)
     analysis_obj = None
     if analysis and analysis.result_json:
@@ -356,17 +373,23 @@ def get_overview(
             analysis_obj = json.loads(analysis.result_json)
         except json.JSONDecodeError:
             analysis_obj = None
-    alerts = build_workspace_alerts(
-        what_changed,
-        all_datasets,
-        _load_cleaned_df,
-        analysis_obj,
+    alerts = (
+        build_workspace_alerts(
+            what_changed,
+            all_datasets,
+            _load_cleaned_df,
+            analysis_obj,
+        )
+        if feats["alerts"]
+        else []
     )
     recommended_actions = build_recommended_actions(
         analysis_obj,
         alerts,
         what_changed,
     )
+    if plan == "free":
+        recommended_actions = recommended_actions[:2]
     habit_hints = build_workspace_habit_hints(
         db, workspace_id, has_datasets=True
     )
@@ -382,4 +405,5 @@ def get_overview(
         "recommended_actions": recommended_actions,
         "habit_hints": habit_hints,
         "usage": usage_payload,
+        "plan_features": feats,
     }

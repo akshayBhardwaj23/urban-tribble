@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 import { AuthBypassAutoSignIn } from "@/components/auth-bypass-autosignin";
+import { AppToaster } from "@/components/app-toaster";
 import { WorkspaceProvider } from "./workspace-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -31,7 +32,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange
       >
         <QueryClientProvider client={queryClient}>
-          <WorkspaceProvider>{children}</WorkspaceProvider>
+          <WorkspaceProvider>
+            {children}
+            <AppToaster />
+          </WorkspaceProvider>
         </QueryClientProvider>
       </ThemeProvider>
     </SessionProvider>

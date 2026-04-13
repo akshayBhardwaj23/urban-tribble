@@ -14,6 +14,8 @@ const navItems = [
   { href: "/history", label: "History", icon: "⏱" },
   { href: "/upload", label: "Import", icon: "↑" },
   { href: "/datasets", label: "Sources", icon: "◫" },
+  { href: "/pricing", label: "Plans", icon: "◇" },
+  { href: "/account", label: "Account", icon: "◎" },
 ];
 
 export default function DashboardLayout({
@@ -53,7 +55,11 @@ export default function DashboardLayout({
                   ? pathname === "/dashboard"
                   : item.href === "/history"
                     ? pathname === "/history" || pathname.startsWith("/history/")
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    : item.href === "/pricing"
+                      ? pathname === "/pricing"
+                      : item.href === "/account"
+                        ? pathname === "/account"
+                        : pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}

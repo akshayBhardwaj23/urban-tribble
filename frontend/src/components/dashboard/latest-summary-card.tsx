@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,7 +70,10 @@ function SummaryBody({ row }: { row: RecurringSummaryRecord }) {
 }
 
 export function LatestSummaryCard({ className }: { className?: string }) {
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { activeWorkspace, profile, loading: workspaceLoading } = useWorkspace();
+  const plan = (profile?.subscription_plan ?? "free").toLowerCase();
+  const canWeekly = plan === "pro";
+  const canMonthly = plan === "starter" || plan === "pro";
   const queryClient = useQueryClient();
   const workspaceId = activeWorkspace?.id;
   const enabled = !workspaceLoading && Boolean(workspaceId);
@@ -152,7 +156,8 @@ export function LatestSummaryCard({ className }: { className?: string }) {
                     size="sm"
                     className="h-8 text-xs"
                     onClick={() => regenerate.mutate("weekly")}
-                    disabled={regenerate.isPending}
+                    disabled={regenerate.isPending || !canWeekly}
+                    title={!canWeekly ? "Weekly summaries require Pro" : undefined}
                   >
                     Rebuild week
                   </Button>
@@ -162,7 +167,8 @@ export function LatestSummaryCard({ className }: { className?: string }) {
                     size="sm"
                     className="h-8 text-xs"
                     onClick={() => regenerate.mutate("monthly")}
-                    disabled={regenerate.isPending}
+                    disabled={regenerate.isPending || !canMonthly}
+                    title={!canMonthly ? "Monthly summaries require a paid plan" : undefined}
                   >
                     Rebuild month
                   </Button>
@@ -171,6 +177,14 @@ export function LatestSummaryCard({ className }: { className?: string }) {
               <TabsContent value="weekly" className="p-5 sm:p-6 mt-0">
                 {data?.weekly ? (
                   <SummaryBody row={data.weekly} />
+                ) : !canWeekly ? (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Weekly digests are included on{" "}
+                    <Link href="/pricing" className="font-medium text-foreground underline-offset-4 hover:underline">
+                      Pro
+                    </Link>
+                    .
+                  </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No weekly summary yet—data may still be importing, or there are no
@@ -181,6 +195,14 @@ export function LatestSummaryCard({ className }: { className?: string }) {
               <TabsContent value="monthly" className="p-5 sm:p-6 mt-0">
                 {data?.monthly ? (
                   <SummaryBody row={data.monthly} />
+                ) : !canMonthly ? (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Monthly summaries are on{" "}
+                    <Link href="/pricing" className="font-medium text-foreground underline-offset-4 hover:underline">
+                      Starter and Pro
+                    </Link>
+                    .
+                  </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No monthly summary yet—needs dated history across the prior calendar month

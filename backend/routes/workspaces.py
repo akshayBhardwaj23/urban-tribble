@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Workspace
+from services.subscription_usage import assert_workspace_create_allowed
 from utils.email_norm import user_by_email_ci
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
@@ -29,6 +30,8 @@ def create_workspace(
     user = user_by_email_ci(db, x_user_email)
     if not user:
         raise HTTPException(404, "User not found")
+
+    assert_workspace_create_allowed(db, user)
 
     workspace = Workspace(name=req.name, owner_id=user.id)
     db.add(workspace)

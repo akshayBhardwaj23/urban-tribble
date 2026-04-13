@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   priorityBadgeClass,
 } from "@/lib/top-priorities";
-import type { WorkspaceRecommendedAction } from "@/lib/api";
+import type { PlanLimitDetail, WorkspaceRecommendedAction } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function priorityLabel(p: WorkspaceRecommendedAction["priority"]): string {
@@ -30,12 +31,15 @@ export function RecommendedActionsSection({
   briefingAvailable,
   onRunBriefing,
   briefingBusy,
+  analysesCapDetail,
   className,
 }: {
   items: WorkspaceRecommendedAction[];
   briefingAvailable: boolean;
   onRunBriefing: () => void;
   briefingBusy: boolean;
+  /** When set, workspace briefing cannot run until the next period or an upgrade. */
+  analysesCapDetail?: PlanLimitDetail | null;
   className?: string;
 }) {
   const sorted = [...items].sort((a, b) => {
@@ -65,7 +69,19 @@ export function RecommendedActionsSection({
               ? "Run or re-run a workspace briefing so model-backed moves appear here, or wait for sharper period-over-period signals from your data."
               : "Import data, then run a workspace briefing—the action list anchors on what the briefing and metrics surface."}
           </p>
-          {!briefingAvailable && (
+          {!briefingAvailable && analysesCapDetail ? (
+            <p className="text-xs text-muted-foreground mt-3 max-w-lg leading-relaxed">
+              Workspace briefings use an analysis run from your plan allowance, and yours is
+              currently full. Use the plan notice above this section or{" "}
+              <Link
+                href="/pricing"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                view pricing
+              </Link>{" "}
+              to continue.
+            </p>
+          ) : !briefingAvailable ? (
             <Button
               type="button"
               size="sm"
@@ -75,7 +91,7 @@ export function RecommendedActionsSection({
             >
               {briefingBusy ? "Running…" : "Run workspace briefing"}
             </Button>
-          )}
+          ) : null}
         </div>
       ) : (
         <ol className="list-none m-0 p-0 space-y-2">

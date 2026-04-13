@@ -51,21 +51,25 @@ export type WorkspaceUsageNudge = {
   href: string;
 };
 
-/** Plan + monthly meters for subtle subscription-aware UI. */
+/** Plan + meters (Free = lifetime uploads/analyses; paid = per calendar month). */
 export type WorkspaceUsage = {
   plan_id: string;
   plan_label: string;
+  /** e.g. "this month" or "lifetime (Free)" */
+  meter_period_label: string;
   period_start: string;
   period_end: string;
   limits: {
-    analyses_per_month: number | null;
-    uploads_per_month: number | null;
+    analyses_cap: number | null;
+    uploads_cap: number | null;
     history_periods: number;
+    chat_messages_cap: number;
   };
   usage: {
-    analyses_this_month: number;
-    uploads_this_month: number;
+    analyses_count: number;
+    uploads_count: number;
     timeline_snapshots: number;
+    chat_user_messages: number;
   };
   history: {
     periods_cap: number;
@@ -76,9 +80,59 @@ export type WorkspaceUsage = {
   meters: {
     analyses: WorkspaceUsageMeterDetail | null;
     uploads: WorkspaceUsageMeterDetail | null;
+    chat: WorkspaceUsageMeterDetail | null;
   };
   nudges: WorkspaceUsageNudge[];
 };
+
+export type PlanFeatures = {
+  timeline: boolean;
+  what_changed: boolean;
+  alerts: boolean;
+  weekly_summary: boolean;
+  monthly_summary: boolean;
+  full_briefing: boolean;
+};
+
+export type PlanLimitDetail = {
+  code: "plan_limit";
+  plan: string;
+  limit: string;
+  message: string;
+};
+
+export class ApiPlanLimitError extends Error {
+  constructor(
+    public readonly detail: PlanLimitDetail,
+    message?: string
+  ) {
+    super(message ?? detail.message);
+    this.name = "ApiPlanLimitError";
+  }
+}
+
+export function isApiPlanLimitError(e: unknown): e is ApiPlanLimitError {
+  return e instanceof ApiPlanLimitError;
+}
+
+/** Parse FastAPI 403 `plan_limit` from a `fetch` response body (non-`request()` calls). */
+export function planLimitErrorFromJson(
+  status: number,
+  body: { detail?: unknown }
+): ApiPlanLimitError | null {
+  const detail = body?.detail;
+  if (
+    status === 403 &&
+    detail &&
+    typeof detail === "object" &&
+    !Array.isArray(detail) &&
+    (detail as PlanLimitDetail).code === "plan_limit"
+  ) {
+    const pl = detail as PlanLimitDetail;
+    return new ApiPlanLimitError(pl, pl.message);
+  }
+  return null;
+}
 
 export type WorkspaceHabitHints = {
   last_activity_at: string | null;
@@ -180,6 +234,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
     const detail = error.detail;
+    if (
+      res.status === 403 &&
+      detail &&
+      typeof detail === "object" &&
+      !Array.isArray(detail) &&
+      (detail as PlanLimitDetail).code === "plan_limit"
+    ) {
+      const pl = detail as PlanLimitDetail;
+      throw new ApiPlanLimitError(pl, pl.message);
+    }
     const message =
       typeof detail === "string"
         ? detail
@@ -200,6 +264,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ status: string }>("/health"),
+
+  getAuthMe: () =>
+    request<{
+      id: string;
+      email: string;
+      name: string | null;
+      image: string | null;
+      active_workspace_id: string | null;
+      subscription_plan?: string;
+      subscription_renews_at?: string | null;
+      workspaces: { id: string; name: string; created_at: string }[];
+    }>("/api/auth/me"),
 
   uploadFile: (file: File, description: string) => {
     const formData = new FormData();
@@ -500,6 +576,7 @@ export const api = {
       recommended_actions: WorkspaceRecommendedAction[];
       habit_hints: WorkspaceHabitHints;
       usage: WorkspaceUsage;
+      plan_features?: PlanFeatures;
     }>("/api/dashboards/overview"),
 
   runOverviewAnalysis: () =>
@@ -616,5 +693,19 @@ export const api = {
   compareWorkspaceSnapshots: (fromId: string, toId: string) =>
     request<WorkspaceCompareResult>(
       `/api/workspace/timeline/compare?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}`
+    ),
+
+  razorpayCheckout: (tier: "starter" | "pro") =>
+    request<{
+      short_url: string;
+      subscription_id: string;
+      key_id: string;
+    }>(
+      "/api/billing/razorpay/checkout",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier }),
+      }
     ),
 };
