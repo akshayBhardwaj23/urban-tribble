@@ -708,4 +708,16 @@ export const api = {
         body: JSON.stringify({ tier }),
       }
     ),
+
+  /** After Standard Checkout success — verifies HMAC per Razorpay subscription docs. */
+  razorpayVerifyCheckout: (body: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+  }) =>
+    request<{ verified: boolean }>("/api/billing/razorpay/verify-checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };

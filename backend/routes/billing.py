@@ -14,6 +14,7 @@ from services.razorpay_service import (
     create_subscription_checkout,
     process_webhook_request,
     razorpay_configured,
+    verify_subscription_auth_signature,
     webhook_configured,
 )
 
@@ -22,6 +23,12 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 class RazorpayCheckoutBody(BaseModel):
     tier: Literal["starter", "pro"] = Field(..., description="Subscription tier to purchase")
+
+
+class RazorpayVerifyCheckoutBody(BaseModel):
+    razorpay_payment_id: str = Field(..., min_length=1)
+    razorpay_subscription_id: str = Field(..., min_length=1)
+    razorpay_signature: str = Field(..., min_length=1)
 
 
 @router.post("/razorpay/checkout")
@@ -46,6 +53,29 @@ def razorpay_checkout(
     except Exception as e:
         raise HTTPException(502, f"Razorpay error: {e!s}") from e
     return out
+
+
+@router.post("/razorpay/verify-checkout")
+def razorpay_verify_checkout(
+    body: RazorpayVerifyCheckoutBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """Verify Razorpay Standard Checkout response after subscription auth (mandatory per Razorpay docs)."""
+    if not razorpay_configured():
+        raise HTTPException(503, "Billing is not configured.")
+    if user.billing_subscription_id != body.razorpay_subscription_id.strip():
+        raise HTTPException(
+            400,
+            "Subscription id does not match the checkout session for this account.",
+        )
+    if not verify_subscription_auth_signature(
+        body.razorpay_payment_id.strip(),
+        body.razorpay_subscription_id.strip(),
+        body.razorpay_signature,
+    ):
+        raise HTTPException(400, "Invalid Razorpay signature.")
+    return {"verified": True}
 
 
 @router.post("/razorpay/webhook")

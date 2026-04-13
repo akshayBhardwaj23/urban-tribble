@@ -131,6 +131,12 @@ export function PricingTierCTA({
           ? session.user.name.trim()
           : undefined;
 
+      type CheckoutSuccess = {
+        razorpay_payment_id: string;
+        razorpay_subscription_id: string;
+        razorpay_signature: string;
+      };
+
       const rzp = new Ctor({
         key: key_id,
         subscription_id,
@@ -140,8 +146,30 @@ export function PricingTierCTA({
           ...(userEmail ? { email: userEmail } : {}),
           ...(userName ? { name: userName } : {}),
         },
-        handler() {
-          window.location.href = "/dashboard?subscription=started";
+        handler(response: CheckoutSuccess) {
+          void (async () => {
+            const pid = response?.razorpay_payment_id;
+            const sid = response?.razorpay_subscription_id;
+            const sig = response?.razorpay_signature;
+            if (!pid || !sid || !sig) {
+              setErr("Missing payment confirmation from Razorpay.");
+              return;
+            }
+            try {
+              await api.razorpayVerifyCheckout({
+                razorpay_payment_id: pid,
+                razorpay_subscription_id: sid,
+                razorpay_signature: sig,
+              });
+              window.location.href = "/dashboard?subscription=started";
+            } catch (verifyErr) {
+              setErr(
+                verifyErr instanceof Error
+                  ? verifyErr.message
+                  : "Payment could not be verified. Your plan will update when webhooks arrive, or try again."
+              );
+            }
+          })();
         },
         modal: {
           ondismiss() {
