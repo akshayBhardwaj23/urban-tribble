@@ -799,7 +799,7 @@ function renderChart(
         <BarChart data={data} layout="vertical">
           <Bar
             dataKey="value"
-            fill={HR_ORANGE}
+            fill={REF_AMBER}
             radius={[0, 12, 12, 0]}
             isAnimationActive={false}
           />
