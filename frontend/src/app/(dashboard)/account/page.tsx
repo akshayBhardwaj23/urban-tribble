@@ -14,6 +14,7 @@ function planLabel(id: string | undefined) {
   const p = (id ?? "free").toLowerCase();
   if (p === "starter") return "Starter";
   if (p === "pro") return "Pro";
+  if (p === "internal") return "Internal";
   return "Free";
 }
 

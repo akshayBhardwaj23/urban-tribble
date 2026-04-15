@@ -3,6 +3,7 @@ const WORKSPACES_MAX: Record<string, number> = {
   free: 1,
   starter: 1,
   pro: 5,
+  internal: 50,
 };
 
 export function maxWorkspacesForPlan(plan: string | undefined | null): number {

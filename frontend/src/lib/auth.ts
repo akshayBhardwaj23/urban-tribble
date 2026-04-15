@@ -19,6 +19,42 @@ export const authOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     }),
     CredentialsProvider({
+      id: "test-login",
+      name: "Test login",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        secret: { label: "Internal key", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = credentials?.email?.trim();
+        if (!email) return null;
+        const secret = (credentials?.secret as string | undefined) ?? "";
+
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/test-login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, secret }),
+          });
+          if (!res.ok) return null;
+          const u = (await res.json()) as {
+            id: string;
+            email: string;
+            name: string | null;
+            image: string | null;
+          };
+          return {
+            id: u.id,
+            email: u.email,
+            name: u.name ?? undefined,
+            image: u.image ?? undefined,
+          };
+        } catch {
+          return null;
+        }
+      },
+    }),
+    CredentialsProvider({
       id: "email-otp",
       name: "Email OTP",
       credentials: {
@@ -59,6 +95,7 @@ export const authOptions = {
       name: "Dev bypass",
       credentials: {},
       authorize() {
+        if (process.env.NODE_ENV === "production") return null;
         if (process.env.AUTH_BYPASS !== "true") return null;
         const email =
           process.env.AUTH_BYPASS_EMAIL?.trim().toLowerCase() ||

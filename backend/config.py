@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     SUBSCRIPTION_PLAN: str = "free"
     # QA only: when set to free|starter|pro, all users resolve to this plan (leave empty in production).
     FORCE_SUBSCRIPTION_PLAN: str = ""
+    # Optional: passwordless test sign-in for one mailbox (see /api/auth/test-login). Never commit real values.
+    AUTH_TEST_LOGIN_ENABLED: bool = False
+    AUTH_TEST_LOGIN_EMAIL: str = ""
+    # If set, /api/auth/test-login requires this secret; the web login flow does not send it—leave empty for email-only test sign-in.
+    AUTH_TEST_LOGIN_SECRET: str = ""
+    AUTH_TEST_LOGIN_NAME: str = "Test user"
     # Resend (https://resend.com) — email OTP
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "Clarus <onboarding@resend.dev>"

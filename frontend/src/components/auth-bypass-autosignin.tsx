@@ -6,7 +6,8 @@ import { useEffect, useRef } from "react";
 /**
  * When NEXT_PUBLIC_AUTH_BYPASS=true and AUTH_BYPASS=true on the server,
  * signs in via the dev-bypass Credentials provider so no Google/OTP is needed.
- * Never enable AUTH_BYPASS in production.
+ * The dev-bypass provider refuses to run when NODE_ENV is production—use
+ * backend AUTH_TEST_LOGIN_* + login "test-login" for a production-safe test user.
  */
 export function AuthBypassAutoSignIn() {
   const { status } = useSession();

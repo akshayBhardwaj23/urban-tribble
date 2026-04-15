@@ -170,10 +170,15 @@ export default function OverviewPage() {
       queryClient.invalidateQueries({ queryKey: ["overview-analysis"] });
       queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
       queryClient.invalidateQueries({ queryKey: ["overview"] });
-      toast.success("Workspace briefing finished", {
+      toast.success("Workspace AI briefing finished", {
         description:
-          "Operator summary and charts below now reflect this run. Open Full briefing for more depth.",
+          "Snapshot and Operator summary are updated below. Open Full briefing at the bottom for the full model output.",
       });
+      window.setTimeout(() => {
+        document
+          .getElementById("workspace-operator-summary")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 350);
     },
     onError: (err) => {
       if (isApiPlanLimitError(err)) {
@@ -543,9 +548,12 @@ export default function OverviewPage() {
 
       <WhatChangedSection block={data.what_changed} className="max-w-6xl" />
 
-      {/* 1. Top summary */}
-      <section className="space-y-3">
+      {/* 1. Snapshot */}
+      <section id="workspace-snapshot" className="space-y-3">
         <SectionLabel>Snapshot</SectionLabel>
+        <p className="text-xs text-slate-500 max-w-2xl -mt-1 leading-relaxed">
+          Updates after you run a workspace briefing—model-generated read of your sources here.
+        </p>
         {analysisBusy && !analysisReady ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -592,7 +600,84 @@ export default function OverviewPage() {
         )}
       </section>
 
-      {/* 2. Important metrics */}
+      {/* 2. Operator summary — narrative from latest workspace briefing */}
+      <section id="workspace-operator-summary" className="space-y-3">
+        <SectionLabel>Operator summary</SectionLabel>
+        <p className="text-xs text-slate-500 max-w-2xl -mt-1 leading-relaxed">
+          From your latest workspace briefing (model-generated). Verify important figures in your
+          source files.
+        </p>
+        <div className="dashboard-surface overflow-hidden">
+          <div className="grid divide-y divide-slate-100 dark:divide-slate-800 lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
+            <div className="p-6 lg:p-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                What moved
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                {analysisReady && happened ? (
+                  happened
+                ) : (
+                  <span className="text-slate-400">
+                    {analysisBusy
+                      ? WORKSPACE_OPERATOR_READ_BUSY.whatMoved
+                      : workspaceRunBriefingInvite(data.total_datasets)}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="dashboard-inner-accent p-6 lg:p-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                So what
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                {analysisReady && matters ? (
+                  matters
+                ) : (
+                  <span className="text-slate-400">
+                    {analysisBusy
+                      ? WORKSPACE_OPERATOR_READ_BUSY.soWhat
+                      : WORKSPACE_OPERATOR_READ_EMPTY.soWhat}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="p-6 lg:p-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Lead move
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100 font-medium">
+                {analysisReady && action ? (
+                  action
+                ) : (
+                  <span className="text-slate-400 font-normal">
+                    {analysisBusy
+                      ? WORKSPACE_OPERATOR_READ_BUSY.leadMove
+                      : WORKSPACE_OPERATOR_READ_EMPTY.leadMove}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          {runOverviewAnalysis.isError && (
+            <p className="px-6 py-3 text-sm text-destructive border-t border-slate-100 dark:border-slate-800">
+              {runOverviewAnalysis.error.message}
+              {isApiPlanLimitError(runOverviewAnalysis.error) ? (
+                <>
+                  {" "}
+                  <Link
+                    href="/pricing"
+                    className="font-medium text-destructive underline underline-offset-4"
+                  >
+                    View plans
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* 3. Key numbers */}
       <section className="space-y-3">
         <SectionLabel>Key numbers</SectionLabel>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -676,87 +761,14 @@ export default function OverviewPage() {
         </p>
       </section>
 
-      {/* 3. Leadership briefing */}
-      <section className="space-y-3">
-        <SectionLabel>Operator summary</SectionLabel>
-        <div className="dashboard-surface overflow-hidden">
-          <div className="grid divide-y divide-slate-100 dark:divide-slate-800 lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
-            <div className="p-6 lg:p-7">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                What moved
-              </p>
-              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-                {analysisReady && happened ? (
-                  happened
-                ) : (
-                  <span className="text-slate-400">
-                    {analysisBusy
-                      ? WORKSPACE_OPERATOR_READ_BUSY.whatMoved
-                      : workspaceRunBriefingInvite(data.total_datasets)}
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="dashboard-inner-accent p-6 lg:p-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                So what
-              </p>
-              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-                {analysisReady && matters ? (
-                  matters
-                ) : (
-                  <span className="text-slate-400">
-                    {analysisBusy
-                      ? WORKSPACE_OPERATOR_READ_BUSY.soWhat
-                      : WORKSPACE_OPERATOR_READ_EMPTY.soWhat}
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="p-6 lg:p-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Lead move
-              </p>
-              <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100 font-medium">
-                {analysisReady && action ? (
-                  action
-                ) : (
-                  <span className="text-slate-400 font-normal">
-                    {analysisBusy
-                      ? WORKSPACE_OPERATOR_READ_BUSY.leadMove
-                      : WORKSPACE_OPERATOR_READ_EMPTY.leadMove}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-          {runOverviewAnalysis.isError && (
-            <p className="px-6 py-3 text-sm text-destructive border-t border-slate-100 dark:border-slate-800">
-              {runOverviewAnalysis.error.message}
-              {isApiPlanLimitError(runOverviewAnalysis.error) ? (
-                <>
-                  {" "}
-                  <Link
-                    href="/pricing"
-                    className="font-medium text-destructive underline underline-offset-4"
-                  >
-                    View plans
-                  </Link>
-                </>
-              ) : null}
-            </p>
-          )}
-        </div>
-      </section>
-
       {/* 4. Charts */}
       <section className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <SectionLabel>Charts</SectionLabel>
             <p className="text-sm text-slate-500 mt-1 max-w-xl">
-              Supporting views for the briefing above. Open a source for filters and row-level
-              detail.
+              Supporting views aligned with Snapshot, Operator summary, and Key numbers above.
+              Open a source for filters and row-level detail.
             </p>
           </div>
         </div>
@@ -951,7 +963,7 @@ export default function OverviewPage() {
 
       {/* Full analysis (optional depth) */}
       {analysisReady && overviewAnalysis.data?.result_json && (
-        <details className="group dashboard-surface">
+        <details id="workspace-full-briefing" className="group dashboard-surface">
           <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
             <span>Full briefing</span>
             <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">
@@ -959,6 +971,9 @@ export default function OverviewPage() {
             </span>
           </summary>
           <div className="px-5 pb-6 pt-0 border-t border-slate-200/60 dark:border-slate-800">
+            <p className="text-xs text-slate-500 pt-4 leading-relaxed max-w-3xl">
+              Full model output—verify important figures against your original sources.
+            </p>
             <div className="pt-4 flex justify-end">
               <Button
                 variant="outline"

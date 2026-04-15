@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import settings
+from utils.email_norm import normalize_email
 from models.models import (
     Analysis,
     ChatMessage,
@@ -22,13 +23,14 @@ from models.models import (
 )
 from services.plan_limits import raise_plan_limit
 
-PLAN_IDS = frozenset({"free", "starter", "pro"})
+PLAN_IDS = frozenset({"free", "starter", "pro", "internal"})
 _ANALYSIS_TYPES_FOR_CAP = ("overview", "workspace_overview")
 
 _PLAN_LABELS = {
     "free": "Free",
     "starter": "Starter",
     "pro": "Pro",
+    "internal": "Internal",
 }
 
 # Lifetime totals (free tier) — uploads & AI analyses across all owned workspaces.
@@ -38,17 +40,31 @@ _FREE_LIFETIME = {"uploads": 2, "analyses": 2}
 _MONTHLY_CAPS = {
     "starter": {"uploads": 10, "analyses": 15},
     "pro": {"uploads": 30, "analyses": None},
+    # Same generous caps as Pro but higher upload ceiling for fixture-heavy testing.
+    "internal": {"uploads": 500, "analyses": None},
 }
 
-_HISTORY_PERIODS = {"free": 0, "starter": 3, "pro": 24}
+_HISTORY_PERIODS = {"free": 0, "starter": 3, "pro": 24, "internal": 24}
 
-_WORKSPACES_MAX = {"free": 1, "starter": 1, "pro": 5}
+_WORKSPACES_MAX = {"free": 1, "starter": 1, "pro": 5, "internal": 50}
 
 # Max user-authored chat messages: lifetime (free) or per UTC calendar month (starter/pro).
-_CHAT_USER_CAPS = {"free": 3, "starter": 50, "pro": 200}
+_CHAT_USER_CAPS = {"free": 3, "starter": 50, "pro": 200, "internal": 1_000_000}
+
+
+def _internal_test_login_user(user: User) -> bool:
+    """Allowlisted mailbox with test sign-in enabled — treated as internal (no practical limits)."""
+    if not getattr(settings, "AUTH_TEST_LOGIN_ENABLED", False):
+        return False
+    allowed = (getattr(settings, "AUTH_TEST_LOGIN_EMAIL", None) or "").strip()
+    if not allowed:
+        return False
+    return normalize_email(user.email) == normalize_email(allowed)
 
 
 def get_effective_plan(_db: Session, user: User) -> str:
+    if _internal_test_login_user(user):
+        return "internal"
     force = (getattr(settings, "FORCE_SUBSCRIPTION_PLAN", None) or "").strip().lower()
     if force in PLAN_IDS:
         return force
@@ -58,11 +74,12 @@ def get_effective_plan(_db: Session, user: User) -> str:
 
 def plan_features(plan: str) -> dict[str, Any]:
     p = plan if plan in PLAN_IDS else "free"
+    pro_like = p in ("pro", "internal")
     return {
         "timeline": p != "free",
         "what_changed": p != "free",
-        "alerts": p == "pro",
-        "weekly_summary": p == "pro",
+        "alerts": pro_like,
+        "weekly_summary": pro_like,
         "monthly_summary": p != "free",
         "full_briefing": p != "free",
     }

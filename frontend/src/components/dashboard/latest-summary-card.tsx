@@ -72,8 +72,9 @@ function SummaryBody({ row }: { row: RecurringSummaryRecord }) {
 export function LatestSummaryCard({ className }: { className?: string }) {
   const { activeWorkspace, profile, loading: workspaceLoading } = useWorkspace();
   const plan = (profile?.subscription_plan ?? "free").toLowerCase();
-  const canWeekly = plan === "pro";
-  const canMonthly = plan === "starter" || plan === "pro";
+  const proLike = plan === "pro" || plan === "internal";
+  const canWeekly = proLike;
+  const canMonthly = plan === "starter" || proLike;
   const queryClient = useQueryClient();
   const workspaceId = activeWorkspace?.id;
   const enabled = !workspaceLoading && Boolean(workspaceId);
