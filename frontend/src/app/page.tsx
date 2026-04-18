@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
 import { Button } from "@/components/ui/button";
-import { ThemeMenuCompact } from "@/components/theme-menu";
 import {
   LandingFooterPrimaryCta,
   LandingHeaderAuth,
@@ -275,9 +274,9 @@ function HeroFloatingSet() {
         />
       </svg>
 
-      <div className="pointer-events-none absolute -left-10 top-20 h-40 w-40 rounded-full bg-[#f9e7ef] blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-10 h-44 w-44 rounded-full bg-[#eaf3ff] blur-3xl" />
-      <div className="pointer-events-none absolute left-1/2 top-[22rem] h-28 w-28 -translate-x-1/2 rounded-full bg-[#ede7ff] blur-3xl" />
+      <div className="pointer-events-none absolute -left-10 top-20 h-40 w-40 rounded-full bg-[#f9e7ef] blur-3xl dark:bg-amber-900/25 dark:opacity-90" />
+      <div className="pointer-events-none absolute right-0 top-10 h-44 w-44 rounded-full bg-[#eaf3ff] blur-3xl dark:bg-sky-950/30 dark:opacity-90" />
+      <div className="pointer-events-none absolute left-1/2 top-[22rem] h-28 w-28 -translate-x-1/2 rounded-full bg-[#ede7ff] blur-3xl dark:bg-violet-950/25 dark:opacity-90" />
     </>
   );
 }
@@ -454,22 +453,26 @@ function FeatureGrid() {
     {
       title: "AI That Explains Your Business",
       body: "Get clear summaries of what changed, why it changed, and what to do next.",
-      tone: "bg-[#ede7ff] border-violet-100",
+      tone:
+        "bg-[#ede7ff] border-violet-100 dark:border-violet-900/35 dark:bg-[oklch(0.26_0.045_290_/_0.45)]",
     },
     {
       title: "See What Happens Next",
       body: "Forecast trends with confidence ranges built from your own historical files.",
-      tone: "bg-[#eaf3ff] border-blue-100",
+      tone:
+        "bg-[#eaf3ff] border-blue-100 dark:border-sky-900/40 dark:bg-[oklch(0.25_0.04_240_/_0.42)]",
     },
     {
       title: "Ask Questions. Get Answers.",
       body: "Use natural language chat to explore revenue, costs, churn, and growth drivers.",
-      tone: "bg-[#fff6d8] border-amber-100",
+      tone:
+        "bg-[#fff6d8] border-amber-100 dark:border-amber-900/45 dark:bg-[oklch(0.3_0.05_74_/_0.38)]",
     },
     {
       title: "All Your Data in One Place",
       body: "Combine sales, finance, and operations sheets into one AI-ready decision layer.",
-      tone: "bg-[#e7f7ef] border-emerald-100",
+      tone:
+        "bg-[#e7f7ef] border-emerald-100 dark:border-emerald-900/40 dark:bg-[oklch(0.27_0.04_155_/_0.4)]",
     },
   ];
 
@@ -483,9 +486,11 @@ function FeatureGrid() {
           }`}
           style={{ animationDelay: `${idx * 80}ms` }}
         >
-          <div className="mb-3 h-8 w-8 rounded-lg bg-white/75 shadow-sm" />
-          <h3 className="text-xl font-semibold tracking-tight text-slate-900">{item.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
+          <div className="mb-3 h-8 w-8 rounded-lg bg-white/75 shadow-sm dark:bg-white/10" />
+          <h3 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
+            {item.title}
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-muted-foreground">{item.body}</p>
         </div>
       ))}
     </div>
@@ -495,7 +500,7 @@ function FeatureGrid() {
 function PricingTeaser() {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl px-6 py-24">
-      <div className="fade-up rounded-[34px] border border-slate-200 bg-white/90 px-8 py-14 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/70 md:px-14">
+      <div className="fade-up rounded-[34px] border border-slate-200 bg-white/90 px-8 py-14 text-center shadow-sm dark:border-white/[0.1] dark:bg-card/75 md:px-14">
         <Tag>Pricing</Tag>
         <h2
           className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
@@ -520,11 +525,11 @@ function PricingTeaser() {
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#f6f4ef] text-slate-900 dark:bg-[#0c1220] dark:text-slate-100">
+    <main className="min-h-screen bg-[#f6f4ef] text-slate-900 dark:bg-background dark:text-foreground">
       <div className="relative overflow-hidden px-3 pb-8 pt-4 md:px-6">
         <HeroFloatingSet />
-        <div className="relative z-10 mx-auto max-w-6xl rounded-[34px] border border-slate-200/80 bg-white/70 px-5 py-5 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/45 md:px-8">
-          <header className="flex items-center justify-between border-b border-slate-200/80 pb-5 dark:border-slate-700">
+        <div className="relative z-10 mx-auto max-w-6xl rounded-[34px] border border-slate-200/80 bg-white/70 px-5 py-5 backdrop-blur-sm dark:border-white/[0.1] dark:bg-card/55 md:px-8">
+          <header className="flex items-center justify-between border-b border-slate-200/80 pb-5 dark:border-white/[0.08]">
             <Link href="/" className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">
               {PRODUCT_NAME}
             </Link>
@@ -541,13 +546,11 @@ export default function LandingPage() {
               <Link href="#cta" className="hover:text-slate-900 dark:hover:text-white">
                 Contact
               </Link>
-              <ThemeMenuCompact />
               <div className="flex items-center gap-4">
                 <LandingHeaderAuth />
               </div>
             </nav>
             <div className="flex items-center gap-2 md:hidden">
-              <ThemeMenuCompact />
               <LandingHeaderAuth />
             </div>
           </header>
@@ -564,7 +567,7 @@ export default function LandingPage() {
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-10">Business Data</span>
                 <span className="mt-1 block text-5xl leading-[0.9] md:text-6xl lg:-ml-8">into</span>
                 <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-6">
-                  <span className="rounded-md bg-[#fff6d8] px-2 py-0.5 text-slate-900 dark:bg-violet-600 dark:text-white dark:shadow-[0_0_28px_-6px_rgba(139,92,246,0.55)]">
+                  <span className="rounded-md bg-[#fff6d8] px-2 py-0.5 text-slate-900 dark:bg-primary/25 dark:text-primary dark:ring-1 dark:ring-primary/35 dark:shadow-[0_0_32px_-8px_oklch(0.62_0.09_74_/_0.45)]">
                     Confident
                   </span>
                 </span>
@@ -579,7 +582,7 @@ export default function LandingPage() {
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
                 <LandingHeroPrimaryCta />
                 <Link href="#solutions">
-                  <Button variant="outline" size="lg" className="h-11 rounded-xl border-slate-300 bg-white px-7 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
+                  <Button variant="outline" size="lg" className="h-11 rounded-xl border-slate-300 bg-white px-7 text-slate-700 hover:bg-slate-50 dark:border-border dark:bg-secondary/40 dark:text-foreground dark:hover:bg-accent">
                     Book a Demo
                   </Button>
                 </Link>
@@ -619,7 +622,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <section className="border-y border-slate-200/70 bg-white/60 py-7 dark:border-slate-700 dark:bg-slate-900/30">
+      <section className="border-y border-slate-200/70 bg-white/60 py-7 dark:border-white/[0.08] dark:bg-secondary/35">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-6">
           {trustLogos.map((logo) => (
             <span key={logo} className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
@@ -660,15 +663,15 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto max-w-6xl space-y-8 px-6 py-20">
-        <div className="relative grid gap-6 rounded-[32px] border border-[#f1dfff] bg-[#f9e7ef]/75 p-7 md:ml-8 md:grid-cols-[1fr_1.2fr] md:p-9">
+        <div className="relative grid gap-6 rounded-[32px] border border-[#f1dfff] bg-[#f9e7ef]/75 p-7 dark:border-white/[0.08] dark:bg-[oklch(0.24_0.03_320_/_0.35)] md:ml-8 md:grid-cols-[1fr_1.2fr] md:p-9">
           <div className="hidden md:block absolute -left-10 top-10 h-16 w-16 rounded-2xl bg-white/80 rotate-12 shadow-sm" />
           <div className="hidden md:block absolute -right-8 -top-8 h-24 w-24 rounded-full bg-violet-200/70 blur-xl" />
           <div className="fade-up">
             <Tag>Dashboards</Tag>
-            <h3 className={`${serif.className} mt-4 text-3xl text-slate-900 md:text-4xl`}>
+            <h3 className={`${serif.className} mt-4 text-3xl text-slate-900 dark:text-foreground md:text-4xl`}>
               Instant Dashboards from Your Data
             </h3>
-            <p className="mt-3 text-[15px] leading-7 text-slate-600">
+            <p className="mt-3 text-[15px] leading-7 text-slate-600 dark:text-muted-foreground">
               Auto-build KPIs, trends, period comparisons, and executive-ready
               summaries from uploaded files.
             </p>
@@ -676,15 +679,15 @@ export default function LandingPage() {
           <DashboardFeatureVisual />
         </div>
 
-        <div className="relative grid gap-6 rounded-[32px] border border-[#f6e8b3] bg-[#fff6d8]/85 p-7 md:mr-8 md:grid-cols-[1.2fr_1fr] md:p-9">
+        <div className="relative grid gap-6 rounded-[32px] border border-[#f6e8b3] bg-[#fff6d8]/85 p-7 dark:border-white/[0.08] dark:bg-[oklch(0.28_0.04_74_/_0.4)] md:mr-8 md:grid-cols-[1.2fr_1fr] md:p-9">
           <div className="hidden md:block absolute -right-10 top-8 h-14 w-14 rounded-full bg-amber-200/80 shadow-sm" />
           <div className="hidden md:block absolute left-1/2 -bottom-8 h-20 w-20 -translate-x-1/2 rounded-full bg-violet-200/40 blur-2xl" />
           <div className="md:order-2 fade-up md:pl-2">
             <Tag>AI Chat + Insights</Tag>
-            <h3 className={`${serif.className} mt-4 text-3xl text-slate-900 md:text-4xl`}>
+            <h3 className={`${serif.className} mt-4 text-3xl text-slate-900 dark:text-foreground md:text-4xl`}>
               Ask Questions. Get Answers.
             </h3>
-            <p className="mt-3 text-[15px] leading-7 text-slate-600">
+            <p className="mt-3 text-[15px] leading-7 text-slate-600 dark:text-muted-foreground">
               Ask why revenue changed, what costs increased, what drives growth,
               and which actions matter next.
             </p>
@@ -695,7 +698,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="features" className="bg-[#f7f5f2] py-28 dark:bg-slate-900/35">
+      <section id="features" className="bg-[#f7f5f2] py-28 dark:bg-secondary/25">
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-10 text-center fade-up">
             <Tag>Core Capabilities</Tag>
@@ -710,7 +713,7 @@ export default function LandingPage() {
       <PricingTeaser />
 
       <section id="cta" className="mx-auto max-w-6xl px-6 py-24">
-        <div className="fade-up rounded-[34px] border border-slate-200 bg-gradient-to-r from-[#eaf3ff] via-[#ede7ff] to-[#f9e7ef] px-8 py-14 text-center shadow-sm dark:border-slate-700 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:px-14">
+        <div className="fade-up rounded-[34px] border border-slate-200 bg-gradient-to-r from-[#eaf3ff] via-[#ede7ff] to-[#f9e7ef] px-8 py-14 text-center shadow-sm dark:border-white/[0.1] dark:from-[oklch(0.2_0.025_280_/_0.5)] dark:via-card/90 dark:to-[oklch(0.22_0.03_55_/_0.45)] md:px-14">
           <Tag>Final CTA</Tag>
           <h2 className={`${serif.className} mx-auto mt-4 max-w-2xl text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}>
             Start using AI for your business decisions

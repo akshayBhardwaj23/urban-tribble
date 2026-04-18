@@ -18,7 +18,7 @@ const serif = DM_Serif_Display({ subsets: ["latin"], weight: "400" });
 
 function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex rounded-full border border-slate-300/80 bg-white/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.19em] text-slate-600 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">
+    <span className="inline-flex rounded-full border border-slate-300/80 bg-white/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.19em] text-slate-600 shadow-sm dark:border-white/15 dark:bg-card/80 dark:text-muted-foreground">
       {children}
     </span>
   );
@@ -26,8 +26,8 @@ function Tag({ children }: { children: ReactNode }) {
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-[#f6f4ef] text-slate-900 dark:bg-[#0c1220] dark:text-slate-100">
-      <div className="border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/50">
+    <main className="min-h-screen bg-[#f6f4ef] text-slate-900 dark:bg-background dark:text-foreground">
+      <div className="border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-white/10 dark:bg-card/60">
         <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <Link
             href="/"
