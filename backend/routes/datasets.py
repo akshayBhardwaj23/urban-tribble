@@ -10,7 +10,16 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from deps import require_active_workspace
-from models.models import Analysis, ChatMessage, Dataset, DatasetRelation, Upload, User
+from models.models import (
+    Analysis,
+    ChatMessage,
+    Dataset,
+    DatasetRelation,
+    Upload,
+    User,
+    Workspace,
+    WorkspaceTimelineSnapshot,
+)
 from services.workspace_query import (
     dataset_upload_pairs_for_workspace,
     get_dataset_upload_in_workspace,
@@ -222,6 +231,16 @@ def delete_dataset(
     if not row:
         raise HTTPException(404, "Dataset not found")
     dataset, upload = row
+
+    wk = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if wk and wk.outlook_forecast_dataset_id == dataset_id:
+        wk.outlook_forecast_dataset_id = None
+        wk.outlook_forecast_date_column = None
+        wk.outlook_forecast_value_column = None
+
+    db.query(WorkspaceTimelineSnapshot).filter(
+        WorkspaceTimelineSnapshot.dataset_id == dataset_id
+    ).delete(synchronize_session="fetch")
 
     db.query(ChatMessage).filter(ChatMessage.dataset_id == dataset_id).delete()
     db.query(Analysis).filter(Analysis.dataset_id == dataset_id).delete()
