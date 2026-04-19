@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -11,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Workspace
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.subscription_usage import assert_workspace_create_allowed
 from services.workspace_query import get_dataset_upload_in_workspace
 from utils.email_norm import user_by_email_ci
@@ -179,8 +179,9 @@ def patch_outlook_forecast(
         schema.get("numeric_columns") or []
     )
 
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError:
         raise HTTPException(400, "Cleaned data file not found for this dataset.")
 
     df = pd.read_parquet(str(parquet_path))

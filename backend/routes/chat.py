@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import List, Tuple
 
 import pandas as pd
@@ -16,6 +15,7 @@ from services.workspace_query import (
     dataset_upload_pairs_for_workspace,
     get_dataset_upload_in_workspace,
 )
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.query_engine import QueryEngine
 from services.subscription_usage import assert_chat_allowed
 
@@ -126,8 +126,9 @@ def chat(
         raise HTTPException(404, "Dataset not found")
     dataset, upload = row
 
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError:
         raise HTTPException(404, "Cleaned data file not found")
 
     df = pd.read_parquet(str(parquet_path))
@@ -190,10 +191,11 @@ def workspace_chat(
 
     dataframes = []
     for ds, up in all_pairs:
-        parquet_path = Path(up.file_url).parent / f"{up.id}_cleaned.parquet"
-        if not parquet_path.exists():
+        try:
+            p = ensure_cleaned_parquet(up)
+        except CleanedDataMissingError:
             continue
-        df = pd.read_parquet(str(parquet_path))
+        df = pd.read_parquet(str(p))
         schema = json.loads(ds.schema_json) if ds.schema_json else {}
         dataframes.append((ds.name, df, schema, up.user_description))
 
