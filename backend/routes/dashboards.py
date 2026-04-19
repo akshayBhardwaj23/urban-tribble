@@ -33,6 +33,7 @@ from services.workspace_alerts import build_workspace_alerts
 from services.workspace_query import latest_workspace_overview_analysis
 from services.workspace_recommended_actions import build_recommended_actions
 from services.workspace_habit_hints import build_workspace_habit_hints
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.subscription_usage import (
     build_workspace_usage_payload,
     empty_what_changed,
@@ -44,8 +45,9 @@ router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
 
 def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError:
         raise HTTPException(404, "Cleaned data file not found")
     return pd.read_parquet(str(parquet_path))
 

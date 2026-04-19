@@ -10,7 +10,16 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from deps import require_active_workspace
-from models.models import Analysis, ChatMessage, Dataset, DatasetRelation, Upload, User
+from models.models import (
+    Analysis,
+    ChatMessage,
+    Dataset,
+    DatasetRelation,
+    Upload,
+    User,
+    Workspace,
+    WorkspaceTimelineSnapshot,
+)
 from services.workspace_query import (
     dataset_upload_pairs_for_workspace,
     get_dataset_upload_in_workspace,
@@ -22,6 +31,7 @@ from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
 from services.upload_io import save_upload_stream_limited
 from services.upload_rate_limit import check_upload_rate_limit
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.workspace_timeline import record_append_snapshot
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
@@ -38,8 +48,9 @@ class DatasetPatchBody(BaseModel):
 
 
 def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError:
         raise HTTPException(404, "Cleaned data file not found")
     return pd.read_parquet(str(parquet_path))
 
@@ -223,6 +234,16 @@ def delete_dataset(
         raise HTTPException(404, "Dataset not found")
     dataset, upload = row
 
+    wk = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if wk and wk.outlook_forecast_dataset_id == dataset_id:
+        wk.outlook_forecast_dataset_id = None
+        wk.outlook_forecast_date_column = None
+        wk.outlook_forecast_value_column = None
+
+    db.query(WorkspaceTimelineSnapshot).filter(
+        WorkspaceTimelineSnapshot.dataset_id == dataset_id
+    ).delete(synchronize_session="fetch")
+
     db.query(ChatMessage).filter(ChatMessage.dataset_id == dataset_id).delete()
     db.query(Analysis).filter(Analysis.dataset_id == dataset_id).delete()
     db.query(DatasetRelation).filter(
@@ -267,8 +288,9 @@ async def append_to_dataset(
     if ext not in settings.ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"File type {ext} not supported")
 
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError:
         raise HTTPException(404, "Cleaned data file not found")
 
     df_existing = pd.read_parquet(str(parquet_path))

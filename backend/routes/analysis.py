@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -24,6 +23,7 @@ from services.subscription_usage import (
     trim_free_analysis_result,
 )
 from services.ai_analyzer import AIAnalyzer
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.forecaster import Forecaster
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
@@ -140,8 +140,9 @@ def run_forecast(
         raise HTTPException(404, "Dataset not found")
     dataset, upload = row
 
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError:
         raise HTTPException(404, "Cleaned data file not found")
 
     df = pd.read_parquet(str(parquet_path))
@@ -312,11 +313,13 @@ def run_overview_forecast(
         row = get_dataset_upload_in_workspace(db, sid, workspace_id)
         if row:
             ds, up = row
-            parquet_path = Path(up.file_url).parent / f"{up.id}_cleaned.parquet"
-            if parquet_path.exists():
-                df = pd.read_parquet(str(parquet_path))
+            try:
+                p = ensure_cleaned_parquet(up)
+                df = pd.read_parquet(str(p))
                 if dc in df.columns and vc in df.columns:
                     picked = (ds, up, dc, vc)
+            except CleanedDataMissingError:
+                pass
 
     if not picked:
         picked = _auto_pick_overview_forecast(db, workspace_id)
@@ -328,8 +331,9 @@ def run_overview_forecast(
 
     best_ds, best_up, best_date_col, best_value_col = picked
 
-    parquet_path = Path(best_up.file_url).parent / f"{best_up.id}_cleaned.parquet"
-    if not parquet_path.exists():
+    try:
+        parquet_path = ensure_cleaned_parquet(best_up)
+    except CleanedDataMissingError:
         raise HTTPException(404, "Cleaned data file not found")
 
     df = pd.read_parquet(str(parquet_path))

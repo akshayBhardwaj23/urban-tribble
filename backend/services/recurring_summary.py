@@ -6,7 +6,6 @@ import html
 import json
 import re
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from models.models import WorkspaceRecurringSummary
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.period_change_summary import build_workspace_what_changed
 from services.workspace_query import dataset_upload_pairs_for_workspace
 
@@ -23,10 +23,11 @@ _KINDS = frozenset({"weekly", "monthly"})
 
 
 def _load_cleaned_df(upload: Any) -> pd.DataFrame:
-    parquet_path = Path(upload.file_url).parent / f"{upload.id}_cleaned.parquet"
-    if not parquet_path.exists():
-        raise FileNotFoundError("Cleaned parquet not found")
-    return pd.read_parquet(str(parquet_path))
+    try:
+        p = ensure_cleaned_parquet(upload)
+    except CleanedDataMissingError as e:
+        raise FileNotFoundError(str(e)) from e
+    return pd.read_parquet(str(p))
 
 
 def _last_completed_iso_week(today: date) -> tuple[date, date]:
