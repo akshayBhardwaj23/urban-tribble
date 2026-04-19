@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_active_workspace
-from models.models import Analysis, Dataset, Upload, User
+from models.models import Analysis, Dataset, Upload, User, Workspace
 from services.workspace_query import (
     dataset_upload_pairs_for_workspace,
     get_dataset_upload_in_workspace,
@@ -259,21 +259,11 @@ class OverviewForecastRequest(BaseModel):
     periods: int = Field(default=90, ge=1, le=366)
 
 
-@router.post("/overview/forecast")
-def run_overview_forecast(
-    req: OverviewForecastRequest,
-    db: Session = Depends(get_db),
-    ws: tuple[User, str] = Depends(require_active_workspace),
-):
-    """Forecast using the best date+revenue pair found across all datasets.
-
-    Chooses the dataset with the most rows that has at least one date column and
-    one revenue/numeric column, then uses the *first* date column and *first*
-    revenue column from that file's schema.
-    """
-    _, workspace_id = ws
+def _auto_pick_overview_forecast(
+    db: Session, workspace_id: str
+) -> Optional[tuple]:
+    """Return (dataset, upload, date_col, value_col) or None."""
     all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
-
     best_ds = None
     best_up = None
     best_date_col = None
@@ -292,9 +282,51 @@ def run_overview_forecast(
             best_rows = up.row_count or 0
 
     if not best_ds or not best_up or not best_date_col or not best_value_col:
-        raise HTTPException(
-            400, "No dataset with both date and revenue columns found for forecasting."
-        )
+        return None
+    return (best_ds, best_up, best_date_col, best_value_col)
+
+
+@router.post("/overview/forecast")
+def run_overview_forecast(
+    req: OverviewForecastRequest,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    """Forecast for workspace Outlook.
+
+    If the workspace has saved ``outlook_forecast_*`` fields, uses that dataset and
+    columns when valid. Otherwise picks the dataset with the most rows that has
+    both date and revenue columns, then the first date and first revenue column.
+    """
+    _, workspace_id = ws
+    wk = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not wk:
+        raise HTTPException(404, "Workspace not found")
+
+    picked: Optional[tuple] = None
+    sid = (wk.outlook_forecast_dataset_id or "").strip()
+    dc = (wk.outlook_forecast_date_column or "").strip()
+    vc = (wk.outlook_forecast_value_column or "").strip()
+
+    if sid and dc and vc:
+        row = get_dataset_upload_in_workspace(db, sid, workspace_id)
+        if row:
+            ds, up = row
+            parquet_path = Path(up.file_url).parent / f"{up.id}_cleaned.parquet"
+            if parquet_path.exists():
+                df = pd.read_parquet(str(parquet_path))
+                if dc in df.columns and vc in df.columns:
+                    picked = (ds, up, dc, vc)
+
+    if not picked:
+        picked = _auto_pick_overview_forecast(db, workspace_id)
+        if not picked:
+            raise HTTPException(
+                400,
+                "No dataset with both date and revenue columns found for forecasting.",
+            )
+
+    best_ds, best_up, best_date_col, best_value_col = picked
 
     parquet_path = Path(best_up.file_url).parent / f"{best_up.id}_cleaned.parquet"
     if not parquet_path.exists():

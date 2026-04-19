@@ -53,6 +53,9 @@ class Workspace(Base):
     name = Column(String, nullable=False)
     owner_id = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    outlook_forecast_dataset_id = Column(String, nullable=True)
+    outlook_forecast_date_column = Column(String, nullable=True)
+    outlook_forecast_value_column = Column(String, nullable=True)
 
 
 class UploadStatus(str, enum.Enum):

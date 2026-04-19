@@ -16,6 +16,10 @@ interface Workspace {
   name: string;
   is_active?: boolean;
   created_at: string;
+  /** Saved Outlook chart source; omit or null = automatic (largest qualifying file). */
+  outlook_forecast_dataset_id?: string | null;
+  outlook_forecast_date_column?: string | null;
+  outlook_forecast_value_column?: string | null;
 }
 
 interface UserProfile {

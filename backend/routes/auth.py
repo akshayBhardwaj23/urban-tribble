@@ -33,6 +33,17 @@ def _profile_billing_fields(db: Session, user: User) -> dict:
     }
 
 
+def _workspace_json(w: Workspace) -> dict:
+    return {
+        "id": w.id,
+        "name": w.name,
+        "created_at": w.created_at.isoformat(),
+        "outlook_forecast_dataset_id": w.outlook_forecast_dataset_id,
+        "outlook_forecast_date_column": w.outlook_forecast_date_column,
+        "outlook_forecast_value_column": w.outlook_forecast_value_column,
+    }
+
+
 class SyncUserRequest(BaseModel):
     email: str
     name: Optional[str] = None
@@ -173,10 +184,7 @@ def sync_user(req: SyncUserRequest, db: Session = Depends(get_db)):
         "active_workspace_id": user.active_workspace_id,
         "needs_onboarding": len(workspaces) == 0,
         **_profile_billing_fields(db, user),
-        "workspaces": [
-            {"id": w.id, "name": w.name, "created_at": w.created_at.isoformat()}
-            for w in workspaces
-        ],
+        "workspaces": [_workspace_json(w) for w in workspaces],
     }
 
 
@@ -204,8 +212,5 @@ def get_me(
         "image": user.image,
         "active_workspace_id": user.active_workspace_id,
         **_profile_billing_fields(db, user),
-        "workspaces": [
-            {"id": w.id, "name": w.name, "created_at": w.created_at.isoformat()}
-            for w in workspaces
-        ],
+        "workspaces": [_workspace_json(w) for w in workspaces],
     }

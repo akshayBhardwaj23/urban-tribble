@@ -350,16 +350,25 @@ def get_overview(
                         "dataset_name": ds.name,
                     })
 
-    datasets_list = [
-        {
+    datasets_list = []
+    for ds, up in all_datasets:
+        metadata = json.loads(ds.schema_json) if ds.schema_json else {}
+        date_cols = metadata.get("date_columns", []) or []
+        rev = metadata.get("revenue_columns", []) or []
+        num = metadata.get("numeric_columns", []) or []
+        value_opts: list[str] = []
+        for c in rev + num:
+            if c and c not in value_opts:
+                value_opts.append(c)
+        datasets_list.append({
             "id": ds.id,
             "name": ds.name,
             "row_count": up.row_count,
             "column_count": up.column_count,
             "created_at": ds.created_at.isoformat(),
-        }
-        for ds, up in all_datasets
-    ]
+            "date_columns": date_cols,
+            "value_columns": value_opts,
+        })
 
     what_changed = (
         build_workspace_what_changed(all_datasets, _load_cleaned_df)

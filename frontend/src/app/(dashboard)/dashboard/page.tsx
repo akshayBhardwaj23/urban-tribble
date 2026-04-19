@@ -129,7 +129,7 @@ function TrendBadge({ trend }: { trend: "up" | "down" | "stable" | null }) {
 }
 
 export default function OverviewPage() {
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading, syncUser } = useWorkspace();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [appendTarget, setAppendTarget] = useState<{
@@ -138,6 +138,10 @@ export default function OverviewPage() {
   } | null>(null);
   /** Steps forward at inferred frequency (day / week / month); max 366 on API. */
   const [outlookPeriods, setOutlookPeriods] = useState(90);
+  /** Empty string = automatic file/column selection on the server. */
+  const [outlookDatasetId, setOutlookDatasetId] = useState("");
+  const [outlookDateCol, setOutlookDateCol] = useState("");
+  const [outlookValueCol, setOutlookValueCol] = useState("");
 
   const overviewEnabled =
     !workspaceLoading && Boolean(activeWorkspace?.id);
@@ -201,8 +205,39 @@ export default function OverviewPage() {
   });
 
   const forecastMutation = useMutation({
-    mutationFn: () => api.runOverviewForecast(outlookPeriods),
+    mutationFn: async () => {
+      if (!activeWorkspace?.id) throw new Error("No workspace");
+      if (!outlookDatasetId) {
+        await api.patchWorkspaceOutlookForecast(activeWorkspace.id, {});
+      } else {
+        await api.patchWorkspaceOutlookForecast(activeWorkspace.id, {
+          dataset_id: outlookDatasetId,
+          date_column: outlookDateCol,
+          value_column: outlookValueCol,
+        });
+      }
+      await syncUser();
+      return api.runOverviewForecast(outlookPeriods);
+    },
   });
+
+  useEffect(() => {
+    const w = activeWorkspace;
+    if (!w) return;
+    setOutlookDatasetId(w.outlook_forecast_dataset_id ?? "");
+    setOutlookDateCol(w.outlook_forecast_date_column ?? "");
+    setOutlookValueCol(w.outlook_forecast_value_column ?? "");
+  }, [
+    activeWorkspace?.id,
+    activeWorkspace?.outlook_forecast_dataset_id,
+    activeWorkspace?.outlook_forecast_date_column,
+    activeWorkspace?.outlook_forecast_value_column,
+  ]);
+
+  const outlookSourceDataset = useMemo(() => {
+    if (!data?.datasets || !outlookDatasetId) return null;
+    return data.datasets.find((d) => d.id === outlookDatasetId) ?? null;
+  }, [data?.datasets, outlookDatasetId]);
 
   useEffect(() => {
     forecastMutation.reset();
@@ -814,26 +849,111 @@ export default function OverviewPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.75fr)]">
           <div className="dashboard-surface dashboard-inner-accent w-full p-6 md:p-8">
             <h3 className="text-sm font-semibold text-slate-900">Outlook</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-2 leading-relaxed max-w-3xl">
-              Directional linear projection—not a forecast of record.{" "}
+            <p className="text-xs text-slate-500 mt-1 mb-3 leading-relaxed max-w-3xl">
+              Directional projection—not a forecast of record.{" "}
               <span className="text-slate-600 dark:text-slate-400">
-                Workspace outlook uses the{" "}
-                <strong className="font-medium text-slate-800 dark:text-slate-200">
-                  source with the most rows
-                </strong>{" "}
-                that has both a date column and a revenue-style numeric column,
-                then the{" "}
-                <strong className="font-medium text-slate-800 dark:text-slate-200">
-                  first date
-                </strong>{" "}
-                and{" "}
-                <strong className="font-medium text-slate-800 dark:text-slate-200">
-                  first numeric measure
-                </strong>{" "}
-                from that file&apos;s schema. To model a different column or
-                file, open that data source and use Forecast there.
+                Pick a <strong className="font-medium text-slate-800 dark:text-slate-200">source file</strong>,{" "}
+                <strong className="font-medium text-slate-800 dark:text-slate-200">date</strong>, and{" "}
+                <strong className="font-medium text-slate-800 dark:text-slate-200">value</strong> column
+                below (saved for this workspace), or leave Source on{" "}
+                <strong className="font-medium text-slate-800 dark:text-slate-200">Automatic</strong> to
+                use the largest file with date + revenue-style columns (first of each in schema).
               </span>
             </p>
+
+            <div className="grid gap-3 sm:grid-cols-3 mb-4 max-w-4xl">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="outlook-source-file"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Source file
+                </label>
+                <select
+                  id="outlook-source-file"
+                  className="h-10 w-full rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
+                  value={outlookDatasetId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setOutlookDatasetId(id);
+                    if (!id || !data?.datasets) {
+                      setOutlookDateCol("");
+                      setOutlookValueCol("");
+                      return;
+                    }
+                    const ds = data.datasets.find((d) => d.id === id);
+                    if (ds) {
+                      setOutlookDateCol(ds.date_columns[0] ?? "");
+                      setOutlookValueCol(ds.value_columns[0] ?? "");
+                    }
+                  }}
+                  disabled={!data?.datasets?.length}
+                >
+                  <option value="">Automatic (largest qualifying file)</option>
+                  {(data?.datasets ?? []).map((ds) => (
+                    <option key={ds.id} value={ds.id}>
+                      {ds.name} ({(ds.row_count ?? 0).toLocaleString()} rows)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="outlook-date-col"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Date column
+                </label>
+                <select
+                  id="outlook-date-col"
+                  className="h-10 w-full rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
+                  value={outlookDateCol}
+                  onChange={(e) => setOutlookDateCol(e.target.value)}
+                  disabled={
+                    !outlookDatasetId ||
+                    !(outlookSourceDataset?.date_columns?.length)
+                  }
+                >
+                  <option value="">—</option>
+                  {(outlookSourceDataset?.date_columns ?? []).map((c) => (
+                    <option key={c} value={c}>
+                      {c.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="outlook-value-col"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Value column
+                </label>
+                <select
+                  id="outlook-value-col"
+                  className="h-10 w-full rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
+                  value={outlookValueCol}
+                  onChange={(e) => setOutlookValueCol(e.target.value)}
+                  disabled={
+                    !outlookDatasetId ||
+                    !(outlookSourceDataset?.value_columns?.length)
+                  }
+                >
+                  <option value="">—</option>
+                  {(outlookSourceDataset?.value_columns ?? []).map((c) => (
+                    <option key={c} value={c}>
+                      {c.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {outlookDatasetId && (!outlookDateCol || !outlookValueCol) ? (
+              <p className="text-xs text-destructive mb-3 max-w-3xl">
+                Select both a date and a value column for your chosen file, or switch Source to
+                Automatic.
+              </p>
+            ) : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end mb-5 md:mb-6">
               <div className="space-y-1.5">
@@ -863,7 +983,11 @@ export default function OverviewPage() {
                 variant="outline"
                 className="rounded-lg shrink-0"
                 onClick={() => forecastMutation.mutate()}
-                disabled={forecastMutation.isPending}
+                disabled={
+                  forecastMutation.isPending ||
+                  (Boolean(outlookDatasetId) &&
+                    (!outlookDateCol || !outlookValueCol))
+                }
               >
                 {forecastMutation.isPending
                   ? "Generating..."

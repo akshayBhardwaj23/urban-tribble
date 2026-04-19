@@ -542,6 +542,8 @@ export const api = {
         row_count: number | null;
         column_count: number | null;
         created_at: string;
+        date_columns: string[];
+        value_columns: string[];
       }[];
       what_changed: {
         available: boolean;
@@ -578,6 +580,25 @@ export const api = {
       usage: WorkspaceUsage;
       plan_features?: PlanFeatures;
     }>("/api/dashboards/overview"),
+
+  patchWorkspaceOutlookForecast: (
+    workspaceId: string,
+    body: {
+      dataset_id?: string | null;
+      date_column?: string | null;
+      value_column?: string | null;
+    }
+  ) =>
+    request<{
+      ok: boolean;
+      outlook_forecast_dataset_id: string | null;
+      outlook_forecast_date_column: string | null;
+      outlook_forecast_value_column: string | null;
+    }>(`/api/workspaces/${workspaceId}/outlook-forecast`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   runOverviewAnalysis: () =>
     request<{

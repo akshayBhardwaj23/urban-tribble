@@ -116,6 +116,20 @@ def _backfill_workspace_timeline_snapshots() -> None:
         db.close()
 
 
+def _ensure_workspace_outlook_forecast_columns() -> None:
+    insp = inspect(engine)
+    if not insp.has_table("workspaces"):
+        return
+    cols = {c["name"] for c in insp.get_columns("workspaces")}
+    with engine.begin() as conn:
+        if "outlook_forecast_dataset_id" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN outlook_forecast_dataset_id VARCHAR"))
+        if "outlook_forecast_date_column" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN outlook_forecast_date_column VARCHAR"))
+        if "outlook_forecast_value_column" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN outlook_forecast_value_column VARCHAR"))
+
+
 def _ensure_dataset_business_classification_column() -> None:
     insp = inspect(engine)
     if not insp.has_table("datasets"):
@@ -157,6 +171,7 @@ def _ensure_user_subscription_columns() -> None:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Base.metadata.create_all(bind=engine)
     _ensure_dataset_dashboard_plan_column()
+    _ensure_workspace_outlook_forecast_columns()
     _ensure_dataset_business_classification_column()
     _ensure_user_subscription_columns()
     _backfill_upload_workspace_ids()
