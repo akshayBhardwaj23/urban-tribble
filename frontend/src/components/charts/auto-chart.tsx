@@ -543,7 +543,7 @@ export function AutoChart({
         ) : null}
       </div>
       <div className="px-3 pb-3 pt-3 sm:px-4">
-        <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.42))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.5),rgba(15,23,42,0.14))]">
+        <div className="rounded-[1.6rem] border border-slate-100/80 bg-white px-2 pb-2 pt-3 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.5),rgba(15,23,42,0.14))]">
           <ChartFrame className="h-[19rem]">
             <ResponsiveContainer width="100%" height="100%">
               {renderChart(prepared, safeId, accentIndex)}
@@ -579,6 +579,8 @@ function renderDualArea(
   const idCur = `saasCur-${safeId}`;
   const idPrev = `saasPrev-${safeId}`;
   const xAxis = timeSeriesXAxisProps(data.length);
+  /** Backend `line` is rendered here without fills so it reads as a true line chart (no warm wash). */
+  const strokeOnly = kind === "line";
 
   return (
     <AreaChart
@@ -587,13 +589,13 @@ function renderDualArea(
     >
       <defs>
         <linearGradient id={idCur} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={p.primaryMid} stopOpacity={0.38} />
-          <stop offset="45%" stopColor={p.primaryMid} stopOpacity={0.12} />
+          <stop offset="0%" stopColor={p.primaryMid} stopOpacity={strokeOnly ? 0 : 0.12} />
+          <stop offset="55%" stopColor={p.primaryMid} stopOpacity={strokeOnly ? 0 : 0.05} />
           <stop offset="100%" stopColor={p.primary} stopOpacity={0} />
         </linearGradient>
         <linearGradient id={idPrev} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={p.compareMid} stopOpacity={0.22} />
-          <stop offset="55%" stopColor={p.compare} stopOpacity={0.06} />
+          <stop offset="0%" stopColor={p.compareMid} stopOpacity={strokeOnly ? 0 : 0.08} />
+          <stop offset="60%" stopColor={p.compare} stopOpacity={strokeOnly ? 0 : 0.03} />
           <stop offset="100%" stopColor={p.compare} stopOpacity={0} />
         </linearGradient>
       </defs>
@@ -645,8 +647,8 @@ function renderDualArea(
         stroke={p.compareStroke}
         strokeWidth={2.25}
         strokeDasharray="6 5"
-        fill={`url(#${idPrev})`}
-        fillOpacity={0.82}
+        fill={strokeOnly ? "none" : `url(#${idPrev})`}
+        fillOpacity={strokeOnly ? 0 : 0.55}
         dot={false}
         activeDot={{
           r: 5,
@@ -662,8 +664,8 @@ function renderDualArea(
         name="Current period"
         stroke={p.primaryStroke}
         strokeWidth={2.6}
-        fill={`url(#${idCur})`}
-        fillOpacity={1}
+        fill={strokeOnly ? "none" : `url(#${idCur})`}
+        fillOpacity={strokeOnly ? 0 : 0.75}
         dot={false}
         activeDot={{
           r: 5,

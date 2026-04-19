@@ -141,19 +141,15 @@
   }
 }
 
-/* Premium dashboard shell (warm workspace + art-directed surfaces) */
+/* Dashboard shell — neutral white workspace */
 @layer components {
   .dashboard-canvas {
-    background:
-      radial-gradient(ellipse 48rem 28rem at -4% -6%, rgba(246, 210, 166, 0.28), transparent 58%),
-      radial-gradient(ellipse 42rem 24rem at 100% 0%, rgba(212, 204, 255, 0.32), transparent 56%),
-      radial-gradient(ellipse 34rem 18rem at 50% 100%, rgba(255, 234, 208, 0.42), transparent 62%),
-      linear-gradient(180deg, #f6f0e7 0%, #f7f4ee 46%, #f2eee7 100%);
+    background: #ffffff;
     min-height: 100%;
   }
 
   .dashboard-glass-panel {
-    @apply rounded-[2rem] border border-white/70 bg-white/78 shadow-[0_24px_55px_-32px_rgba(120,93,64,0.28),0_10px_28px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl;
+    @apply rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_20px_50px_-32px_rgba(15,23,42,0.08),0_8px_24px_-16px_rgba(15,23,42,0.06)] backdrop-blur-xl;
   }
 
   .dashboard-pill-tabs {
@@ -186,17 +182,18 @@
   }
 
   .dashboard-hero-card {
-    @apply relative overflow-hidden rounded-[2.15rem] border border-white/75 bg-white/80 px-6 py-6 shadow-[0_28px_70px_-36px_rgba(120,93,64,0.3),0_14px_36px_-24px_rgba(15,23,42,0.18)] backdrop-blur-xl md:px-8 md:py-8;
+    @apply relative overflow-hidden rounded-[2.15rem] border border-slate-200/70 bg-white px-6 py-6 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.08),0_10px_28px_-20px_rgba(15,23,42,0.06)] md:px-8 md:py-8;
   }
 
   .dashboard-hero-card::before {
     content: "";
     position: absolute;
     inset: 0;
-    background:
-      radial-gradient(circle at 12% 12%, rgba(255, 248, 239, 0.96), transparent 22rem),
-      radial-gradient(circle at 86% 12%, rgba(223, 216, 255, 0.26), transparent 20rem),
-      linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+    background: linear-gradient(
+      135deg,
+      rgba(248, 250, 252, 0.5) 0%,
+      rgba(255, 255, 255, 0) 55%
+    );
     pointer-events: none;
   }
 
@@ -206,17 +203,19 @@
   }
 
   .dashboard-surface {
-    @apply rounded-[2rem] border border-white/75 bg-white/82 shadow-[0_26px_60px_-34px_rgba(15,23,42,0.2),0_10px_28px_-18px_rgba(148,113,74,0.18)] backdrop-blur-xl;
+    @apply rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_20px_50px_-32px_rgba(15,23,42,0.08),0_8px_22px_-14px_rgba(15,23,42,0.05)];
   }
 
   .dashboard-surface-muted {
-    @apply rounded-[1.75rem] border border-white/70 bg-white/66 shadow-[0_22px_46px_-34px_rgba(15,23,42,0.16)] backdrop-blur-lg;
+    @apply rounded-[1.75rem] border border-slate-200/70 bg-slate-50/80 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.07)];
   }
 
   .dashboard-inner-accent {
-    background:
-      radial-gradient(circle at top right, rgba(255, 219, 176, 0.24), transparent 10rem),
-      radial-gradient(circle at bottom left, rgba(210, 204, 255, 0.22), transparent 11rem);
+    background: linear-gradient(
+      180deg,
+      rgba(248, 250, 252, 0.65) 0%,
+      rgba(255, 255, 255, 0) 100%
+    );
   }
 
   .dashboard-section-label {
@@ -228,28 +227,23 @@
   }
 
   .dashboard-kpi-card {
-    @apply rounded-[1.85rem] border border-white/80 bg-white/84 px-5 py-5 shadow-[0_22px_46px_-28px_rgba(15,23,42,0.18)] backdrop-blur-xl;
+    @apply rounded-[1.85rem] border border-slate-200/75 bg-white px-5 py-5 shadow-[0_16px_40px_-26px_rgba(15,23,42,0.08)];
   }
 
   .dashboard-table-shell {
-    @apply rounded-[1.5rem] border border-white/65 bg-white/74 shadow-[0_14px_30px_-22px_rgba(15,23,42,0.18)] backdrop-blur-lg;
+    @apply rounded-[1.5rem] border border-slate-200/75 bg-white shadow-[0_12px_28px_-20px_rgba(15,23,42,0.08)];
   }
 
   .dashboard-chip {
-    @apply inline-flex items-center rounded-full border border-white/75 bg-white/84 px-3 py-1 text-[11px] font-semibold tracking-[0.1em] text-slate-600 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.2)];
+    @apply inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1 text-[11px] font-semibold tracking-[0.1em] text-slate-600 shadow-[0_8px_20px_-14px_rgba(15,23,42,0.08)];
   }
 
   .dashboard-empty-card {
-    @apply flex flex-col items-center justify-center rounded-[2rem] border border-white/70 bg-white/80 px-6 py-12 text-center shadow-[0_24px_48px_-32px_rgba(15,23,42,0.18),0_8px_20px_-16px_rgba(148,113,74,0.18)] backdrop-blur-xl;
+    @apply flex flex-col items-center justify-center rounded-[2rem] border border-slate-200/75 bg-white px-6 py-12 text-center shadow-[0_20px_44px_-30px_rgba(15,23,42,0.08)];
   }
 
-  /* Dark mode: warm studio lighting — subtle amber/sand + cool slate (no purple wash) */
   .dark .dashboard-canvas {
-    background:
-      radial-gradient(ellipse 44rem 26rem at -6% -8%, rgba(180, 140, 80, 0.12), transparent 58%),
-      radial-gradient(ellipse 40rem 24rem at 102% 4%, rgba(120, 145, 175, 0.1), transparent 56%),
-      radial-gradient(ellipse 34rem 20rem at 48% 102%, rgba(90, 110, 95, 0.08), transparent 62%),
-      linear-gradient(180deg, oklch(0.17 0.012 72) 0%, oklch(0.155 0.013 68) 50%, oklch(0.14 0.014 65) 100%);
+    background: oklch(0.145 0.012 72);
   }
 
   .dark .dashboard-glass-panel {
@@ -272,10 +266,11 @@
   }
 
   .dark .dashboard-hero-card::before {
-    background:
-      radial-gradient(circle at 14% 14%, rgba(200, 165, 110, 0.1), transparent 22rem),
-      radial-gradient(circle at 88% 8%, rgba(130, 150, 175, 0.09), transparent 20rem),
-      linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 50%
+    );
   }
 
   .dark .dashboard-hero-card {
@@ -296,9 +291,11 @@
   }
 
   .dark .dashboard-inner-accent {
-    background:
-      radial-gradient(circle at top right, rgba(190, 155, 100, 0.12), transparent 12rem),
-      radial-gradient(circle at bottom left, rgba(115, 145, 165, 0.1), transparent 12rem);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 100%
+    );
   }
 
   .dark .dashboard-kpi-card {

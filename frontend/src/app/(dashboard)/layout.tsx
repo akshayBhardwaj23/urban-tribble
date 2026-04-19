@@ -30,7 +30,7 @@ export default function DashboardLayout({
       <WorkspaceQueryInvalidator />
       <div className="dashboard-canvas flex h-screen overflow-hidden">
         <aside
-          className="sticky top-0 flex h-screen w-[17rem] shrink-0 flex-col border-r border-white/50 bg-[rgba(255,250,244,0.78)] p-5 shadow-[10px_0_40px_-28px_rgba(15,23,42,0.22)] backdrop-blur-xl dark:border-white/10 dark:bg-[rgba(10,15,28,0.72)] dark:shadow-[10px_0_44px_-28px_rgba(0,0,0,0.48)]"
+          className="sticky top-0 flex h-screen w-[17rem] shrink-0 flex-col border-r border-slate-200/80 bg-white p-5 shadow-[4px_0_24px_-12px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[oklch(0.16_0.012_72)] dark:shadow-[10px_0_44px_-28px_rgba(0,0,0,0.48)]"
         >
           <div className="mb-5 rounded-[1.75rem] border border-white/70 bg-white/72 px-4 py-4 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
             <Link

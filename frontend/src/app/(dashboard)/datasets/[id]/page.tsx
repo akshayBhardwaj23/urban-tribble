@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AutoChart } from "@/components/charts/auto-chart";
+import { cn } from "@/lib/utils";
 import { DashboardKpiTile } from "@/components/dashboard/kpi-tile";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import {
@@ -525,9 +526,14 @@ export default function DatasetPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="flex flex-col gap-5 w-full">
+            <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2 md:[grid-auto-flow:row_dense]">
               {dashboardData.data?.charts.map((chart, i) => (
-                <AutoChart key={chart.id} chart={chart} accentIndex={i} />
+                <div
+                  key={chart.id}
+                  className={cn("min-w-0", chart.type !== "bar" && "md:col-span-2")}
+                >
+                  <AutoChart chart={chart} accentIndex={i} />
+                </div>
               ))}
             </div>
           )}
