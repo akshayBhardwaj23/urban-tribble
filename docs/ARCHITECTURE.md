@@ -6,7 +6,7 @@ This document is the **authoritative technical map** of the project: how data mo
 
 ## 1. Product mental model (one paragraph)
 
-Users sign in with Google, pick a **workspace** (isolated container), and upload **tabular files** (Excel/CSV/TSV). The backend **cleans** rows, **infers column roles** (date, revenue-like, category, etc.), stores **metadata in SQLite** and **cleaned rows as Parquet on disk**, and optionally builds a **dashboard plan** (KPIs + charts). The UI shows **per-dataset** dashboards, **AI briefings** (structured JSON from the model), **workspace overview** (rollup KPIs/charts + optional workspace-level briefing), **linear forecasts**, and **chat** that turns questions into **pandas code** executed safely on the DataFrame.
+Users sign in with Google, pick a **workspace** (isolated container), and upload **tabular files** (Excel/CSV/TSV). The backend **cleans** rows, **infers column roles** (date, revenue-like, category, etc.), stores **metadata in SQLite** and **cleaned rows as Parquet on disk**, and optionally builds a **dashboard plan** (KPIs + charts). The UI shows **per-dataset** dashboards, **AI briefings** (structured JSON from the model), **workspace overview** (rollup KPIs/charts + optional workspace-level briefing), **forecasts** (Prophet with linear fallback), and **chat** that turns questions into **pandas code** executed safely on the DataFrame.
 
 ---
 
@@ -197,7 +197,7 @@ Almost all analytics **reload Parquet**, not the original Excel, so cleaning ste
 
 ### 7.5 Forecasting
 
-**Per dataset:** `POST /api/analysis/forecast` — loads Parquet, picks `date_column` / `value_column` from request or first entries in `schema_json`, runs **`Forecaster.forecast`** (linear regression, bands).
+**Per dataset:** `POST /api/analysis/forecast` — loads Parquet, picks `date_column` / `value_column` from request or first entries in `schema_json`, runs **`Forecaster.forecast`** (Prophet when enough history and `FORECAST_ENGINE=prophet`, else linear regression; confidence bands).
 
 **Workspace outlook:** `POST /api/analysis/overview/forecast` — picks the **largest dataset by row count** that has both date and revenue columns; uses **first** date + **first** revenue column of that schema.
 
@@ -226,7 +226,7 @@ If no API key, chat degrades (engine checks `self.client`).
 | **AIAnalyzer** | `data_summary` dict, `schema_json` dict, optional text | Single JSON object (briefing) | One structured JSON response |
 | **DashboardPlanner** | DataFrame + metadata + stats (+ description) | `dashboard_plan_json` | When `OPENAI_API_KEY` is set, calls chat completions (`OPENAI_MODEL`) for KPI/chart JSON; otherwise **heuristic** plan in code |
 | **QueryEngine** | Question + DataFrame(s) + schema + optional **chat history** | `answer`, optional `chart_data` | **Two-step:** codegen JSON → execute → explain JSON; both steps see prior turns |
-| **Forecaster** | DataFrame + columns | Historical fit + forward points + stats | **No LLM**; numeric linear regression |
+| **Forecaster** | DataFrame + columns | Historical fit + forward points + stats | **No LLM**; Prophet or linear regression (`FORECAST_ENGINE`) |
 
 Prompt tone for briefing is controlled in **`backend/services/ai_analyzer.py`** (`SYSTEM_PROMPT`).
 

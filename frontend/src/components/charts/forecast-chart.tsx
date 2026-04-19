@@ -185,7 +185,7 @@ export function ForecastChart({
               {(data.stats.r_squared * 100).toFixed(1)}%
             </p>
             <p className="text-xs text-muted-foreground">
-              How well the trend line fits
+              How closely history matches the model (linear or Prophet in-sample fit)
             </p>
           </CardContent>
         </Card>

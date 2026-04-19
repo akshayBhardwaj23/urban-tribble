@@ -5,7 +5,7 @@ AI-powered business analytics SaaS. Upload Excel/CSV files and get automated das
 ## Tech Stack
 
 - **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts
-- **Backend**: FastAPI, Python 3.11+, Pandas, OpenAI GPT-4o, SQLAlchemy
+- **Backend**: FastAPI, Python 3.11+, Pandas, [Prophet](https://facebook.github.io/prophet/) (forecasting; CmdStan via `cmdstanpy` on first fit), OpenAI GPT-4o, SQLAlchemy
 - **Database**: SQLite (dev) / PostgreSQL (prod)
 
 ## Quick Start
@@ -22,6 +22,8 @@ uvicorn main:app --reload
 ```
 
 Backend runs at http://localhost:8000. Health check: http://localhost:8000/health
+
+**Forecasting:** Dataset and workspace outlooks use **Prophet** when enough history is present (see `FORECAST_ENGINE`, `FORECAST_PROPHET_MIN_POINTS`, `FORECAST_PROPHET_MAX_HISTORY_ROWS` in `backend/config.py`). Shorter series, non-positive values, or failures fall back to **linear regression**. Installing `prophet` may download CmdStan the first time a Prophet model runs; allow network during `pip install` and on that first fit in CI or containers.
 
 ### Frontend
 

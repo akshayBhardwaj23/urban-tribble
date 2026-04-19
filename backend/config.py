@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     RAZORPAY_PLAN_PRO: str = ""
     # Billing cycles (e.g. 60 ≈ five years of monthly invoices)
     RAZORPAY_SUBSCRIPTION_TOTAL_COUNT: int = 60
+    # Forecasting: prophet (with linear fallback) or linear only. Min points before trying Prophet.
+    FORECAST_ENGINE: str = "prophet"
+    FORECAST_PROPHET_MIN_POINTS: int = 24
+    FORECAST_PROPHET_MAX_HISTORY_ROWS: int = 4000
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
