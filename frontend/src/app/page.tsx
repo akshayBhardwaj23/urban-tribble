@@ -440,8 +440,12 @@ function Footer() {
           <Link href="#cta" className="hover:text-slate-900 dark:hover:text-white">
             Contact
           </Link>
-          <span>Privacy</span>
-          <span>Terms</span>
+          <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-slate-900 dark:hover:text-white">
+            Terms
+          </Link>
         </div>
       </div>
     </footer>

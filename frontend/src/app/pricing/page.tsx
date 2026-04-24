@@ -299,9 +299,17 @@ export default function PricingPage() {
           <Link href="/" className="font-semibold text-slate-900 dark:text-white">
             {PRODUCT_NAME}
           </Link>
-          <Link href="/" className="hover:text-slate-900 dark:hover:text-white">
-            Back to home
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            <Link href="/" className="hover:text-slate-900 dark:hover:text-white">
+              Back to home
+            </Link>
+            <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-slate-900 dark:hover:text-white">
+              Terms
+            </Link>
+          </div>
         </div>
       </footer>
     </main>

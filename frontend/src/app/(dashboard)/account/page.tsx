@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { useQuery } from "@tanstack/react-query";
+import { signOut, useSession } from "next-auth/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ function planLabel(id: string | undefined) {
 
 export default function AccountPage() {
   const { data: session, status } = useSession();
+  const queryClient = useQueryClient();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["auth-me", session?.user?.email ?? "none"],
@@ -29,6 +31,19 @@ export default function AccountPage() {
       return api.getAuthMe();
     },
     enabled: status === "authenticated" && Boolean(session?.user?.email),
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: () => api.deleteAuthAccount(),
+    onSuccess: async () => {
+      queryClient.clear();
+      await signOut({ callbackUrl: "/" });
+    },
+    onError: (err) => {
+      toast.error("Could not delete account", {
+        description: err instanceof Error ? err.message : "Try again or contact support.",
+      });
+    },
   });
 
   if (status === "loading" || (status === "authenticated" && isPending && !data)) {
@@ -73,7 +88,16 @@ export default function AccountPage() {
           Account
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your profile, plan, and where to upgrade.
+          Your profile, plan, data retention, and where to upgrade.
+        </p>
+        <p className="mt-3 text-xs text-muted-foreground leading-relaxed max-w-xl">
+          <Link href="/privacy" className="text-foreground underline underline-offset-2">
+            Privacy
+          </Link>
+          {" · "}
+          <Link href="/terms" className="text-foreground underline underline-offset-2">
+            Terms
+          </Link>
         </p>
       </div>
 
@@ -163,6 +187,39 @@ export default function AccountPage() {
               </li>
             ))}
           </ul>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="text-base text-destructive">Delete account</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <p className="text-muted-foreground leading-relaxed">
+            Permanently delete your account, all workspaces you own, uploaded files, briefings,
+            and history. This cannot be undone. Active subscriptions should be cancelled with
+            your payment provider where applicable.
+          </p>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="rounded-lg"
+            disabled={deleteAccount.isPending}
+            onClick={() => {
+              if (
+                typeof window !== "undefined" &&
+                !window.confirm(
+                  "Delete your account and all workspace data permanently? This cannot be undone."
+                )
+              ) {
+                return;
+              }
+              deleteAccount.mutate();
+            }}
+          >
+            {deleteAccount.isPending ? "Deleting…" : "Delete my account"}
+          </Button>
         </CardContent>
       </Card>
     </div>

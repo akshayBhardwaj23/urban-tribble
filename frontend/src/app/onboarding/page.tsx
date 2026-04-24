@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { ThemeMenuCompact } from "@/components/theme-menu";
+import { trackEvent } from "@/lib/analytics";
 
 export default function OnboardingPage() {
   const { status } = useSession();
@@ -58,7 +60,8 @@ export default function OnboardingPage() {
     setError("");
     try {
       await createWorkspace(trimmed);
-      router.push("/dashboard");
+      trackEvent("workspace_created");
+      router.push("/upload");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -75,8 +78,20 @@ export default function OnboardingPage() {
         <h1 className="text-3xl font-bold tracking-tight">
           Welcome to {PRODUCT_NAME}
         </h1>
-        <p className="mt-2 text-muted-foreground">
-          Name a workspace to hold your sources and briefings
+        <p className="mt-2 text-muted-foreground max-w-md mx-auto">
+          Name a workspace to hold your sources and briefings. Next, you&apos;ll import a
+          file so charts and the AI briefing can run.
+        </p>
+        <p className="mt-3 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+          By continuing, you agree to our{" "}
+          <Link href="/terms" className="underline underline-offset-2">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline underline-offset-2">
+            Privacy
+          </Link>{" "}
+          summary.
         </p>
       </div>
 

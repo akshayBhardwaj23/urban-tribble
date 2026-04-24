@@ -56,6 +56,11 @@ docs/              Architecture documentation
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full system map: auth, storage, every major API, AI flows, and step-by-step examples.
 
+## Production deployment
+
+- **[docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)** — storage, DB, Razorpay webhooks, email, observability, legal pages.
+- **File uploads:** set **`UPLOAD_DIR`** to an **absolute path** on a **persistent volume** (not only the default `./data/uploads`) so user files survive API redeploys on PaaS hosts.
+
 ### Razorpay (optional)
 
 Flow matches [Razorpay Subscriptions — integration guide](https://razorpay.com/docs/payments/subscriptions/integration-guide/): **(1)** define **Plans** in the Dashboard (`plan_…` ids) → **(2)** `POST /api/billing/razorpay/checkout` creates a **Subscription** (`sub_…`) → **(3)** `/pricing` opens **Standard Checkout** with `key_id` + `subscription_id` → **(4)** on success, `POST /api/billing/razorpay/verify-checkout` verifies the **payment signature** (mandatory step in Razorpay’s docs) → **(5)** webhooks on `/api/billing/razorpay/webhook` update `subscription_plan`. A **PWA `manifest`** is not required for Razorpay.

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +58,7 @@ import { RecommendedActionsSection } from "@/components/dashboard/recommended-ac
 import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { WorkspaceUsageStrip } from "@/components/dashboard/workspace-usage-strip";
 import { exportDashboardToPdf } from "@/lib/export-dashboard-pdf";
+import { trackEvent } from "@/lib/analytics";
 
 function formatWorkspaceActivity(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -205,6 +206,7 @@ export default function OverviewPage() {
         description:
           "Snapshot and Operator summary are updated below. Open Full briefing at the bottom for the full model output.",
       });
+      trackEvent("workspace_briefing_completed", { workspace_id: wid });
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           scrollDashboardMainToElement("workspace-snapshot");
@@ -310,6 +312,35 @@ export default function OverviewPage() {
       }),
     [data?.datasets, data?.total_rows]
   );
+
+  const [lastOverviewExitAt, setLastOverviewExitAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeWorkspace?.id) return;
+    const key = "snaptix_last_dashboard_exit_at";
+    setLastOverviewExitAt(localStorage.getItem(key));
+    return () => {
+      localStorage.setItem(key, new Date().toISOString());
+    };
+  }, [activeWorkspace?.id]);
+
+  const sinceVisitTimeline = useQuery({
+    queryKey: [
+      "workspace-timeline-since",
+      activeWorkspace?.id ?? "none",
+      lastOverviewExitAt ?? "none",
+    ],
+    queryFn: () =>
+      api.getWorkspaceTimeline({
+        since: lastOverviewExitAt!,
+        limit: 100,
+      }),
+    enabled:
+      overviewEnabled &&
+      Boolean(activeWorkspace?.id) &&
+      Boolean(lastOverviewExitAt) &&
+      Boolean(data && data.total_datasets > 0),
+  });
 
   if (workspaceLoading) {
     return (
@@ -486,6 +517,9 @@ export default function OverviewPage() {
         workspaceName: activeWorkspace.name,
       });
       toast.success("PDF downloaded");
+      trackEvent("dashboard_export_pdf", {
+        workspace: activeWorkspace?.id ?? "",
+      });
     } catch (err) {
       toast.error("Could not export PDF", {
         description:
@@ -635,6 +669,41 @@ export default function OverviewPage() {
 
       {analysesLimitDetail ? (
         <PlanLimitCallout detail={analysesLimitDetail} className="max-w-6xl" />
+      ) : null}
+
+      {sinceVisitTimeline.data &&
+      sinceVisitTimeline.data.events.length > 0 &&
+      lastOverviewExitAt ? (
+        <div
+          className="max-w-6xl rounded-2xl border border-indigo-200/80 bg-indigo-50/90 px-4 py-3 text-sm text-indigo-950 shadow-sm dark:border-indigo-900/50 dark:bg-indigo-950/35 dark:text-indigo-100"
+          role="status"
+        >
+          <p className="leading-relaxed">
+            <span className="font-semibold">Since your last visit</span>{" "}
+            ({new Date(lastOverviewExitAt).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+            ):{" "}
+            <strong>{sinceVisitTimeline.data.events.length}</strong> updates recorded in
+            History (imports, briefings, or appends).{" "}
+            <Link
+              href="/history"
+              className="font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-950 dark:text-indigo-200 dark:hover:text-white"
+            >
+              View history
+            </Link>
+            {" · "}
+            <button
+              type="button"
+              className="font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-950 dark:text-indigo-200 dark:hover:text-white disabled:opacity-50"
+              disabled={briefingActionsDisabled}
+              onClick={() => runOverviewAnalysis.mutate()}
+            >
+              Re-run briefing
+            </button>
+          </p>
+        </div>
       ) : null}
 
       <LatestSummaryCard className="max-w-6xl" />

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -37,12 +40,27 @@ def _get_snapshot_row(
 @router.get("/timeline")
 def get_workspace_timeline(
     limit: int = Query(40, ge=1, le=100),
+    since: Optional[str] = Query(
+        None,
+        description="ISO 8601 datetime; return only events created after this instant.",
+    ),
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     user, workspace_id = ws
     assert_timeline_allowed(db, user)
-    rows = list_snapshots(db, workspace_id, limit)
+    since_dt: datetime | None = None
+    if since and since.strip():
+        raw = since.strip().replace("Z", "+00:00")
+        try:
+            since_dt = datetime.fromisoformat(raw)
+            if since_dt.tzinfo is not None:
+                since_dt = since_dt.replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(
+                400, "Invalid since parameter; use an ISO 8601 datetime."
+            ) from None
+    rows = list_snapshots(db, workspace_id, limit, since_dt)
     events_desc = [serialize_snapshot(r) for r in rows]
     chrono_asc = list(reversed(events_desc))
     return {

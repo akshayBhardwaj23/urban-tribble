@@ -86,7 +86,7 @@ export default function DashboardLayout({
         </aside>
         <main
           id="dashboard-main"
-          className="flex-1 overflow-auto px-5 py-5 md:px-7 md:py-7"
+          className="flex-1 overflow-auto overscroll-y-contain px-4 py-4 sm:px-5 sm:py-5 md:px-7 md:py-7 [touch-action:pan-y]"
         >
           {children}
         </main>

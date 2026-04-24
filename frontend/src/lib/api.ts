@@ -277,6 +277,11 @@ export const api = {
       workspaces: { id: string; name: string; created_at: string }[];
     }>("/api/auth/me"),
 
+  deleteAuthAccount: () =>
+    request<{ ok: boolean; deleted: boolean }>("/api/auth/me", {
+      method: "DELETE",
+    }),
+
   uploadFile: (file: File, description: string) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -695,8 +700,12 @@ export const api = {
       body: JSON.stringify({ kind: body.kind, force: body.force ?? false }),
     }),
 
-  getWorkspaceTimeline: () =>
-    request<{
+  getWorkspaceTimeline: (opts?: { since?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (opts?.since) q.set("since", opts.since);
+    if (opts?.limit != null) q.set("limit", String(opts.limit));
+    const qs = q.toString();
+    return request<{
       events: WorkspaceTimelineEvent[];
       evolution: {
         recurring: {
@@ -709,7 +718,8 @@ export const api = {
         improving: { theme_key: string; narrative: string }[];
       };
       digests: WorkspaceDigestStub[];
-    }>("/api/workspace/timeline"),
+    }>(`/api/workspace/timeline${qs ? `?${qs}` : ""}`);
+  },
 
   compareWorkspaceSnapshots: (fromId: string, toId: string) =>
     request<WorkspaceCompareResult>(

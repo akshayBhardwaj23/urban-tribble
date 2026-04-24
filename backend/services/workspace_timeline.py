@@ -198,11 +198,19 @@ def _snapshot_exists(db: Session, workspace_id: str, event_type: str, ref_id: st
     )
 
 
-def list_snapshots(db: Session, workspace_id: str, limit: int = 40) -> list[WorkspaceTimelineSnapshot]:
+def list_snapshots(
+    db: Session,
+    workspace_id: str,
+    limit: int = 40,
+    since: Optional[datetime] = None,
+) -> list[WorkspaceTimelineSnapshot]:
+    q = db.query(WorkspaceTimelineSnapshot).filter(
+        WorkspaceTimelineSnapshot.workspace_id == workspace_id,
+    )
+    if since is not None:
+        q = q.filter(WorkspaceTimelineSnapshot.created_at > since)
     return (
-        db.query(WorkspaceTimelineSnapshot)
-        .filter(WorkspaceTimelineSnapshot.workspace_id == workspace_id)
-        .order_by(WorkspaceTimelineSnapshot.created_at.desc())
+        q.order_by(WorkspaceTimelineSnapshot.created_at.desc())
         .limit(limit)
         .all()
     )

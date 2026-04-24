@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from models.models import User, Workspace
+from services.account_deletion import delete_user_account
 from services.otp_email import send_otp_email, verify_otp_and_get_user
 from services.subscription_usage import get_effective_plan
 from utils.email_norm import normalize_email, user_by_email_ci
@@ -214,3 +215,18 @@ def get_me(
         **_profile_billing_fields(db, user),
         "workspaces": [_workspace_json(w) for w in workspaces],
     }
+
+
+@router.delete("/me")
+def delete_me(
+    x_user_email: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete the signed-in user, all owned workspaces, uploads, and related data."""
+    if not x_user_email:
+        raise HTTPException(401, "Not authenticated")
+    user = user_by_email_ci(db, x_user_email)
+    if not user:
+        raise HTTPException(404, "User not found")
+    delete_user_account(db, user)
+    return {"ok": True, "deleted": True}
