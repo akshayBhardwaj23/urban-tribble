@@ -57,6 +57,7 @@ import { AlertsSignalsSection } from "@/components/dashboard/alerts-signals-sect
 import { RecommendedActionsSection } from "@/components/dashboard/recommended-actions-section";
 import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { WorkspaceUsageStrip } from "@/components/dashboard/workspace-usage-strip";
+import { exportDashboardToPdf } from "@/lib/export-dashboard-pdf";
 
 function formatWorkspaceActivity(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -152,6 +153,8 @@ export default function OverviewPage() {
   // When restoring Outlook: add syncUser back to useWorkspace() for forecastMutation.
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const exportPdfRef = useRef<HTMLDivElement>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
   const [appendTarget, setAppendTarget] = useState<{
     id: string;
     name: string;
@@ -475,8 +478,29 @@ export default function OverviewPage() {
   const habits = data.habit_hints;
   const lastUpdatedLabel = formatWorkspaceActivity(habits?.last_activity_at);
 
+  const handleExportPdf = async () => {
+    if (!exportPdfRef.current || !activeWorkspace) return;
+    setPdfExporting(true);
+    try {
+      await exportDashboardToPdf(exportPdfRef.current, {
+        workspaceName: activeWorkspace.name,
+      });
+      toast.success("PDF downloaded");
+    } catch (err) {
+      toast.error("Could not export PDF", {
+        description:
+          err instanceof Error
+            ? err.message
+            : "Try again, or use your browser’s Print → Save as PDF.",
+      });
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
   return (
     <div className="dashboard-page">
+      <div ref={exportPdfRef} className="dashboard-pdf-root space-y-6 max-w-6xl">
       <header className="dashboard-hero-card dashboard-inner-accent">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.8fr)] xl:items-start">
           <div className="min-w-0">
@@ -574,6 +598,17 @@ export default function OverviewPage() {
                   : analysisReady
                     ? "Re-run briefing"
                     : "Run workspace briefing"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-lg"
+                onClick={() => void handleExportPdf()}
+                disabled={pdfExporting}
+                title="Download a PDF snapshot of this overview (charts and text as shown)."
+                data-pdf-exclude
+              >
+                {pdfExporting ? "Exporting…" : "Export PDF"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
@@ -978,6 +1013,8 @@ export default function OverviewPage() {
           </div>
         </details>
       )}
+
+      </div>
 
       <Dialog
         open={!!appendTarget}
