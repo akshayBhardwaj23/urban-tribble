@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useMemo, useEffect } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +17,9 @@ import {
   AutoChart,
   type ChartConfig,
 } from "@/components/charts/auto-chart";
+/* Workspace Outlook (linear projection chart) — disabled; uncomment import + block below to restore.
 import { ForecastChart } from "@/components/charts/forecast-chart";
+*/
 import {
   AnalysisPanel,
   type AnalysisResult,
@@ -72,6 +74,22 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       {children}
     </h2>
   );
+}
+
+/** Scroll nested dashboard `<main id="dashboard-main">` so briefing results land in view reliably. */
+function scrollDashboardMainToElement(elementId: string, offset = 16) {
+  const main = document.getElementById("dashboard-main");
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  if (main) {
+    const mainRect = main.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const top =
+      elRect.top - mainRect.top + main.scrollTop - offset;
+    main.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  } else {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function BriefTile({
@@ -130,19 +148,21 @@ function TrendBadge({ trend }: { trend: "up" | "down" | "stable" | null }) {
 }
 
 export default function OverviewPage() {
-  const { activeWorkspace, loading: workspaceLoading, syncUser } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
+  // When restoring Outlook: add syncUser back to useWorkspace() for forecastMutation.
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [appendTarget, setAppendTarget] = useState<{
     id: string;
     name: string;
   } | null>(null);
-  /** Steps forward at inferred frequency (day / week / month); max 366 on API. */
+  /*
+  // --- Workspace Outlook (disabled — user-facing value low; same-line linear extension)
   const [outlookPeriods, setOutlookPeriods] = useState(90);
-  /** Empty string = automatic file/column selection on the server. */
   const [outlookDatasetId, setOutlookDatasetId] = useState("");
   const [outlookDateCol, setOutlookDateCol] = useState("");
   const [outlookValueCol, setOutlookValueCol] = useState("");
+  */
 
   const overviewEnabled =
     !workspaceLoading && Boolean(activeWorkspace?.id);
@@ -171,19 +191,22 @@ export default function OverviewPage() {
 
   const runOverviewAnalysis = useMutation({
     mutationFn: () => api.runOverviewAnalysis(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["overview-analysis"] });
+    onSuccess: async () => {
+      const wid = activeWorkspace?.id ?? "none";
       queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
       queryClient.invalidateQueries({ queryKey: ["overview"] });
+      await queryClient.refetchQueries({
+        queryKey: ["overview-analysis", wid],
+      });
       toast.success("Workspace AI briefing finished", {
         description:
           "Snapshot and Operator summary are updated below. Open Full briefing at the bottom for the full model output.",
       });
-      window.setTimeout(() => {
-        document
-          .getElementById("workspace-operator-summary")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 350);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollDashboardMainToElement("workspace-snapshot");
+        });
+      });
     },
     onError: (err) => {
       if (isApiPlanLimitError(err)) {
@@ -205,6 +228,7 @@ export default function OverviewPage() {
     },
   });
 
+  /*
   const forecastMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspace?.id) throw new Error("No workspace");
@@ -243,6 +267,7 @@ export default function OverviewPage() {
   useEffect(() => {
     forecastMutation.reset();
   }, [activeWorkspace?.id, forecastMutation.reset]);
+  */
 
   const appendMutation = useMutation({
     mutationFn: ({ datasetId, file }: { datasetId: string; file: File }) =>
@@ -461,7 +486,12 @@ export default function OverviewPage() {
             </h1>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
               {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
-              · {data.total_rows.toLocaleString()} rows · Briefing first, then charts
+              · {data.total_rows.toLocaleString()} rows · Briefing first, then charts.
+              The workspace briefing is{" "}
+              <span className="font-medium text-slate-600 dark:text-slate-300">
+                AI-generated from your sources
+              </span>
+              —verify important figures in your files.
             </p>
             {habits && (
               <div className="mt-3 max-w-2xl space-y-1.5">
@@ -546,6 +576,13 @@ export default function OverviewPage() {
                     : "Run workspace briefing"}
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-medium text-slate-600 dark:text-slate-400">
+                AI analysis
+              </span>
+              {" · "}
+              Runs a model read across your sources. Check numbers and assumptions before acting.
+            </p>
             {habits?.briefing_cta_context ? (
               <p className="text-[11px] leading-snug text-muted-foreground">
                 <span className="font-medium text-slate-600 dark:text-slate-400">
@@ -585,8 +622,14 @@ export default function OverviewPage() {
       <WhatChangedSection block={data.what_changed} className="max-w-6xl" />
 
       {/* 1. Snapshot */}
-      <section id="workspace-snapshot" className="space-y-3">
-        <SectionLabel>Snapshot</SectionLabel>
+      <section
+        id="workspace-snapshot"
+        className="space-y-3 scroll-mt-6"
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <SectionLabel>Snapshot</SectionLabel>
+          <span className="dashboard-chip shrink-0 text-[10px]">AI briefing</span>
+        </div>
         <p className="text-xs text-slate-500 max-w-2xl -mt-1 leading-relaxed">
           Updates after you run a workspace briefing—model-generated read of your sources here.
         </p>
@@ -850,211 +893,16 @@ export default function OverviewPage() {
         )}
       </section>
 
-      {/* Planning + sources (secondary) — outlook full width so the chart reads clearly */}
       <section className="space-y-3">
-        <SectionLabel>Outlook & sources</SectionLabel>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.75fr)]">
-          <div className="dashboard-surface dashboard-inner-accent w-full p-6 md:p-8">
-            <h3 className="text-sm font-semibold text-slate-900">Outlook</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-3 leading-relaxed max-w-3xl">
-              Directional projection—not a forecast of record.{" "}
-              <span className="text-slate-600 dark:text-slate-400">
-                Pick a <strong className="font-medium text-slate-800 dark:text-slate-200">source file</strong>,{" "}
-                <strong className="font-medium text-slate-800 dark:text-slate-200">date</strong>, and{" "}
-                <strong className="font-medium text-slate-800 dark:text-slate-200">value</strong> column
-                below (saved for this workspace), or leave Source on{" "}
-                <strong className="font-medium text-slate-800 dark:text-slate-200">Automatic</strong> to
-                use the largest file with date + revenue-style columns (first of each in schema).
-              </span>
-            </p>
-
-            <div className="grid gap-3 sm:grid-cols-3 mb-4 max-w-4xl">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="outlook-source-file"
-                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  Source file
-                </label>
-                <select
-                  id="outlook-source-file"
-                  className="h-10 w-full rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
-                  value={outlookDatasetId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setOutlookDatasetId(id);
-                    if (!id || !data?.datasets) {
-                      setOutlookDateCol("");
-                      setOutlookValueCol("");
-                      return;
-                    }
-                    const ds = data.datasets.find((d) => d.id === id);
-                    if (ds) {
-                      setOutlookDateCol(ds.date_columns[0] ?? "");
-                      setOutlookValueCol(ds.value_columns[0] ?? "");
-                    }
-                  }}
-                  disabled={!data?.datasets?.length}
-                >
-                  <option value="">Automatic (largest qualifying file)</option>
-                  {(data?.datasets ?? []).map((ds) => (
-                    <option key={ds.id} value={ds.id}>
-                      {ds.name} ({(ds.row_count ?? 0).toLocaleString()} rows)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="outlook-date-col"
-                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  Date column
-                </label>
-                <select
-                  id="outlook-date-col"
-                  className="h-10 w-full rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
-                  value={outlookDateCol}
-                  onChange={(e) => setOutlookDateCol(e.target.value)}
-                  disabled={
-                    !outlookDatasetId ||
-                    !(outlookSourceDataset?.date_columns?.length)
-                  }
-                >
-                  <option value="">—</option>
-                  {(outlookSourceDataset?.date_columns ?? []).map((c) => (
-                    <option key={c} value={c}>
-                      {c.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="outlook-value-col"
-                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  Value column
-                </label>
-                <select
-                  id="outlook-value-col"
-                  className="h-10 w-full rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
-                  value={outlookValueCol}
-                  onChange={(e) => setOutlookValueCol(e.target.value)}
-                  disabled={
-                    !outlookDatasetId ||
-                    !(outlookSourceDataset?.value_columns?.length)
-                  }
-                >
-                  <option value="">—</option>
-                  {(outlookSourceDataset?.value_columns ?? []).map((c) => (
-                    <option key={c} value={c}>
-                      {c.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {outlookDatasetId && (!outlookDateCol || !outlookValueCol) ? (
-              <p className="text-xs text-destructive mb-3 max-w-3xl">
-                Select both a date and a value column for your chosen file, or switch Source to
-                Automatic.
-              </p>
-            ) : null}
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end mb-5 md:mb-6">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="outlook-horizon"
-                  className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  Horizon
-                </label>
-                <select
-                  id="outlook-horizon"
-                  className="h-10 min-w-[11rem] rounded-xl border border-white/75 bg-white/90 px-3 text-sm text-slate-800 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.26)] dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100"
-                  value={outlookPeriods}
-                  onChange={(e) => setOutlookPeriods(Number(e.target.value))}
-                >
-                  <option value={30}>30 periods</option>
-                  <option value={90}>90 periods</option>
-                  <option value={180}>180 periods</option>
-                  <option value={365}>365 periods</option>
-                </select>
-                <p className="text-[11px] text-slate-400 max-w-xs leading-snug">
-                  Each period matches your data spacing (day, week, or month).
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-lg shrink-0"
-                onClick={() => forecastMutation.mutate()}
-                disabled={
-                  forecastMutation.isPending ||
-                  (Boolean(outlookDatasetId) &&
-                    (!outlookDateCol || !outlookValueCol))
-                }
-              >
-                {forecastMutation.isPending
-                  ? "Generating..."
-                  : forecastMutation.data
-                    ? "Regenerate outlook"
-                    : "Generate outlook"}
-              </Button>
-            </div>
-
-            {forecastMutation.isError && (
-              <p className="text-sm text-destructive mb-4">
-                {forecastMutation.error.message}
-              </p>
-            )}
-
-            {forecastMutation.data ? (
-              <div className="space-y-4">
-                <div className="dashboard-surface-muted px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
-                  <p className="font-medium text-slate-800 dark:text-slate-100">
-                    What this chart uses
-                  </p>
-                  <p className="mt-1 leading-relaxed">
-                    <span className="font-medium">
-                      {forecastMutation.data.value_column.replace(/_/g, " ")}
-                    </span>
-                    {" · "}
-                    timeline{" "}
-                    <span className="font-medium">
-                      {forecastMutation.data.date_column.replace(/_/g, " ")}
-                    </span>
-                    {" · "}
-                    file{" "}
-                    <span className="font-medium">
-                      {forecastMutation.data.dataset_name}
-                    </span>
-                  </p>
-                  <p className="mt-2 text-slate-500 dark:text-slate-400">
-                    Showing{" "}
-                    <span className="font-medium text-slate-700 dark:text-slate-200">
-                      {forecastMutation.data.stats.forecast_periods}
-                    </span>{" "}
-                    future {forecastMutation.data.stats.period_type}
-                    {forecastMutation.data.stats.forecast_periods === 1
-                      ? ""
-                      : "s"}
-                    .
-                  </p>
-                </div>
-                <ForecastChart
-                  data={forecastMutation.data}
-                  valueColumn={forecastMutation.data.value_column}
-                  chartHeightClassName="min-h-[16rem] h-[min(34rem,52vh)] sm:min-h-[20rem]"
-                />
-              </div>
-            ) : null}
-          </div>
-
+        <SectionLabel>Sources</SectionLabel>
+        {/*
+        Workspace Outlook UI (disabled). Restore: uncomment ForecastChart import, outlook hooks block,
+        two-column grid, and the following card (search "Outlook" in git history).
+        Previously: SectionLabel "Outlook & sources", xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.75fr)].
+        */}
+        <div className="max-w-2xl">
           <div className="dashboard-surface w-full p-6">
-            <h3 className="text-sm font-semibold text-slate-900">Sources</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-4">
+            <p className="text-xs text-slate-500 mb-4">
               Open a source for preview, briefing detail, or to add rows.
             </p>
             <ul className="space-y-2">

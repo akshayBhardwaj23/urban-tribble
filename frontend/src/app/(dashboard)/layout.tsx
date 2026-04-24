@@ -84,7 +84,10 @@ export default function DashboardLayout({
             <UserMenu />
           </div>
         </aside>
-        <main className="flex-1 overflow-auto px-5 py-5 md:px-7 md:py-7">
+        <main
+          id="dashboard-main"
+          className="flex-1 overflow-auto px-5 py-5 md:px-7 md:py-7"
+        >
           {children}
         </main>
       </div>
