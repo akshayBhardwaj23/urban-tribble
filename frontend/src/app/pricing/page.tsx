@@ -57,7 +57,7 @@ export default function PricingPage() {
           Run your business with clarity, not guesswork.
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300 sm:text-[17px] sm:leading-8">
-          Clarus turns your spreadsheets into ongoing business insights—so you know what changed,
+          Snaptix turns your spreadsheets into ongoing business insights—so you know what changed,
           what matters, and what to do next.
         </p>
         <p className="mx-auto mt-6 max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-400">

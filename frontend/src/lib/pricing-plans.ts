@@ -80,7 +80,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
 ];
 
-export const PRICING_VALUE_HEADLINE = "Why businesses keep using Clarus";
+export const PRICING_VALUE_HEADLINE = "Why businesses keep using Snaptix";
 
 export const PRICING_VALUE_POINTS = [
   "See what changed, not just what exists",
@@ -90,14 +90,14 @@ export const PRICING_VALUE_POINTS = [
 ];
 
 export const PRICING_ROI_LINE =
-  "If Clarus helps you avoid one bad decision or spot one missed opportunity, it pays for itself.";
+  "If Snaptix helps you avoid one bad decision or spot one missed opportunity, it pays for itself.";
 
 export type PricingFaqItem = { q: string; a: string };
 
 export const PRICING_FAQ: PricingFaqItem[] = [
   {
     q: "Do I need to upload data every time?",
-    a: "You can upload new data whenever you want updated insights. Over time, Clarus builds history to show trends and changes.",
+    a: "You can upload new data whenever you want updated insights. Over time, Snaptix builds history to show trends and changes.",
   },
   {
     q: "What kind of files can I upload?",

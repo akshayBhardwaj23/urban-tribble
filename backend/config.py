@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     AUTH_TEST_LOGIN_NAME: str = "Test user"
     # Resend (https://resend.com) — email OTP
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "Clarus <onboarding@resend.dev>"
+    RESEND_FROM_EMAIL: str = "Snaptix <onboarding@resend.dev>"
     # HMAC pepper for OTP hashes (set in production)
     OTP_PEPPER: str = "dev-otp-pepper-change-in-production"
     OTP_EXPIRE_MINUTES: int = 10

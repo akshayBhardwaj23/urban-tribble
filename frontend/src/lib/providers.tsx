@@ -9,7 +9,7 @@ import { AuthBypassAutoSignIn } from "@/components/auth-bypass-autosignin";
 import { AppToaster } from "@/components/app-toaster";
 import { WorkspaceProvider } from "./workspace-context";
 
-/** Marketing home is always light; elsewhere respects clarus-theme + system. */
+/** Marketing home is always light; elsewhere respects snaptix-theme + system. */
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const forceLight = pathname === "/";
@@ -19,7 +19,7 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
       attribute="class"
       defaultTheme="system"
       enableSystem
-      storageKey="clarus-theme"
+      storageKey="snaptix-theme"
       disableTransitionOnChange
       forcedTheme={forceLight ? "light" : undefined}
     >

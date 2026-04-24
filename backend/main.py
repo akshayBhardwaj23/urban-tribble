@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
-app = FastAPI(title="Excel Consultant", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Snaptix", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

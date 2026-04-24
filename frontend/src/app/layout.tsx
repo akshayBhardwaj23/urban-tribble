@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter, Fraunces } from "next/font/google";
 import { Providers } from "@/lib/providers";
-import { META_DESCRIPTION, PRODUCT_NAME } from "@/lib/brand";
+import { CANONICAL_SITE_URL, META_DESCRIPTION, PRODUCT_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -20,8 +20,21 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(CANONICAL_SITE_URL),
   title: `${PRODUCT_NAME} — AI business analyst`,
   description: META_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: PRODUCT_NAME,
+    title: `${PRODUCT_NAME} — AI business analyst`,
+    description: META_DESCRIPTION,
+    url: CANONICAL_SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${PRODUCT_NAME} — AI business analyst`,
+    description: META_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

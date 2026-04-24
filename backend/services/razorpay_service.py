@@ -23,6 +23,18 @@ logger = logging.getLogger(__name__)
 PLAN_TIERS = frozenset({"starter", "pro"})
 
 
+def _note_str(notes: Any, *keys: str) -> Optional[str]:
+    if not isinstance(notes, dict):
+        return None
+    for k in keys:
+        raw = notes.get(k)
+        if raw is not None:
+            s = str(raw).strip()
+            if s:
+                return s
+    return None
+
+
 def razorpay_configured() -> bool:
     return bool(
         settings.RAZORPAY_KEY_ID.strip()
@@ -94,7 +106,7 @@ def _ensure_customer(db: Session, user: User) -> str:
         "email": user.email,
         "fail_existing": 0,
         "notes": {
-            "clarus_user_id": str(user.id),
+            "snaptix_user_id": str(user.id),
         },
     }
     if user.name:
@@ -138,8 +150,8 @@ def create_subscription_checkout(db: Session, user: User, tier: str) -> dict[str
             "customer_notify": False,
             "expire_by": expire_by,
             "notes": {
-                "clarus_user_id": str(user.id),
-                "clarus_plan": str(tier),
+                "snaptix_user_id": str(user.id),
+                "snaptix_plan": str(tier),
             },
         }
     )
@@ -193,9 +205,7 @@ def _resolve_user(db: Session, entity: dict[str, Any]) -> Optional[User]:
     notes = entity.get("notes")
     uid: Optional[str] = None
     if isinstance(notes, dict):
-        raw = notes.get("clarus_user_id")
-        if raw is not None:
-            uid = str(raw).strip() or None
+        uid = _note_str(notes, "snaptix_user_id", "clarus_user_id")
     if uid:
         u = db.query(User).filter(User.id == uid).first()
         if u:
@@ -233,12 +243,11 @@ def _apply_period_end(user: User, entity: dict[str, Any]) -> None:
 
 def _resolve_tier(entity: dict[str, Any]) -> Optional[str]:
     notes = entity.get("notes")
-    if isinstance(notes, dict):
-        raw = notes.get("clarus_plan")
-        if raw is not None:
-            t = str(raw).strip().lower()
-            if t in PLAN_TIERS:
-                return t
+    raw = _note_str(notes, "snaptix_plan", "clarus_plan") if isinstance(notes, dict) else None
+    if raw is not None:
+        t = raw.strip().lower()
+        if t in PLAN_TIERS:
+            return t
     return _tier_from_razorpay_plan_id(entity.get("plan_id"))
 
 

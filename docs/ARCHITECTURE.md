@@ -1,4 +1,4 @@
-# Clarus / Excel Consultant — Architecture & Deep Dive
+# Snaptix — Architecture & Deep Dive
 
 This document is the **authoritative technical map** of the project: how data moves, where it lives, which APIs exist, and how AI is used. Use it to onboard, debug, or answer stakeholder questions.
 

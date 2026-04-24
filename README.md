@@ -1,4 +1,4 @@
-# Excel Consultant
+# Snaptix
 
 AI-powered business analytics SaaS. Upload Excel/CSV files and get automated dashboards, AI-generated insights, forecasting, and natural language data querying.
 
@@ -42,8 +42,9 @@ Frontend runs at http://localhost:3000.
 2. Create a new OAuth 2.0 Client ID (Web application)
 3. Add `http://localhost:3000` to Authorized JavaScript origins
 4. Add `http://localhost:3000/api/auth/callback/google` to Authorized redirect URIs
-5. Copy Client ID and Client Secret to `frontend/.env.local`
-6. Generate a NEXTAUTH_SECRET: `openssl rand -base64 32`
+5. For production at **https://snaptix.ai**, also add `https://snaptix.ai` and `https://snaptix.ai/api/auth/callback/google`, and set `NEXTAUTH_URL=https://snaptix.ai` in `frontend/.env.local`
+6. Copy Client ID and Client Secret to `frontend/.env.local`
+7. Generate a NEXTAUTH_SECRET: `openssl rand -base64 32`
 
 ## Project Structure
 
