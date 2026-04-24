@@ -24,6 +24,7 @@ import {
 } from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
 import { api, isApiPlanLimitError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
@@ -89,7 +90,7 @@ function BriefTile({
       ? "border-amber-200/80 bg-[linear-gradient(135deg,rgba(255,247,230,0.96),rgba(255,255,255,0.85))] dark:border-amber-900/40 dark:bg-[linear-gradient(135deg,rgba(120,53,15,0.18),rgba(15,23,42,0.6))]"
       : variant === "opportunity"
         ? "border-emerald-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(255,255,255,0.84))] dark:border-emerald-900/40 dark:bg-[linear-gradient(135deg,rgba(6,78,59,0.18),rgba(15,23,42,0.6))]"
-        : "border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.94),rgba(248,243,236,0.9))] dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(30,41,59,0.62),rgba(15,23,42,0.62))]";
+        : "border-slate-200/70 bg-white dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(30,41,59,0.62),rgba(15,23,42,0.62))]";
   const showEmpty = !body.trim();
 
   return (
@@ -808,7 +809,7 @@ export default function OverviewPage() {
           </div>
         </div>
         {data.charts.length > 0 ? (
-          <div className="flex flex-col gap-6 w-full">
+          <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2 md:[grid-auto-flow:row_dense]">
             {data.charts.map(
               (
                 chart: {
@@ -822,7 +823,13 @@ export default function OverviewPage() {
                 },
                 i: number
               ) => (
-                <div key={chart.id} className="space-y-2">
+                <div
+                  key={chart.id}
+                  className={cn(
+                    "min-w-0 space-y-2",
+                    chart.type !== "bar" && "md:col-span-2"
+                  )}
+                >
                   <AutoChart chart={chart} accentIndex={i} />
                   {chart.dataset_name && (
                     <p className="text-xs font-medium text-slate-500">
