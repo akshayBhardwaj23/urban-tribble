@@ -12,6 +12,14 @@ type PlanId = "free" | "starter" | "pro";
 
 const CHECKOUT_SCRIPT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
 
+/**
+ * Embedded Checkout.js can show "issue with the merchant" before any payment UI even when
+ * subscription.create succeeds. Default is hosted page (short_url) — same mandate flow, more reliable.
+ * Set NEXT_PUBLIC_RAZORPAY_CHECKOUT_MODAL=true to use the modal + client verify-checkout instead.
+ */
+const useRazorpayCheckoutModal =
+  process.env.NEXT_PUBLIC_RAZORPAY_CHECKOUT_MODAL === "true";
+
 /** Razorpay may return api.razorpay.com links that fail in-browser; used only as fallback. */
 function normalizeRazorpayCheckoutUrl(url: string): string {
   try {
@@ -85,7 +93,7 @@ export function PricingTierCTA({
           className={cn(
             "min-h-12 w-full rounded-xl font-semibold",
             featured
-              ? "h-12 text-base shadow-lg shadow-violet-600/25 dark:shadow-violet-900/40"
+              ? "h-12 text-base shadow-lg shadow-amber-500/20 dark:shadow-[0_12px_40px_-12px_oklch(0.5_0.08_74_/_0.45)]"
               : "h-12 text-[15px]",
           )}
           size="lg"
@@ -107,6 +115,11 @@ export function PricingTierCTA({
     try {
       setApiUserEmail(session.user.email);
       const { short_url, subscription_id, key_id } = await api.razorpayCheckout(planId);
+
+      if (!useRazorpayCheckoutModal) {
+        window.location.assign(normalizeRazorpayCheckoutUrl(short_url));
+        return;
+      }
 
       try {
         await loadRazorpayCheckoutScript();
@@ -202,7 +215,7 @@ export function PricingTierCTA({
         className={cn(
           "min-h-12 w-full rounded-xl font-semibold",
           featured
-            ? "h-12 text-base shadow-lg shadow-violet-600/25 dark:shadow-violet-900/40"
+            ? "h-12 text-base shadow-lg shadow-amber-500/20 dark:shadow-[0_12px_40px_-12px_oklch(0.5_0.08_74_/_0.45)]"
             : "h-12 text-[15px]",
         )}
         size="lg"

@@ -30,3 +30,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+
+
+temp

@@ -9,6 +9,8 @@ export const PRODUCT_DOMAIN = "snaptix.ai" as const;
 
 export const CANONICAL_SITE_URL = `https://${PRODUCT_DOMAIN}` as const;
 
+export const SEO_TITLE = `${PRODUCT_NAME} — AI business analyst for spreadsheets`;
+
 /** Primary positioning — browser, login, hero eyebrow */
 export const POSITIONING_LINE =
   "AI analyst for revenue, cost, and the tradeoffs between them";
@@ -19,6 +21,18 @@ export const PRODUCT_TAGLINE =
 
 /** Browser tab + Open Graph description */
 export const META_DESCRIPTION = `${PRODUCT_NAME} helps operators read revenue, cost, and ops data: upload spreadsheets, get a calm briefing on what moved and what to verify, then decide with clearer tradeoffs.`;
+
+export const SEO_KEYWORDS = [
+  "AI business analyst",
+  "spreadsheet analytics",
+  "Excel analytics",
+  "CSV dashboard",
+  "AI data analysis",
+  "business intelligence",
+  "financial analysis software",
+  "automated dashboards",
+  PRODUCT_NAME,
+];
 
 /** Login screen subtitle (same intent as POSITIONING_LINE; split if you want login-only copy) */
 export const LOGIN_HEADLINE = POSITIONING_LINE;

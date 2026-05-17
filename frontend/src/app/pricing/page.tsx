@@ -1,10 +1,11 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
 import { PricingTierCTA } from "@/components/pricing/pricing-tier-cta";
 import { LandingHeaderAuth } from "@/components/landing-auth";
 import { ThemeMenuCompact } from "@/components/theme-menu";
-import { PRODUCT_NAME } from "@/lib/brand";
+import { CANONICAL_SITE_URL, PRODUCT_NAME } from "@/lib/brand";
 import {
   PRICING_FAQ,
   PRICING_PLANS,
@@ -14,7 +15,69 @@ import {
 } from "@/lib/pricing-plans";
 import { cn } from "@/lib/utils";
 
+export const metadata: Metadata = {
+  title: "Pricing",
+  description:
+    "Compare Snaptix plans for AI spreadsheet dashboards, business briefings, forecasting, and workspace analytics.",
+  alternates: {
+    canonical: "/pricing",
+  },
+  openGraph: {
+    title: `Pricing — ${PRODUCT_NAME}`,
+    description:
+      "Compare Snaptix plans for AI spreadsheet dashboards, business briefings, forecasting, and workspace analytics.",
+    url: `${CANONICAL_SITE_URL}/pricing`,
+  },
+};
+
 const serif = DM_Serif_Display({ subsets: ["latin"], weight: "400" });
+
+function planPrice(plan: (typeof PRICING_PLANS)[number]) {
+  const value = plan.priceDisplay.replace(/[^\d]/g, "");
+  return value ? value : "0";
+}
+
+function PricingStructuredData() {
+  const graph = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "OfferCatalog",
+        "@id": `${CANONICAL_SITE_URL}/pricing#plans`,
+        name: `${PRODUCT_NAME} pricing`,
+        url: `${CANONICAL_SITE_URL}/pricing`,
+        itemListElement: PRICING_PLANS.map((plan) => ({
+          "@type": "Offer",
+          name: `${PRODUCT_NAME} ${plan.name}`,
+          description: plan.subtitle,
+          price: planPrice(plan),
+          priceCurrency: "INR",
+          url: `${CANONICAL_SITE_URL}/pricing#${plan.id}`,
+          category: "SaaS subscription",
+        })),
+      },
+      {
+        "@type": "FAQPage",
+        "@id": `${CANONICAL_SITE_URL}/pricing#faq`,
+        mainEntity: PRICING_FAQ.map((item) => ({
+          "@type": "Question",
+          name: item.q,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: item.a,
+          },
+        })),
+      },
+    ],
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }}
+    />
+  );
+}
 
 function Tag({ children }: { children: ReactNode }) {
   return (
@@ -27,6 +90,7 @@ function Tag({ children }: { children: ReactNode }) {
 export default function PricingPage() {
   return (
     <main className="min-h-screen bg-[#f6f4ef] text-slate-900 dark:bg-background dark:text-foreground">
+      <PricingStructuredData />
       <div className="border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-white/10 dark:bg-card/60">
         <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <Link
@@ -79,6 +143,7 @@ export default function PricingPage() {
             return (
               <article
                 key={plan.id}
+                id={plan.id}
                 className={cn(
                   "relative flex min-h-0 flex-col rounded-3xl border",
                   featured

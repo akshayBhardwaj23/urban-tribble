@@ -8,6 +8,8 @@ import {
   LandingHeroPrimaryCta,
 } from "@/components/landing-auth";
 import {
+  CANONICAL_SITE_URL,
+  META_DESCRIPTION,
   POSITIONING_LINE,
   PRODUCT_NAME,
   PRODUCT_TAGLINE,
@@ -527,9 +529,55 @@ function PricingTeaser() {
   );
 }
 
+function LandingStructuredData() {
+  const graph = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${CANONICAL_SITE_URL}/#organization`,
+        name: PRODUCT_NAME,
+        url: CANONICAL_SITE_URL,
+        logo: `${CANONICAL_SITE_URL}/snaptix-icon.svg`,
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${CANONICAL_SITE_URL}/#website`,
+        name: PRODUCT_NAME,
+        url: CANONICAL_SITE_URL,
+        description: META_DESCRIPTION,
+        publisher: { "@id": `${CANONICAL_SITE_URL}/#organization` },
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": `${CANONICAL_SITE_URL}/#software`,
+        name: PRODUCT_NAME,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        url: CANONICAL_SITE_URL,
+        description: META_DESCRIPTION,
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "INR",
+          category: "free trial",
+        },
+      },
+    ],
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }}
+    />
+  );
+}
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#f6f4ef] text-slate-900 dark:bg-background dark:text-foreground">
+      <LandingStructuredData />
       <div className="relative overflow-hidden px-3 pb-8 pt-4 md:px-6">
         <HeroFloatingSet />
         <div className="relative z-10 mx-auto max-w-6xl rounded-[34px] border border-slate-200/80 bg-white/70 px-5 py-5 backdrop-blur-sm dark:border-white/[0.1] dark:bg-card/55 md:px-8">
