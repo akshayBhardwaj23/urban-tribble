@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand-logo";
 import {
   LandingFooterPrimaryCta,
   LandingHeaderAuth,
@@ -538,7 +539,7 @@ function LandingStructuredData() {
         "@id": `${CANONICAL_SITE_URL}/#organization`,
         name: PRODUCT_NAME,
         url: CANONICAL_SITE_URL,
-        logo: `${CANONICAL_SITE_URL}/snaptix-icon.svg`,
+        logo: `${CANONICAL_SITE_URL}/icon-512.png`,
       },
       {
         "@type": "WebSite",
@@ -582,9 +583,7 @@ export default function LandingPage() {
         <HeroFloatingSet />
         <div className="relative z-10 mx-auto max-w-6xl rounded-[34px] border border-slate-200/80 bg-white/70 px-5 py-5 backdrop-blur-sm dark:border-white/[0.1] dark:bg-card/55 md:px-8">
           <header className="flex items-center justify-between border-b border-slate-200/80 pb-5 dark:border-white/[0.08]">
-            <Link href="/" className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">
-              {PRODUCT_NAME}
-            </Link>
+            <BrandLogo href="/" nameClassName="text-base" />
             <nav className="hidden items-center gap-6 text-sm text-slate-600 dark:text-slate-300 md:flex">
               <Link href="#solutions" className="hover:text-slate-900 dark:hover:text-white">
                 Solutions

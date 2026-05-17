@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { LOGIN_HEADLINE, PRODUCT_NAME } from "@/lib/brand";
+import { BrandLogo } from "@/components/brand-logo";
+import { LOGIN_HEADLINE } from "@/lib/brand";
 import { ThemeMenuCompact } from "@/components/theme-menu";
 
 const API_BASE =
@@ -98,9 +99,9 @@ export default function LoginPage() {
       <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
         <ThemeMenuCompact />
       </div>
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold tracking-tight">{PRODUCT_NAME}</h1>
-        <p className="mt-2 text-muted-foreground">{LOGIN_HEADLINE}</p>
+      <div className="mb-8 flex flex-col items-center text-center">
+        <BrandLogo href="/" nameClassName="text-3xl font-bold" />
+        <p className="mt-4 text-muted-foreground">{LOGIN_HEADLINE}</p>
       </div>
 
       <Card className="w-full max-w-sm">

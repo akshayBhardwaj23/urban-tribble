@@ -9,6 +9,9 @@ export const PRODUCT_DOMAIN = "snaptix.ai" as const;
 
 export const CANONICAL_SITE_URL = `https://${PRODUCT_DOMAIN}` as const;
 
+/** Transparent brand mark (public/) */
+export const LOGO_SRC = "/logo-snaptix.png";
+
 export const SEO_TITLE = `${PRODUCT_NAME} — AI business analyst for spreadsheets`;
 
 /** Primary positioning — browser, login, hero eyebrow */

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
+import { BrandLogo } from "@/components/brand-logo";
 import { PricingTierCTA } from "@/components/pricing/pricing-tier-cta";
 import { LandingHeaderAuth } from "@/components/landing-auth";
 import { ThemeMenuCompact } from "@/components/theme-menu";
@@ -93,12 +94,7 @@ export default function PricingPage() {
       <PricingStructuredData />
       <div className="border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-white/10 dark:bg-card/60">
         <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <Link
-            href="/"
-            className="min-w-0 shrink text-base font-semibold tracking-tight text-slate-900 dark:text-white"
-          >
-            {PRODUCT_NAME}
-          </Link>
+          <BrandLogo href="/" className="min-w-0 shrink" nameClassName="text-base" />
           <nav className="flex shrink-0 items-center gap-3 text-sm text-slate-600 dark:text-slate-300 sm:gap-5">
             <Link href="/" className="hidden hover:text-slate-900 dark:hover:text-white sm:inline">
               Home

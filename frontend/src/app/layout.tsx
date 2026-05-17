@@ -41,10 +41,6 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
-  icons: {
-    icon: [{ url: "/snaptix-icon.svg", type: "image/svg+xml" }],
-    shortcut: [{ url: "/snaptix-icon.svg", type: "image/svg+xml" }],
-  },
   manifest: "/manifest.webmanifest",
   robots: {
     index: true,

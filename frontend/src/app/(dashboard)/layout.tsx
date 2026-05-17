@@ -7,7 +7,7 @@ import { WorkspaceQueryInvalidator } from "@/components/workspace-query-invalida
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
-import { PRODUCT_NAME } from "@/lib/brand";
+import { BrandLogo } from "@/components/brand-logo";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "◈" },
@@ -33,12 +33,10 @@ export default function DashboardLayout({
           className="sticky top-0 flex h-screen w-[17rem] shrink-0 flex-col border-r border-slate-200/80 bg-white p-5 shadow-[4px_0_24px_-12px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[oklch(0.16_0.012_72)] dark:shadow-[10px_0_44px_-28px_rgba(0,0,0,0.48)]"
         >
           <div className="mb-5 rounded-[1.75rem] border border-white/70 bg-white/72 px-4 py-4 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-            <Link
+            <BrandLogo
               href="/dashboard"
-              className="block text-lg font-bold tracking-tight text-foreground"
-            >
-              {PRODUCT_NAME}
-            </Link>
+              nameClassName="text-lg font-bold text-foreground"
+            />
             <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
               Dashboards, sources, briefings, and chat in one workspace.
             </p>
