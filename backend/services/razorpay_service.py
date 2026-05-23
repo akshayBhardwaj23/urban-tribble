@@ -71,6 +71,35 @@ def _tier_from_razorpay_plan_id(plan_id: Optional[str]) -> Optional[str]:
     return None
 
 
+def activate_subscription_after_checkout(
+    db: Session, user: User, subscription_id: str
+) -> Optional[str]:
+    """Apply plan from Razorpay subscription notes/plan_id after successful auth payment."""
+    sub_id = subscription_id.strip()
+    if not sub_id:
+        return None
+    try:
+        entity = _client().subscription.fetch(sub_id)
+    except Exception as e:
+        logger.warning("Razorpay subscription.fetch failed after checkout: %s", e)
+        return None
+    if not isinstance(entity, dict):
+        return None
+
+    tier = _resolve_tier(entity)
+    if not tier:
+        return None
+
+    user.billing_subscription_id = sub_id
+    user.billing_provider = "razorpay"
+    user.subscription_plan = tier
+    _apply_period_end(user, entity)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return tier
+
+
 def verify_subscription_auth_signature(
     razorpay_payment_id: str,
     razorpay_subscription_id: str,

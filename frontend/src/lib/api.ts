@@ -753,9 +753,12 @@ export const api = {
     razorpay_subscription_id: string;
     razorpay_signature: string;
   }) =>
-    request<{ verified: boolean }>("/api/billing/razorpay/verify-checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
+    request<{ verified: boolean; subscription_plan?: string }>(
+      "/api/billing/razorpay/verify-checkout",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    ),
 };

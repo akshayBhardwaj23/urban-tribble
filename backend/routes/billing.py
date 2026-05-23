@@ -11,6 +11,7 @@ from database import get_db
 from deps import require_user
 from models.models import User
 from services.razorpay_service import (
+    activate_subscription_after_checkout,
     create_subscription_checkout,
     process_webhook_request,
     razorpay_configured,
@@ -75,7 +76,14 @@ def razorpay_verify_checkout(
         body.razorpay_signature,
     ):
         raise HTTPException(400, "Invalid Razorpay signature.")
-    return {"verified": True}
+
+    tier = activate_subscription_after_checkout(
+        db, user, body.razorpay_subscription_id.strip()
+    )
+    return {
+        "verified": True,
+        "subscription_plan": tier or user.subscription_plan,
+    }
 
 
 @router.post("/razorpay/webhook")

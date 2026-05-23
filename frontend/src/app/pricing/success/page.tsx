@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api, setApiUserEmail } from "@/lib/api";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { useWorkspace } from "@/lib/workspace-context";
 import type { RazorpayCheckoutSuccess } from "@/lib/razorpay-checkout";
 
 function readCheckoutParams(
@@ -30,6 +31,7 @@ function PricingSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
+  const { syncUser } = useWorkspace();
   const [message, setMessage] = useState("Confirming your subscription…");
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +55,12 @@ function PricingSuccessContent() {
 
       if (params) {
         try {
-          await api.razorpayVerifyCheckout(params);
+          const result = await api.razorpayVerifyCheckout(params);
+          if (!cancelled && result.subscription_plan) {
+            setMessage(
+              `Your ${result.subscription_plan === "pro" ? "Pro" : "Starter"} plan is active.`
+            );
+          }
         } catch (e) {
           if (!cancelled) {
             setMessage(
@@ -70,13 +77,7 @@ function PricingSuccessContent() {
         setMessage("Thanks for subscribing. Checking your plan…");
       }
 
-      // Allow webhook a moment, then confirm profile
-      await new Promise((r) => setTimeout(r, 1200));
-      try {
-        await api.getAuthMe();
-      } catch {
-        /* plan may still update via webhook */
-      }
+      await syncUser();
 
       if (!cancelled) {
         router.replace("/dashboard?subscription=started");
@@ -87,7 +88,7 @@ function PricingSuccessContent() {
     return () => {
       cancelled = true;
     };
-  }, [status, session?.user?.email, searchParams, router]);
+  }, [status, session?.user?.email, searchParams, router, syncUser]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4 text-center">
