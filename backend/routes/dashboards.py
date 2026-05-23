@@ -28,6 +28,7 @@ from services.dashboard_executor import (
 from services.period_change_summary import (
     build_what_changed_for_dataframe,
     build_workspace_what_changed,
+    resolve_period_comparison_for_dataframe,
 )
 from services.workspace_alerts import build_workspace_alerts
 from services.workspace_query import latest_workspace_overview_analysis
@@ -165,6 +166,14 @@ def get_dashboard_data(
         "date_column": date_col if timeframe_applied else None,
     }
 
+    period_comparison = resolve_period_comparison_for_dataframe(
+        df_full,
+        metadata,
+        start_ts=start_ts if last_n_days is None else None,
+        end_ts=end_ts if last_n_days is None else None,
+        last_n_days=last_n_days,
+    )
+
     kpi_ctx = build_kpi_context_dict(
         source_file=dataset.name,
         row_count=len(df),
@@ -213,6 +222,7 @@ def get_dashboard_data(
             "date_bounds": date_bounds,
             "filtered_row_count": len(df),
             "what_changed": what_changed,
+            "period_comparison": period_comparison,
         }
 
     charts = legacy_charts(
@@ -234,6 +244,7 @@ def get_dashboard_data(
         "date_bounds": date_bounds,
         "filtered_row_count": len(df),
         "what_changed": what_changed,
+        "period_comparison": period_comparison,
     }
 
 

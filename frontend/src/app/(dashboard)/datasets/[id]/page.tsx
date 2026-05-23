@@ -523,7 +523,11 @@ export default function DatasetPage() {
                   key={chart.id}
                   className={cn("min-w-0", chart.type !== "bar" && "md:col-span-2")}
                 >
-                  <AutoChart chart={chart} accentIndex={i} />
+                  <AutoChart
+                    chart={chart}
+                    accentIndex={i}
+                    periodComparison={dashboardData.data?.period_comparison ?? null}
+                  />
                 </div>
               ))}
             </div>

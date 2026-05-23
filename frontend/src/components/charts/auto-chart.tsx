@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import {
   Area,
   AreaChart,
@@ -23,6 +23,12 @@ import {
   formatChartAxisDate,
   formatChartTooltipDate,
 } from "@/lib/chart-dates";
+import {
+  type PeriodComparison,
+  dayInRange,
+  eachDayInRange,
+  seriesLabelsFromComparison,
+} from "@/lib/chart-period-comparison";
 import {
   CHART_GRID,
   CHART_MUTED,
@@ -56,7 +62,52 @@ const MAX_LINE_AREA_POINTS = 480;
 const MAX_BAR_POINTS = 120;
 const MAX_PIE_SLICES = 24;
 
-type DualPoint = { x: string; y: number; yPrev: number };
+type DualPoint = { x: string; y: number | null; yPrev: number | null };
+
+type BarDatum = { name: string; nameFull: string; value: number };
+
+const BAR_LABEL_MAX_CHARS = 30;
+
+function truncateCategoryStart(text: string, maxChars = BAR_LABEL_MAX_CHARS): string {
+  const t = text.trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, Math.max(1, maxChars - 1))}…`;
+}
+
+function barCategoryAxisWidth(data: BarDatum[]): number {
+  const longest = data.reduce((m, d) => Math.max(m, d.name.length), 8);
+  return Math.min(240, Math.max(108, Math.ceil(longest * 6.8) + 16));
+}
+
+function makeCategoryYAxisTick(data: BarDatum[]) {
+  const fullByLabel = new Map(data.map((d) => [d.name, d.nameFull]));
+  return function CategoryYAxisTick(props: {
+    x?: number | string;
+    y?: number | string;
+    payload?: { value?: string };
+  }): ReactElement {
+    const x = Number(props.x ?? 0);
+    const y = Number(props.y ?? 0);
+    const label = String(props.payload?.value ?? "");
+    const full = fullByLabel.get(label) ?? label;
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text
+          x={-8}
+          y={0}
+          dy={4}
+          textAnchor="end"
+          fill={CHART_MUTED}
+          fontSize={11}
+          fontWeight={500}
+        >
+          <title>{full}</title>
+          {label}
+        </text>
+      </g>
+    );
+  };
+}
 
 function downsampleOrdered<T>(points: T[], max: number): T[] {
   if (points.length <= max) return points;
@@ -128,33 +179,59 @@ function sanitizeLineAreaData(
   return downsampleOrdered(smoothed, MAX_LINE_AREA_POINTS);
 }
 
-/** Previous period = same series lagged (honest when API sends one series). */
-function withPreviousPeriod(
-  points: { x: string; y: number }[]
+/** Calendar current vs immediately prior window (same logic as What changed). */
+function buildCalendarDualPeriod(
+  points: { x: string; y: number }[],
+  pc: PeriodComparison
 ): DualPoint[] {
-  const n = points.length;
-  if (n === 0) return [];
-  if (n === 1) {
-    const y = points[0].y;
-    return [{ ...points[0], yPrev: y * 0.92 }];
+  const cur = pc.current!;
+  const prev = pc.previous!;
+  const byDay = new Map<string, number>();
+  for (const p of mergePointsByDay(points)) {
+    byDay.set(p.x, (byDay.get(p.x) ?? 0) + p.y);
   }
-  const lag = Math.max(1, Math.floor(Math.min(n - 1, Math.ceil(n / 5))));
-  return points.map((d, i) => {
-    const j = Math.max(0, i - lag);
-    return { ...d, yPrev: points[j].y };
-  });
+  const days = [
+    ...new Set([
+      ...eachDayInRange(prev.start, prev.end),
+      ...eachDayInRange(cur.start, cur.end),
+    ]),
+  ].sort();
+  return days.map((day) => ({
+    x: day,
+    y: dayInRange(day, cur.start, cur.end) ? (byDay.get(day) ?? 0) : null,
+    yPrev: dayInRange(day, prev.start, prev.end) ? (byDay.get(day) ?? 0) : null,
+  }));
 }
 
-function sanitizeBarData(
-  raw: Record<string, unknown>[]
-): { name: string; value: number }[] {
+function hasPreviousSeries(data: DualPoint[]): boolean {
+  return data.some((d) => d.yPrev != null && Number.isFinite(d.yPrev));
+}
+
+function maxBarLabelChars(axisWidth: number): number {
+  return Math.max(12, Math.min(42, Math.floor((axisWidth - 20) / 6.5)));
+}
+
+function sanitizeBarData(raw: Record<string, unknown>[]): BarDatum[] {
   const rows = raw
     .map((row) => ({
       name: row.name != null ? String(row.name) : "",
       value: Number(row.value),
     }))
-    .filter((r) => r.name !== "" && Number.isFinite(r.value));
-  return rows.slice(0, MAX_BAR_POINTS);
+    .filter((r) => r.name !== "" && Number.isFinite(r.value))
+    .slice(0, MAX_BAR_POINTS);
+  const axisWidth = barCategoryAxisWidth(
+    rows.map((r) => ({
+      name: truncateCategoryStart(r.name, BAR_LABEL_MAX_CHARS),
+      nameFull: r.name,
+      value: r.value,
+    }))
+  );
+  const maxChars = maxBarLabelChars(axisWidth);
+  return rows.map((r) => ({
+    nameFull: r.name,
+    name: truncateCategoryStart(r.name, maxChars),
+    value: r.value,
+  }));
 }
 
 function sanitizePieData(
@@ -174,7 +251,7 @@ function sanitizePieData(
 type PreparedChart =
   | { type: "line"; data: DualPoint[] }
   | { type: "area"; data: DualPoint[] }
-  | { type: "bar"; data: { name: string; value: number }[] }
+  | { type: "bar"; data: BarDatum[] }
   | { type: "pie"; data: { name: string; value: number }[] };
 
 function titleCaseWords(s: string): string {
@@ -210,54 +287,68 @@ function formatInsightMetric(value: number): string {
 
 type ChartInsightLines = { line1: string; line2?: string };
 
-/** Recent window vs prior window of the same length (time-series). */
+/** Sum in each calendar window when period comparison is available. */
 function lineAreaPeriodInsight(
   data: DualPoint[],
-  chart: ChartConfig
+  chart: ChartConfig,
+  periodComparison?: PeriodComparison | null,
+  seriesLabels?: { current: string; previous: string } | null
 ): ChartInsightLines {
   const label = humanizeMetricLabel(chart);
-  const n = data.length;
-  if (n < 2) {
+  const curVals = data
+    .map((d) => d.y)
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  const prevVals = data
+    .map((d) => d.yPrev)
+    .filter((v): v is number => v != null && Number.isFinite(v));
+
+  if (curVals.length < 1) {
     return {
-      line1: `Not enough history to compare the latest period to an earlier one for ${label}.`,
+      line1: `Not enough history to chart ${label} for the selected period.`,
     };
   }
-  const w = Math.max(1, Math.min(14, Math.floor(n / 3)));
-  const recent = data.slice(Math.max(0, n - w));
-  const prior = data.slice(Math.max(0, n - 2 * w), Math.max(0, n - w));
-  const curAvg = mean(recent.map((d) => d.y));
-  const prevAvg =
-    prior.length >= 1
-      ? mean(prior.map((d) => d.y))
-      : data[n - 1]!.yPrev;
 
-  const eps =
-    1e-9 * Math.max(1, Math.abs(curAvg), Math.abs(prevAvg));
+  const curTotal = curVals.reduce((a, b) => a + b, 0);
+  const prevTotal =
+    prevVals.length > 0 ? prevVals.reduce((a, b) => a + b, 0) : NaN;
+
+  const eps = 1e-9 * Math.max(1, Math.abs(curTotal), Math.abs(prevTotal));
 
   let line1: string;
-  if (!Number.isFinite(curAvg) || !Number.isFinite(prevAvg)) {
-    line1 = `Could not compute a period comparison for ${label}.`;
-  } else if (Math.abs(prevAvg) < eps && Math.abs(curAvg) < eps) {
-    line1 = `${label} is effectively flat compared to the previous period.`;
-  } else if (Math.abs(prevAvg) < eps) {
-    line1 = `${label} rose in the latest stretch after a very small prior average.`;
+  if (!Number.isFinite(prevTotal) || prevVals.length === 0) {
+    line1 = `${label} in the selected period totals ${formatInsightMetric(curTotal)}.`;
+    const line2 = periodComparison?.description
+      ? `Comparison: ${periodComparison.description}.`
+      : undefined;
+    return { line1, line2 };
+  }
+
+  if (Math.abs(prevTotal) < eps && Math.abs(curTotal) < eps) {
+    line1 = `${label} is effectively flat between the two periods.`;
+  } else if (Math.abs(prevTotal) < eps) {
+    line1 = `${label} rose versus a very small prior-period total.`;
   } else {
-    const pct = ((curAvg - prevAvg) / Math.abs(prevAvg)) * 100;
+    const pct = ((curTotal - prevTotal) / Math.abs(prevTotal)) * 100;
     if (Math.abs(pct) < 0.5) {
-      line1 = `${label} is nearly unchanged compared to the previous period (under 1% difference).`;
+      line1 = `${label} is nearly unchanged between the two periods (under 1%).`;
     } else if (pct > 0) {
-      line1 = `${label} increased by ${pct.toFixed(0)}% compared to the previous period.`;
+      line1 = `${label} increased by ${pct.toFixed(0)}% versus the prior period.`;
     } else {
-      line1 = `${label} decreased by ${Math.abs(pct).toFixed(0)}% compared to the previous period.`;
+      line1 = `${label} decreased by ${Math.abs(pct).toFixed(0)}% versus the prior period.`;
     }
   }
 
-  const line2 = `Recent average ${formatInsightMetric(curAvg)} vs ${formatInsightMetric(prevAvg)} in the prior comparable window.`;
+  const line2 = seriesLabels
+    ? `${seriesLabels.current}: ${formatInsightMetric(curTotal)} total · ${seriesLabels.previous}: ${formatInsightMetric(prevTotal)} total`
+    : periodComparison?.description
+      ? periodComparison.description
+      : `Current total ${formatInsightMetric(curTotal)} vs prior ${formatInsightMetric(prevTotal)}.`;
+
   return { line1, line2 };
 }
 
 function barOrPieInsight(
-  data: { name: string; value: number }[],
+  data: { name: string; nameFull?: string; value: number }[],
   chart: ChartConfig,
   kind: "bar" | "pie"
 ): ChartInsightLines {
@@ -269,7 +360,7 @@ function barOrPieInsight(
   const total = sorted.reduce((s, d) => s + d.value, 0);
   const top = sorted[0]!;
   const topShare = total > 0 ? (top.value / total) * 100 : 0;
-  const topName = String(top.name);
+  const topName = String(top.nameFull ?? top.name);
 
   let line1: string;
   if (kind === "pie") {
@@ -287,7 +378,7 @@ function barOrPieInsight(
   let line2: string | undefined;
   if (sorted.length >= 2) {
     const second = sorted[1]!;
-    const secondName = String(second.name);
+    const secondName = String(second.nameFull ?? second.name);
     if (second.value > 0) {
       const vsPrev = ((top.value - second.value) / second.value) * 100;
       if (Math.abs(vsPrev) < 0.5) {
@@ -305,12 +396,19 @@ function barOrPieInsight(
 
 function insightForPrepared(
   prepared: PreparedChart,
-  chart: ChartConfig
+  chart: ChartConfig,
+  periodComparison?: PeriodComparison | null,
+  seriesLabels?: { current: string; previous: string } | null
 ): ChartInsightLines {
   switch (prepared.type) {
     case "line":
     case "area":
-      return lineAreaPeriodInsight(prepared.data, chart);
+      return lineAreaPeriodInsight(
+        prepared.data,
+        chart,
+        periodComparison,
+        seriesLabels
+      );
     case "bar":
       return barOrPieInsight(prepared.data, chart, "bar");
     case "pie":
@@ -320,13 +418,21 @@ function insightForPrepared(
   }
 }
 
-function prepareChart(chart: ChartConfig): PreparedChart | null {
+function prepareChart(
+  chart: ChartConfig,
+  periodComparison?: PeriodComparison | null
+): PreparedChart | null {
   switch (chart.type) {
     case "line":
     case "area": {
       const raw = sanitizeLineAreaData(chart.data);
       if (!raw.length) return null;
-      const data = withPreviousPeriod(raw);
+      const data =
+        periodComparison?.available &&
+        periodComparison.current &&
+        periodComparison.previous
+          ? buildCalendarDualPeriod(raw, periodComparison)
+          : raw.map((d) => ({ x: d.x, y: d.y, yPrev: null }));
       return { type: chart.type, data };
     }
     case "bar": {
@@ -387,6 +493,7 @@ function SaaSTooltip({
   active,
   payload,
   label,
+  seriesLabels,
 }: {
   active?: boolean;
   payload?: ReadonlyArray<{
@@ -396,6 +503,7 @@ function SaaSTooltip({
     value?: number;
   }>;
   label?: string;
+  seriesLabels?: { current: string; previous: string } | null;
 }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
@@ -404,6 +512,10 @@ function SaaSTooltip({
   const prev = payload.find((p) => p.dataKey === "yPrev");
   const curColor = cur?.color ?? "#312e81";
   const prevColor = prev?.color ?? "#f97316";
+  const curLabel = seriesLabels?.current ?? "Current period";
+  const prevLabel = seriesLabels?.previous ?? "Previous period";
+  const showCur = row.y != null && Number.isFinite(row.y);
+  const showPrev = row.yPrev != null && Number.isFinite(row.yPrev);
   return (
     <div style={tooltipShell()}>
       <p
@@ -419,39 +531,45 @@ function SaaSTooltip({
         {formatChartTooltipDate(label)}
       </p>
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 9999,
-                background: "#fff",
-                border: `2px solid ${curColor}`,
-                boxSizing: "border-box",
-              }}
-            />
-            Current
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#0f172a" }}>
-            {formatTooltip(row.y)}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#64748b" }}>
-            <span
-              style={{
-                width: 12,
-                height: 0,
-                borderTop: `2px dashed ${prevColor}`,
-              }}
-            />
-            Previous
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#64748b" }}>
-            {formatTooltip(row.yPrev)}
-          </span>
-        </div>
+        {showCur ? (
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#475569", maxWidth: 160 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 9999,
+                  background: "#fff",
+                  border: `2px solid ${curColor}`,
+                  boxSizing: "border-box",
+                  flexShrink: 0,
+                }}
+              />
+              <span>{curLabel}</span>
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#0f172a" }}>
+              {formatTooltip(row.y)}
+            </span>
+          </div>
+        ) : null}
+        {showPrev ? (
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#64748b", maxWidth: 160 }}>
+              <span
+                style={{
+                  width: 12,
+                  height: 0,
+                  borderTop: `2px dashed ${prevColor}`,
+                  flexShrink: 0,
+                }}
+              />
+              <span>{prevLabel}</span>
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#64748b" }}>
+              {formatTooltip(row.yPrev)}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -460,11 +578,14 @@ function SaaSTooltip({
 export function AutoChart({
   chart,
   accentIndex = 0,
+  periodComparison = null,
 }: {
   chart: ChartConfig;
   accentIndex?: number;
+  periodComparison?: PeriodComparison | null;
 }) {
-  const prepared = prepareChart(chart);
+  const seriesLabels = seriesLabelsFromComparison(periodComparison);
+  const prepared = prepareChart(chart, periodComparison);
   const safeId = chart.id.replace(/[^a-zA-Z0-9_-]/g, "_");
 
   if (!prepared) {
@@ -482,12 +603,20 @@ export function AutoChart({
     );
   }
 
-  const insight = insightForPrepared(prepared, chart);
+  const insight = insightForPrepared(
+    prepared,
+    chart,
+    periodComparison,
+    seriesLabels
+  );
 
   return (
     <Card>
       <CardHeader className="space-y-1 pb-2">
         <CardTitle className="text-sm font-medium">{chart.title}</CardTitle>
+        {periodComparison?.description && (prepared.type === "line" || prepared.type === "area") ? (
+          <p className="text-xs text-muted-foreground">{periodComparison.description}</p>
+        ) : null}
         {insight.line1 ? (
           <div className="max-w-2xl space-y-1">
             <p className="text-sm text-foreground">{insight.line1}</p>
@@ -501,7 +630,7 @@ export function AutoChart({
         <div className="h-72 min-h-[18rem] w-full rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
           <ChartFrame className="h-full">
             <ResponsiveContainer width="100%" height="100%">
-              {renderChart(prepared, safeId, accentIndex)}
+              {renderChart(prepared, safeId, accentIndex, seriesLabels)}
             </ResponsiveContainer>
           </ChartFrame>
         </div>
@@ -528,7 +657,8 @@ function renderDualArea(
   data: DualPoint[],
   safeId: string,
   kind: "line" | "area",
-  accentIndex: number
+  accentIndex: number,
+  seriesLabels?: { current: string; previous: string } | null
 ) {
   const p = getSaaSPalette(accentIndex, kind);
   const idCur = `saasCur-${safeId}`;
@@ -536,6 +666,9 @@ function renderDualArea(
   const xAxis = timeSeriesXAxisProps(data.length);
   /** Backend `line` is rendered here without fills so it reads as a true line chart (no warm wash). */
   const strokeOnly = kind === "line";
+  const showPrev = hasPreviousSeries(data);
+  const curName = seriesLabels?.current ?? "Current period";
+  const prevName = seriesLabels?.previous ?? "Previous period";
 
   return (
     <AreaChart
@@ -578,45 +711,46 @@ function renderDualArea(
         tickFormatter={formatNumber}
         width={48}
       />
-      <Tooltip content={<SaaSTooltip />} />
-      <Legend
-        verticalAlign="bottom"
-        align="center"
-        iconType="line"
-        iconSize={11}
-        wrapperStyle={{ paddingTop: 6 }}
-        content={({ payload }) => {
-          if (!payload?.length) return null;
-          const order = ["Current period", "Previous period"];
-          const sorted = [...payload].sort(
-            (a, b) => order.indexOf(String(a.value)) - order.indexOf(String(b.value))
-          );
-          return <LegendPills payload={sorted} />;
-        }}
-      />
-      {/* Previous first so it renders behind */}
-      <Area
-        type="monotone"
-        dataKey="yPrev"
-        name="Previous period"
-        stroke={p.compareStroke}
-        strokeWidth={2.25}
-        strokeDasharray="6 5"
-        fill={strokeOnly ? "none" : `url(#${idPrev})`}
-        fillOpacity={strokeOnly ? 0 : 0.55}
-        dot={false}
-        activeDot={{
-          r: 5,
-          strokeWidth: 2,
-          stroke: p.compareStroke,
-          fill: "#fff",
-        }}
-        isAnimationActive={false}
-      />
+      <Tooltip content={<SaaSTooltip seriesLabels={seriesLabels} />} />
+      {showPrev ? (
+        <Legend
+          verticalAlign="bottom"
+          align="center"
+          iconType="line"
+          iconSize={11}
+          wrapperStyle={{ paddingTop: 6 }}
+          content={({ payload }) => {
+            if (!payload?.length) return null;
+            return <LegendPills payload={payload} />;
+          }}
+        />
+      ) : null}
+      {showPrev ? (
+        <Area
+          type="monotone"
+          dataKey="yPrev"
+          name={prevName}
+          connectNulls={false}
+          stroke={p.compareStroke}
+          strokeWidth={2.25}
+          strokeDasharray="6 5"
+          fill={strokeOnly ? "none" : `url(#${idPrev})`}
+          fillOpacity={strokeOnly ? 0 : 0.55}
+          dot={false}
+          activeDot={{
+            r: 5,
+            strokeWidth: 2,
+            stroke: p.compareStroke,
+            fill: "#fff",
+          }}
+          isAnimationActive={false}
+        />
+      ) : null}
       <Area
         type="monotone"
         dataKey="y"
-        name="Current period"
+        name={curName}
+        connectNulls={false}
         stroke={p.primaryStroke}
         strokeWidth={2.6}
         fill={strokeOnly ? "none" : `url(#${idCur})`}
@@ -637,23 +771,25 @@ function renderDualArea(
 function renderChart(
   chart: PreparedChart,
   safeId: string,
-  accentIndex: number
+  accentIndex: number,
+  seriesLabels?: { current: string; previous: string } | null
 ) {
   const { type, data } = chart;
 
   switch (type) {
     case "line":
-      return renderDualArea(data, safeId, "line", accentIndex);
+      return renderDualArea(data, safeId, "line", accentIndex, seriesLabels);
 
     case "area":
-      return renderDualArea(data, safeId, "area", accentIndex);
+      return renderDualArea(data, safeId, "area", accentIndex, seriesLabels);
 
-    case "bar":
+    case "bar": {
+      const yWidth = barCategoryAxisWidth(data);
       return (
         <BarChart
           layout="vertical"
           data={data}
-          margin={{ top: 8, right: 28, left: 8, bottom: 8 }}
+          margin={{ top: 8, right: 28, left: 4, bottom: 8 }}
         >
           <CartesianGrid
             stroke={SAAS_GRID}
@@ -670,14 +806,27 @@ function renderChart(
           <YAxis
             type="category"
             dataKey="name"
-            width={92}
-            tick={tickStyle}
+            width={yWidth}
+            tick={makeCategoryYAxisTick(data)}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip
-            formatter={formatTooltip}
-            contentStyle={tooltipShell()}
+            content={({ active, payload: items }) => {
+              if (!active || !items?.length) return null;
+              const row = items[0]?.payload as BarDatum | undefined;
+              if (!row) return null;
+              return (
+                <div style={tooltipShell()}>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a", maxWidth: 280 }}>
+                    {row.nameFull}
+                  </p>
+                  <p style={{ margin: "6px 0 0", fontSize: 13, fontWeight: 650, color: "#475569" }}>
+                    {formatTooltip(row.value)}
+                  </p>
+                </div>
+              );
+            }}
           />
           <Bar
             dataKey="value"
@@ -697,6 +846,7 @@ function renderChart(
           </Bar>
         </BarChart>
       );
+    }
 
     case "pie":
       const pieTotal = data.reduce((sum, slice) => sum + slice.value, 0);

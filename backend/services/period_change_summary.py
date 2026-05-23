@@ -150,6 +150,46 @@ def _resolve_comparison_windows(
     return cur_start, cur_end, prev_start, prev_end, desc
 
 
+def resolve_period_comparison_for_dataframe(
+    df: pd.DataFrame,
+    metadata: dict[str, Any],
+    *,
+    start_ts: Optional[pd.Timestamp] = None,
+    end_ts: Optional[pd.Timestamp] = None,
+    last_n_days: Optional[int] = None,
+) -> dict[str, Any]:
+    """Calendar windows for chart overlays (matches what_changed logic)."""
+    empty: dict[str, Any] = {
+        "available": False,
+        "description": "",
+        "current": None,
+        "previous": None,
+    }
+    if df is None or len(df) < 2:
+        return empty
+    date_col = resolve_date_column(df, metadata)
+    if not date_col:
+        return empty
+    try:
+        c0, c1, p0, p1, desc = _resolve_comparison_windows(
+            df, date_col, start_ts=start_ts, end_ts=end_ts, last_n_days=last_n_days
+        )
+    except ValueError:
+        return empty
+    return {
+        "available": True,
+        "description": desc,
+        "current": {
+            "start": c0.strftime("%Y-%m-%d"),
+            "end": c1.strftime("%Y-%m-%d"),
+        },
+        "previous": {
+            "start": p0.strftime("%Y-%m-%d"),
+            "end": p1.strftime("%Y-%m-%d"),
+        },
+    }
+
+
 def _build_change_item(
     label: str,
     prev_v: float,

@@ -456,6 +456,12 @@ export const api = {
       };
       /** Min/max calendar dates in the primary date column (full file, for preset anchors). */
       date_bounds?: { min: string | null; max: string | null };
+      period_comparison?: {
+        available: boolean;
+        description?: string;
+        current?: { start: string; end: string } | null;
+        previous?: { start: string; end: string } | null;
+      };
       what_changed: {
         available: boolean;
         period_description: string;
