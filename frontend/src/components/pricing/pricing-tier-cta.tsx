@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { api, setApiUserEmail } from "@/lib/api";
 import { PRODUCT_NAME } from "@/lib/brand";
 import {
+  checkoutCallbackUrl,
   checkoutSuccessUrl,
   loadRazorpayCheckoutScript,
   normalizeRazorpayCheckoutUrl,
@@ -99,7 +100,7 @@ export function PricingTierCTA({
         subscription_id,
         name: PRODUCT_NAME,
         description,
-        callback_url: checkoutSuccessUrl(),
+        callback_url: checkoutCallbackUrl(),
         redirect: true,
         prefill: {
           ...(userEmail ? { email: userEmail } : {}),

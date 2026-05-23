@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/** Razorpay Standard Checkout posts payment fields to `callback_url` (not GET). */
+/** Razorpay Standard Checkout POSTs payment fields to `callback_url` (not GET). */
 const CHECKOUT_PARAM_KEYS = [
   "razorpay_payment_id",
   "razorpay_subscription_id",
@@ -59,7 +59,7 @@ async function readRazorpayCallbackParams(
 
 export async function POST(request: NextRequest) {
   const params = await readRazorpayCallbackParams(request);
-  const redirectUrl = new URL(request.url);
+  const redirectUrl = new URL("/pricing/success", request.url);
 
   for (const [key, value] of params) {
     redirectUrl.searchParams.set(key, value);
