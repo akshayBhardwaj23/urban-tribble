@@ -282,6 +282,13 @@ export const api = {
       method: "DELETE",
     }),
 
+  deleteWorkspace: (workspaceId: string) =>
+    request<{
+      ok: boolean;
+      deleted: boolean;
+      active_workspace_id: string | null;
+    }>(`/api/workspaces/${workspaceId}`, { method: "DELETE" }),
+
   uploadFile: (file: File, description: string) => {
     const formData = new FormData();
     formData.append("file", file);

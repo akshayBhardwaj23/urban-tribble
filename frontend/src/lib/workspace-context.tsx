@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 
-import { planLimitErrorFromJson } from "@/lib/api";
+import { api, planLimitErrorFromJson, setApiUserEmail } from "@/lib/api";
 
 interface Workspace {
   id: string;
@@ -42,6 +42,7 @@ interface WorkspaceContextValue {
   syncUser: () => Promise<UserProfile | null>;
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (name: string) => Promise<Workspace>;
+  deleteWorkspace: (workspaceId: string) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -52,6 +53,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   syncUser: async () => null,
   switchWorkspace: async () => {},
   createWorkspace: async () => ({ id: "", name: "", created_at: "" }),
+  deleteWorkspace: async () => {},
 });
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -132,6 +134,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     [session?.user?.email, syncUser]
   );
 
+  const deleteWorkspace = useCallback(
+    async (workspaceId: string) => {
+      if (!session?.user?.email) throw new Error("Not authenticated");
+      setApiUserEmail(session.user.email);
+      await api.deleteWorkspace(workspaceId);
+      await syncUser();
+    },
+    [session?.user?.email, syncUser]
+  );
+
   useEffect(() => {
     if (status === "loading") return;
 
@@ -157,6 +169,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         syncUser,
         switchWorkspace,
         createWorkspace,
+        deleteWorkspace,
       }}
     >
       {children}

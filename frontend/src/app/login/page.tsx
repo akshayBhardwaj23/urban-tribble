@@ -13,6 +13,17 @@ import { ThemeMenuCompact } from "@/components/theme-menu";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const DEFAULT_RESEND_SECONDS = 60;
+
+function parseResendSeconds(detail: string): number {
+  const m = detail.match(/Wait (\d+) seconds/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (n > 0) return n;
+  }
+  return DEFAULT_RESEND_SECONDS;
+}
+
 export default function LoginPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -21,12 +32,22 @@ export default function LoginPage() {
   const [step, setStep] = useState<"email" | "code">("email");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendNotice, setResendNotice] = useState("");
 
   useEffect(() => {
     if (status === "authenticated") {
       router.replace("/dashboard");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = window.setInterval(() => {
+      setResendCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [resendCooldown]);
 
   if (status === "loading") {
     return (
@@ -36,9 +57,39 @@ export default function LoginPage() {
     );
   }
 
+  async function requestOtp(): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/api/auth/otp/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      try {
+        const j = JSON.parse(text) as { detail?: string };
+        const detail = j.detail ?? "Could not send code.";
+        if (res.status === 429) {
+          setResendCooldown(parseResendSeconds(detail));
+        }
+        setError(detail);
+      } catch {
+        setError("Could not send code.");
+      }
+      return false;
+    }
+    try {
+      const j = JSON.parse(text) as { resend_after_seconds?: number };
+      setResendCooldown(j.resend_after_seconds ?? DEFAULT_RESEND_SECONDS);
+    } catch {
+      setResendCooldown(DEFAULT_RESEND_SECONDS);
+    }
+    return true;
+  }
+
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setResendNotice("");
     setBusy(true);
     try {
       const testAttempt = await signIn("test-login", {
@@ -51,23 +102,26 @@ export default function LoginPage() {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/api/auth/otp/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        try {
-          const j = JSON.parse(text) as { detail?: string };
-          setError(j.detail ?? "Could not send code.");
-        } catch {
-          setError("Could not send code.");
-        }
-        return;
-      }
+      const ok = await requestOtp();
+      if (!ok) return;
       setStep("code");
       setCode("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendCode() {
+    if (resendCooldown > 0 || busy) return;
+    setError("");
+    setResendNotice("");
+    setBusy(true);
+    try {
+      const ok = await requestOtp();
+      if (ok) {
+        setResendNotice("A new code was sent. Check your inbox.");
+        setCode("");
+      }
     } finally {
       setBusy(false);
     }
@@ -159,8 +213,25 @@ export default function LoginPage() {
                       {error}
                     </p>
                   ) : null}
+                  {resendNotice ? (
+                    <p className="text-center text-xs text-muted-foreground">
+                      {resendNotice}
+                    </p>
+                  ) : null}
                   <Button type="submit" className="h-11 w-full" disabled={busy}>
                     {busy ? "Checking…" : "Sign in"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    disabled={busy || resendCooldown > 0}
+                    onClick={() => void resendCode()}
+                  >
+                    {resendCooldown > 0
+                      ? `Resend code in ${resendCooldown}s`
+                      : "Resend code"}
                   </Button>
                   <Button
                     type="button"
@@ -171,7 +242,9 @@ export default function LoginPage() {
                     onClick={() => {
                       setStep("email");
                       setError("");
+                      setResendNotice("");
                       setCode("");
+                      setResendCooldown(0);
                     }}
                   >
                     Use a different email

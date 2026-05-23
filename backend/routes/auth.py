@@ -84,7 +84,7 @@ def otp_send(req: OtpSendRequest, db: Session = Depends(get_db)):
             503,
             f"Email could not be sent. {detail}",
         )
-    return {"ok": True}
+    return {"ok": True, "resend_after_seconds": settings.OTP_RESEND_SECONDS}
 
 
 @router.post("/otp/verify")

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,6 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, setApiUserEmail } from "@/lib/api";
+import { useWorkspace } from "@/lib/workspace-context";
 import { maxWorkspacesForPlan } from "@/lib/workspace-plan-limits";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +24,10 @@ function planLabel(id: string | undefined) {
 export default function AccountPage() {
   const { data: session, status } = useSession();
   const queryClient = useQueryClient();
+  const { deleteWorkspace: removeWorkspace } = useWorkspace();
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(
+    null
+  );
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["auth-me", session?.user?.email ?? "none"],
@@ -31,6 +37,21 @@ export default function AccountPage() {
       return api.getAuthMe();
     },
     enabled: status === "authenticated" && Boolean(session?.user?.email),
+  });
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: (workspaceId: string) => removeWorkspace(workspaceId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+      void refetch();
+      toast.success("Workspace deleted");
+    },
+    onError: (err) => {
+      toast.error("Could not delete workspace", {
+        description: err instanceof Error ? err.message : "Try again.",
+      });
+    },
+    onSettled: () => setDeletingWorkspaceId(null),
   });
 
   const deleteAccount = useMutation({
@@ -172,21 +193,53 @@ export default function AccountPage() {
           <p className="text-muted-foreground">
             Your plan allows up to <strong className="text-foreground">{wsMax}</strong>{" "}
             workspace{wsMax === 1 ? "" : "s"}. Switch or create workspaces from the
-            sidebar.
+            sidebar. Deleting a workspace removes all its sources, briefings, and files.
           </p>
           <ul className="list-none space-y-2 m-0 p-0">
-            {me.workspaces.map((w) => (
-              <li
-                key={w.id}
-                className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 flex justify-between gap-2"
-              >
-                <span className="font-medium truncate">{w.name}</span>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {w.id === me.active_workspace_id ? "Active" : ""}
-                </span>
-              </li>
-            ))}
+            {me.workspaces.map((w) => {
+              const isDeleting =
+                deletingWorkspaceId === w.id && deleteWorkspaceMutation.isPending;
+              return (
+                <li
+                  key={w.id}
+                  className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium truncate block">{w.name}</span>
+                    {w.id === me.active_workspace_id ? (
+                      <span className="text-xs text-muted-foreground">Active</span>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={isDeleting || deleteWorkspaceMutation.isPending}
+                    onClick={() => {
+                      if (
+                        typeof window !== "undefined" &&
+                        !window.confirm(
+                          `Delete workspace "${w.name}" and all its data permanently? This cannot be undone.`
+                        )
+                      ) {
+                        return;
+                      }
+                      setDeletingWorkspaceId(w.id);
+                      deleteWorkspaceMutation.mutate(w.id);
+                    }}
+                  >
+                    {isDeleting ? "Deleting…" : "Delete"}
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
+          {me.workspaces.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No workspaces yet. Create one from the sidebar or complete onboarding.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

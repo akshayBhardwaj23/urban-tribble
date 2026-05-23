@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.models import User, Workspace
 from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
+from services.account_deletion import delete_workspace_cascade
 from services.subscription_usage import assert_workspace_create_allowed
 from services.workspace_query import get_dataset_upload_in_workspace
 from utils.email_norm import user_by_email_ci
@@ -123,6 +124,48 @@ def activate_workspace(
     db.commit()
 
     return {"active_workspace_id": workspace_id}
+
+
+@router.delete("/{workspace_id}")
+def delete_workspace(
+    workspace_id: str,
+    x_user_email: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete a workspace and all its data (sources, briefings, files)."""
+    if not x_user_email:
+        raise HTTPException(401, "Authentication required")
+
+    user = user_by_email_ci(db, x_user_email)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.owner_id == user.id)
+        .first()
+    )
+    if not workspace:
+        raise HTTPException(404, "Workspace not found")
+
+    if user.active_workspace_id == workspace_id:
+        other = (
+            db.query(Workspace)
+            .filter(Workspace.owner_id == user.id, Workspace.id != workspace_id)
+            .order_by(Workspace.created_at.asc())
+            .first()
+        )
+        user.active_workspace_id = other.id if other else None
+
+    delete_workspace_cascade(db, workspace)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "ok": True,
+        "deleted": True,
+        "active_workspace_id": user.active_workspace_id,
+    }
 
 
 @router.patch("/{workspace_id}/outlook-forecast")
