@@ -15,6 +15,10 @@ const API_BASE =
 
 const DEFAULT_RESEND_SECONDS = 60;
 
+function normalizeLoginEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 function parseResendSeconds(detail: string): number {
   const m = detail.match(/Wait (\d+) seconds/);
   if (m) {
@@ -34,6 +38,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendNotice, setResendNotice] = useState("");
+  /** Last address we successfully sent an OTP to (cooldown applies per email). */
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -83,6 +89,18 @@ export default function LoginPage() {
     } catch {
       setResendCooldown(DEFAULT_RESEND_SECONDS);
     }
+    setOtpSentTo(normalizeLoginEmail(email));
+    return true;
+  }
+
+  function blockResendForCurrentEmail(): boolean {
+    const norm = normalizeLoginEmail(email);
+    if (!otpSentTo || norm !== otpSentTo || resendCooldown <= 0) {
+      return false;
+    }
+    setError(
+      `Wait ${resendCooldown} seconds before requesting another code for this email.`
+    );
     return true;
   }
 
@@ -90,6 +108,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setResendNotice("");
+    if (blockResendForCurrentEmail()) return;
     setBusy(true);
     try {
       const testAttempt = await signIn("test-login", {
@@ -113,6 +132,7 @@ export default function LoginPage() {
 
   async function resendCode() {
     if (resendCooldown > 0 || busy) return;
+    if (blockResendForCurrentEmail()) return;
     setError("");
     setResendNotice("");
     setBusy(true);
@@ -182,8 +202,21 @@ export default function LoginPage() {
                       {error}
                     </p>
                   ) : null}
-                  <Button type="submit" className="h-11 w-full" disabled={busy}>
-                    {busy ? "Sending…" : "Email me a code"}
+                  <Button
+                    type="submit"
+                    className="h-11 w-full"
+                    disabled={
+                      busy ||
+                      (otpSentTo === normalizeLoginEmail(email) &&
+                        resendCooldown > 0)
+                    }
+                  >
+                    {busy
+                      ? "Sending…"
+                      : otpSentTo === normalizeLoginEmail(email) &&
+                          resendCooldown > 0
+                        ? `Wait ${resendCooldown}s to send again`
+                        : "Email me a code"}
                   </Button>
                 </form>
               ) : (
@@ -244,7 +277,6 @@ export default function LoginPage() {
                       setError("");
                       setResendNotice("");
                       setCode("");
-                      setResendCooldown(0);
                     }}
                   >
                     Use a different email

@@ -68,11 +68,13 @@ class TestLoginRequest(BaseModel):
 @router.post("/otp/send")
 def otp_send(req: OtpSendRequest, db: Session = Depends(get_db)):
     """Send a 6-digit sign-in code to the email (Resend)."""
-    ok, detail = send_otp_email(db, str(req.email))
+    ok, detail, retry_after = send_otp_email(db, str(req.email))
     if detail == "rate_limited_send":
+        wait = retry_after or settings.OTP_RESEND_SECONDS
         raise HTTPException(
-            429,
-            f"Wait {settings.OTP_RESEND_SECONDS} seconds before requesting another code.",
+            status_code=429,
+            detail=f"Wait {wait} seconds before requesting another code.",
+            headers={"Retry-After": str(wait)},
         )
     if not ok:
         if detail == "RESEND_API_KEY not configured":
@@ -84,7 +86,10 @@ def otp_send(req: OtpSendRequest, db: Session = Depends(get_db)):
             503,
             f"Email could not be sent. {detail}",
         )
-    return {"ok": True, "resend_after_seconds": settings.OTP_RESEND_SECONDS}
+    return {
+        "ok": True,
+        "resend_after_seconds": settings.OTP_RESEND_SECONDS,
+    }
 
 
 @router.post("/otp/verify")

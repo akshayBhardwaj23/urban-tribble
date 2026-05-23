@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import re
 import secrets
 from collections import defaultdict
@@ -19,7 +20,6 @@ from utils.email_norm import normalize_email, user_by_email_ci
 
 _CODE_RE = re.compile(r"^\d{6}$")
 
-_send_last: dict[str, datetime] = {}
 _verify_fails: DefaultDict[str, List[datetime]] = defaultdict(list)
 
 
@@ -33,16 +33,22 @@ def _hash_code(email: str, code: str) -> str:
     ).hexdigest()
 
 
-def _rate_send_ok(email: str) -> bool:
+def seconds_until_otp_resend_allowed(db: Session, email: str) -> int:
+    """Seconds until another OTP may be sent (DB-backed; works across app instances)."""
     n = normalize_email(email)
-    last = _send_last.get(n)
-    if not last:
-        return True
-    return datetime.utcnow() - last >= timedelta(seconds=settings.OTP_RESEND_SECONDS)
-
-
-def _record_send(email: str) -> None:
-    _send_last[normalize_email(email)] = datetime.utcnow()
+    row = (
+        db.query(LoginOtpChallenge)
+        .filter(LoginOtpChallenge.email == n)
+        .order_by(LoginOtpChallenge.created_at.desc())
+        .first()
+    )
+    if not row:
+        return 0
+    elapsed = (datetime.utcnow() - row.created_at).total_seconds()
+    remaining = settings.OTP_RESEND_SECONDS - elapsed
+    if remaining <= 0:
+        return 0
+    return int(math.ceil(remaining))
 
 
 def _verify_failures_prune(email: str) -> None:
@@ -65,17 +71,21 @@ def generate_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
-def send_otp_email(db: Session, email: str) -> tuple[bool, str]:
+def send_otp_email(db: Session, email: str) -> tuple[bool, str, int]:
     """
-    Send OTP via Resend, then persist challenge. Returns (ok, message_for_logs_or_error).
+    Send OTP via Resend, then persist challenge.
+
+    Returns (ok, message_for_logs_or_error, retry_after_seconds).
+    retry_after_seconds is > 0 only when rate-limited.
     """
     n = normalize_email(email)
     api_key = (settings.RESEND_API_KEY or "").strip()
     if not api_key:
-        return False, "RESEND_API_KEY not configured"
+        return False, "RESEND_API_KEY not configured", 0
 
-    if not _rate_send_ok(n):
-        return False, "rate_limited_send"
+    retry_after = seconds_until_otp_resend_allowed(db, n)
+    if retry_after > 0:
+        return False, "rate_limited_send", retry_after
 
     code = generate_code()
     code_hash = _hash_code(n, code)
@@ -104,13 +114,13 @@ def send_otp_email(db: Session, email: str) -> tuple[bool, str]:
             timeout=20.0,
         )
     except httpx.HTTPError as e:
-        return False, f"network_error:{e!s}"
+        return False, f"network_error:{e!s}", 0
 
     if r.status_code >= 400:
         body = (r.text or "").strip()
         if len(body) > 500:
             body = body[:500] + "…"
-        return False, f"resend_http_{r.status_code}:{body or 'no body'}"
+        return False, f"resend_http_{r.status_code}:{body or 'no body'}", 0
 
     db.query(LoginOtpChallenge).filter(
         LoginOtpChallenge.email == n
@@ -123,9 +133,8 @@ def send_otp_email(db: Session, email: str) -> tuple[bool, str]:
         )
     )
     db.commit()
-    _record_send(n)
 
-    return True, "sent"
+    return True, "sent", settings.OTP_RESEND_SECONDS
 
 
 def verify_otp_and_get_user(db: Session, email: str, code: str) -> User | None:
