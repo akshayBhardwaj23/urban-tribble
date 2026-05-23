@@ -309,6 +309,8 @@ def get_overview(
         revenue_cols = metadata.get("revenue_columns", [])
         category_cols = metadata.get("category_columns", [])
 
+        period_comparison = resolve_period_comparison_for_dataframe(df, metadata)
+
         daily_df, _dcol, rcol = compute_daily_metrics_for_dataset(df, metadata)
         if daily_df is not None and rcol:
             dcharts = daily_time_series_charts(daily_df, rcol)
@@ -322,6 +324,7 @@ def get_overview(
                     "y_label": ch.get("y_label"),
                     "data": ch["data"],
                     "dataset_name": ds.name,
+                    "period_comparison": period_comparison,
                 })
         else:
             for date_col in date_cols[:1]:
@@ -344,6 +347,7 @@ def get_overview(
                             "y_label": rev_col,
                             "data": chart_data,
                             "dataset_name": ds.name,
+                            "period_comparison": period_comparison,
                         })
 
         for cat_col in category_cols[:1]:

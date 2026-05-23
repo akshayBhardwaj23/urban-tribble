@@ -644,7 +644,7 @@ function timeSeriesXAxisProps(pointCount: number) {
   const n = pointCount;
   const compact = n > 0 && n <= 14;
   const interval = compact ? 0 : Math.max(1, Math.ceil(n / 8) - 1);
-  const bottom = compact ? 12 : 22;
+  const bottom = compact ? 16 : 28;
   const minTickGap = compact ? 4 : 12;
   const tick =
     compact
@@ -673,7 +673,7 @@ function renderDualArea(
   return (
     <AreaChart
       data={data}
-      margin={{ top: 14, right: 10, left: 0, bottom: xAxis.bottom }}
+      margin={{ top: 14, right: 10, left: 4, bottom: xAxis.bottom }}
     >
       <defs>
         <linearGradient id={idCur} x1="0" y1="0" x2="0" y2="1">
@@ -709,7 +709,7 @@ function renderDualArea(
         tickLine={false}
         axisLine={false}
         tickFormatter={formatNumber}
-        width={48}
+        width={64}
       />
       <Tooltip content={<SaaSTooltip seriesLabels={seriesLabels} />} />
       {showPrev ? (

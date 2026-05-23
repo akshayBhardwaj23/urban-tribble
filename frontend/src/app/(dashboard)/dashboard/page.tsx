@@ -941,6 +941,7 @@ export default function OverviewPage() {
                   data: ChartConfig["data"];
                   x_label?: string;
                   y_label?: string;
+                  period_comparison?: import("@/lib/chart-period-comparison").PeriodComparison;
                 },
                 i: number
               ) => (
@@ -951,7 +952,11 @@ export default function OverviewPage() {
                     chart.type !== "bar" && "md:col-span-2"
                   )}
                 >
-                  <AutoChart chart={chart} accentIndex={i} />
+                  <AutoChart
+                    chart={chart}
+                    accentIndex={i}
+                    periodComparison={chart.period_comparison ?? null}
+                  />
                   {chart.dataset_name && (
                     <p className="text-xs font-medium text-slate-500">
                       Source · {chart.dataset_name}

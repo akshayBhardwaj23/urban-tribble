@@ -553,6 +553,12 @@ export const api = {
         x_label?: string;
         y_label?: string;
         dataset_name?: string;
+        period_comparison?: {
+          available: boolean;
+          description?: string;
+          current?: { start: string; end: string } | null;
+          previous?: { start: string; end: string } | null;
+        };
       }[];
       datasets: {
         id: string;
