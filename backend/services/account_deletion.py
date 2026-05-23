@@ -60,6 +60,14 @@ def delete_workspace_cascade(db: Session, workspace: Workspace) -> None:
     for dataset, upload in pairs:
         _delete_dataset_pair(db, workspace.id, dataset, upload)
 
+    # Uploads without a dataset row (failed ingest, partial cleanup, etc.)
+    orphan_uploads = (
+        db.query(Upload).filter(Upload.workspace_id == workspace.id).all()
+    )
+    for upload in orphan_uploads:
+        _unlink_upload_files(upload)
+        db.delete(upload)
+
     db.query(WorkspaceTimelineSnapshot).filter(
         WorkspaceTimelineSnapshot.workspace_id == workspace.id
     ).delete(synchronize_session="fetch")
@@ -77,9 +85,23 @@ def delete_workspace_cascade(db: Session, workspace: Workspace) -> None:
 
 def delete_user_account(db: Session, user: User) -> None:
     """Remove all owned workspaces (including files on disk) and the user."""
+    user.active_workspace_id = None
+    db.flush()
+
     workspaces = db.query(Workspace).filter(Workspace.owner_id == user.id).all()
     for w in workspaces:
         delete_workspace_cascade(db, w)
+
+    # Ensure workspace rows are gone before deleting the user (FK workspaces.owner_id).
+    db.flush()
+
+    remaining = (
+        db.query(Workspace).filter(Workspace.owner_id == user.id).count()
+    )
+    if remaining:
+        raise RuntimeError(
+            f"Account deletion incomplete: {remaining} workspace(s) still owned by user."
+        )
 
     email_norm = normalize_email(user.email)
     db.query(LoginOtpChallenge).filter(LoginOtpChallenge.email == email_norm).delete(
