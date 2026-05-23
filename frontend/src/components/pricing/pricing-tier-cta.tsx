@@ -6,72 +6,22 @@ import { signIn, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { api, setApiUserEmail } from "@/lib/api";
 import { PRODUCT_NAME } from "@/lib/brand";
+import {
+  checkoutSuccessUrl,
+  loadRazorpayCheckoutScript,
+  normalizeRazorpayCheckoutUrl,
+  useRazorpayHostedCheckout,
+  type RazorpayCheckoutSuccess,
+  type RazorpayConstructor,
+} from "@/lib/razorpay-checkout";
 import { cn } from "@/lib/utils";
 
 type PlanId = "free" | "starter" | "pro";
 
-const CHECKOUT_SCRIPT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
-
-/**
- * Embedded Checkout.js can show "issue with the merchant" before any payment UI even when
- * subscription.create succeeds. Default is hosted page (short_url) — same mandate flow, more reliable.
- * Set NEXT_PUBLIC_RAZORPAY_CHECKOUT_MODAL=true to use the modal + client verify-checkout instead.
- */
-const useRazorpayCheckoutModal =
-  process.env.NEXT_PUBLIC_RAZORPAY_CHECKOUT_MODAL === "true";
-
-/** Razorpay may return api.razorpay.com links that fail in-browser; used only as fallback. */
-function normalizeRazorpayCheckoutUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    if (u.hostname === "api.razorpay.com" && u.pathname.includes("/subscriptions/")) {
-      u.hostname = "checkout.razorpay.com";
-      return u.toString();
-    }
-  } catch {
-    /* ignore */
-  }
-  return url;
+async function completeCheckout(response: RazorpayCheckoutSuccess): Promise<void> {
+  await api.razorpayVerifyCheckout(response);
+  window.location.href = `${checkoutSuccessUrl()}?verified=1`;
 }
-
-function loadRazorpayCheckoutScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined") {
-      reject(new Error("No window"));
-      return;
-    }
-    const w = window as unknown as { Razorpay?: unknown };
-    if (w.Razorpay) {
-      resolve();
-      return;
-    }
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${CHECKOUT_SCRIPT_SRC}"]`
-    );
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Razorpay script failed")),
-        { once: true }
-      );
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = CHECKOUT_SCRIPT_SRC;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Could not load Razorpay Checkout"));
-    document.body.appendChild(s);
-  });
-}
-
-type RazorpayInstance = {
-  open: () => void;
-  on: (event: string, handler: (payload: { error?: { description?: string } }) => void) => void;
-};
-
-type RazorpayConstructor = new (options: Record<string, unknown>) => RazorpayInstance;
 
 export function PricingTierCTA({
   planId,
@@ -116,7 +66,7 @@ export function PricingTierCTA({
       setApiUserEmail(session.user.email);
       const { short_url, subscription_id, key_id } = await api.razorpayCheckout(planId);
 
-      if (!useRazorpayCheckoutModal) {
+      if (useRazorpayHostedCheckout) {
         window.location.assign(normalizeRazorpayCheckoutUrl(short_url));
         return;
       }
@@ -144,22 +94,18 @@ export function PricingTierCTA({
           ? session.user.name.trim()
           : undefined;
 
-      type CheckoutSuccess = {
-        razorpay_payment_id: string;
-        razorpay_subscription_id: string;
-        razorpay_signature: string;
-      };
-
       const rzp = new Ctor({
         key: key_id,
         subscription_id,
         name: PRODUCT_NAME,
         description,
+        callback_url: checkoutSuccessUrl(),
+        redirect: true,
         prefill: {
           ...(userEmail ? { email: userEmail } : {}),
           ...(userName ? { name: userName } : {}),
         },
-        handler(response: CheckoutSuccess) {
+        handler(response: RazorpayCheckoutSuccess) {
           void (async () => {
             const pid = response?.razorpay_payment_id;
             const sid = response?.razorpay_subscription_id;
@@ -169,12 +115,11 @@ export function PricingTierCTA({
               return;
             }
             try {
-              await api.razorpayVerifyCheckout({
+              await completeCheckout({
                 razorpay_payment_id: pid,
                 razorpay_subscription_id: sid,
                 razorpay_signature: sig,
               });
-              window.location.href = "/dashboard?subscription=started";
             } catch (verifyErr) {
               setErr(
                 verifyErr instanceof Error
@@ -200,7 +145,6 @@ export function PricingTierCTA({
       });
 
       rzp.open();
-      // Modal is open; re-enable the button so the label is not stuck on "Opening checkout…"
       setBusy(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Checkout failed");
