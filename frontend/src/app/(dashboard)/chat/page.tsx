@@ -88,9 +88,9 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="dashboard-page mx-auto flex h-[calc(100vh-6rem)] max-w-5xl flex-col">
-      <div className="dashboard-hero-card dashboard-inner-accent mb-4">
-        <h1 className="text-[2.15rem] font-semibold leading-none tracking-[-0.04em]">
+    <div className="mx-auto flex h-[calc(100vh-6rem)] max-w-5xl flex-col space-y-4">
+      <div className="mb-2">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Q&A on your data
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -101,7 +101,7 @@ export default function ChatPage() {
 
       {/* Dataset Selector */}
       {!selectedDataset ? (
-        <Card className="dashboard-surface border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Choose a source</CardTitle>
           </CardHeader>
@@ -156,7 +156,7 @@ export default function ChatPage() {
             </Button>
           </div>
 
-          <Card className="dashboard-surface flex flex-1 flex-col overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+          <Card className="flex flex-1 flex-col overflow-hidden">
             <ScrollArea className="flex-1 p-4">
               {messages.length === 0 ? (
                 <div className="flex h-full items-center justify-center py-20 text-center">

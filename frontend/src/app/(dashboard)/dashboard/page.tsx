@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -72,7 +72,7 @@ function formatWorkspaceActivity(iso: string | null | undefined): string | null 
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="dashboard-section-label">
+    <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {children}
     </h2>
   );
@@ -107,25 +107,29 @@ function BriefTile({
 }) {
   const border =
     variant === "risk"
-      ? "border-amber-200/80 bg-[linear-gradient(135deg,rgba(255,247,230,0.96),rgba(255,255,255,0.85))] dark:border-amber-900/40 dark:bg-[linear-gradient(135deg,rgba(120,53,15,0.18),rgba(15,23,42,0.6))]"
+      ? "border-amber-200 dark:border-amber-900/50"
       : variant === "opportunity"
-        ? "border-emerald-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(255,255,255,0.84))] dark:border-emerald-900/40 dark:bg-[linear-gradient(135deg,rgba(6,78,59,0.18),rgba(15,23,42,0.6))]"
-        : "border-slate-200/70 bg-white dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(30,41,59,0.62),rgba(15,23,42,0.62))]";
+        ? "border-emerald-200 dark:border-emerald-900/50"
+        : "";
   const showEmpty = !body.trim();
 
   return (
-    <div className={`dashboard-kpi-card min-h-[10rem] ${border}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-        {title}
-      </p>
+    <Card className={cn("min-h-[10rem]", border)}>
+      <CardHeader className="pb-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {title}
+        </p>
+      </CardHeader>
+      <CardContent>
       <p
-        className={`mt-2 text-sm leading-relaxed ${
-          showEmpty ? "text-slate-400" : "text-slate-800 dark:text-slate-100"
+        className={`text-sm leading-relaxed ${
+          showEmpty ? "text-muted-foreground" : "text-foreground"
         }`}
       >
         {showEmpty ? emptyHint ?? "—" : body}
       </p>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -533,16 +537,14 @@ export default function OverviewPage() {
   };
 
   return (
-    <div className="dashboard-page">
-      <div ref={exportPdfRef} className="dashboard-pdf-root space-y-6 max-w-6xl">
-      <header className="dashboard-hero-card dashboard-inner-accent">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.8fr)] xl:items-start">
+    <div className="space-y-6 max-w-6xl">
+      <div ref={exportPdfRef} className="dashboard-pdf-root space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <span className="dashboard-chip">Workspace overview</span>
-            <h1 className="mt-4 text-[2.35rem] font-semibold leading-none tracking-[-0.05em] text-slate-900 dark:text-slate-50">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Overview
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
               {data.total_datasets} source{data.total_datasets !== 1 ? "s" : ""}{" "}
               · {data.total_rows.toLocaleString()} rows · Briefing first, then charts.
               The workspace briefing is{" "}
@@ -584,19 +586,11 @@ export default function OverviewPage() {
               </div>
             )}
           </div>
-          <div className="dashboard-surface-muted flex flex-col gap-4 p-4 md:p-5">
-            <div>
-              <p className="dashboard-section-label">Workspace actions</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                Import, append, or refresh the operator read without changing your current view.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
               {data.datasets.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-lg"
                   onClick={() => {
                     const ds = data.datasets[0];
                     setAppendTarget({ id: ds.id, name: ds.name });
@@ -606,19 +600,18 @@ export default function OverviewPage() {
                 </Button>
               )}
               <Link href="/history">
-                <Button size="sm" variant="outline" className="rounded-lg">
+                <Button size="sm" variant="outline">
                   History
                 </Button>
               </Link>
               <Link href="/upload">
-                <Button size="sm" className="rounded-lg">
+                <Button size="sm">
                   Import data
                 </Button>
               </Link>
               <Button
                 size="sm"
                 variant="secondary"
-                className="rounded-lg"
                 onClick={() => runOverviewAnalysis.mutate()}
                 disabled={briefingActionsDisabled}
                 title={
@@ -636,7 +629,6 @@ export default function OverviewPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="rounded-lg"
                 onClick={() => void handleExportPdf()}
                 disabled={pdfExporting}
                 title="Download a PDF snapshot of this overview (charts and text as shown)."
@@ -645,25 +637,7 @@ export default function OverviewPage() {
                 {pdfExporting ? "Exporting…" : "Export PDF"}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-medium text-slate-600 dark:text-slate-400">
-                AI analysis
-              </span>
-              {" · "}
-              Runs a model read across your sources. Check numbers and assumptions before acting.
-            </p>
-            {habits?.briefing_cta_context ? (
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                <span className="font-medium text-slate-600 dark:text-slate-400">
-                  Briefing
-                </span>
-                {" · "}
-                {habits.briefing_cta_context}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      </div>
 
       <WorkspaceUsageStrip usage={data.usage} className="max-w-6xl" />
 
@@ -732,7 +706,7 @@ export default function OverviewPage() {
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <SectionLabel>Snapshot</SectionLabel>
-          <span className="dashboard-chip shrink-0 text-[10px]">AI briefing</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">AI briefing</span>
         </div>
         <p className="text-xs text-slate-500 max-w-2xl -mt-1 leading-relaxed">
           Updates after you run a workspace briefing—model-generated read of your sources here.
@@ -790,8 +764,8 @@ export default function OverviewPage() {
           From your latest workspace briefing (model-generated). Verify important figures in your
           source files.
         </p>
-        <div className="dashboard-surface overflow-hidden">
-          <div className="grid divide-y divide-slate-100 dark:divide-slate-800 lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
+        <Card className="overflow-hidden">
+          <div className="grid divide-y lg:grid-cols-3 lg:divide-y-0 lg:divide-x">
             <div className="p-6 lg:p-7">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 What moved
@@ -808,7 +782,7 @@ export default function OverviewPage() {
                 )}
               </p>
             </div>
-            <div className="dashboard-inner-accent p-6 lg:p-7">
+            <div className="bg-muted/30 p-6 lg:p-7">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 So what
               </p>
@@ -857,7 +831,7 @@ export default function OverviewPage() {
               ) : null}
             </p>
           )}
-        </div>
+        </Card>
       </section>
 
       {/* 3. Key numbers */}
@@ -867,7 +841,7 @@ export default function OverviewPage() {
           {metricSlots.map((slot) => (
             <div
               key={slot.key}
-              className="dashboard-kpi-card min-h-[12.5rem]"
+              className="min-h-[12.5rem] rounded-lg border bg-card p-4 shadow-sm"
             >
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 {slot.label}
@@ -907,7 +881,7 @@ export default function OverviewPage() {
               </div>
             </div>
           ))}
-          <div className="dashboard-kpi-card min-h-[12.5rem]">
+          <div className="min-h-[12.5rem] rounded-lg border bg-card p-4 shadow-sm">
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
               Record volume
             </p>
@@ -1005,14 +979,15 @@ export default function OverviewPage() {
         Previously: SectionLabel "Outlook & sources", xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.75fr)].
         */}
         <div className="max-w-2xl">
-          <div className="dashboard-surface w-full p-6">
+          <Card className="w-full">
+            <CardContent className="p-6">
             <p className="text-xs text-slate-500 mb-4">
               Open a source for preview, briefing detail, or to add rows.
             </p>
             <ul className="space-y-2">
               {data.datasets.map((ds) => (
                 <li key={ds.id}>
-                  <div className="flex items-center justify-between gap-2 rounded-2xl border border-transparent px-3 py-3 transition-colors hover:border-white/70 hover:bg-white/75 dark:hover:border-white/10 dark:hover:bg-slate-900/40">
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-transparent px-3 py-3 transition-colors hover:bg-muted/50">
                     <Link
                       href={`/datasets/${ds.id}`}
                       className="flex-1 min-w-0"
@@ -1040,13 +1015,14 @@ export default function OverviewPage() {
                 </li>
               ))}
             </ul>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
       {/* Full analysis (optional depth) */}
       {analysisReady && overviewAnalysis.data?.result_json && (
-        <details id="workspace-full-briefing" className="group dashboard-surface">
+        <details id="workspace-full-briefing" className="group rounded-lg border bg-card shadow-sm">
           <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
             <span>Full briefing</span>
             <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">

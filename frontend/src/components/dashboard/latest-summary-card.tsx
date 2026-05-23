@@ -101,7 +101,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
     <section className={className}>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="dashboard-section-label">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Latest summary
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
@@ -122,7 +122,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
         </div>
       </div>
 
-      <Card className="dashboard-surface dashboard-inner-accent overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           {showSkeleton ? (
             <div className="p-6 space-y-4">

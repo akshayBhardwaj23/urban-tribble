@@ -18,6 +18,13 @@ import {
   formatChartAxisDate,
   formatChartTooltipDate,
 } from "@/lib/chart-dates";
+import {
+  CHART_COMPARE,
+  CHART_GRID,
+  CHART_MUTED,
+  CHART_SERIES,
+  seriesPalette,
+} from "@/lib/chart-theme";
 
 interface ForecastData {
   historical: { date: string; actual: number; predicted: number }[];
@@ -154,9 +161,9 @@ export function ForecastChart({
   const fcBottom = fcCompact ? 10 : 22;
   const fcMinGap = fcCompact ? 4 : 12;
   const fcTick = fcCompact
-    ? { fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }
+    ? { fill: CHART_MUTED, fontSize: 11, fontWeight: 500 }
     : {
-        fill: "hsl(220, 9%, 46%)",
+        fill: CHART_MUTED,
         fontSize: 11,
         fontWeight: 500,
         angle: -32,
@@ -166,7 +173,7 @@ export function ForecastChart({
   return (
     <div className="space-y-4">
       <div className="grid w-full gap-4 md:grid-cols-3">
-        <Card className="dashboard-surface dashboard-inner-accent border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+        <Card>
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Trend</p>
             <p className="text-lg font-semibold mt-1">
@@ -178,7 +185,7 @@ export function ForecastChart({
             </p>
           </CardContent>
         </Card>
-        <Card className="dashboard-surface border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+        <Card>
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Model Fit (R²)</p>
             <p className="text-lg font-semibold mt-1">
@@ -189,7 +196,7 @@ export function ForecastChart({
             </p>
           </CardContent>
         </Card>
-        <Card className="dashboard-surface border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+        <Card>
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Forecast Range</p>
             <p className="text-lg font-semibold mt-1">
@@ -202,7 +209,7 @@ export function ForecastChart({
         </Card>
       </div>
 
-      <Card className="dashboard-surface dashboard-inner-accent overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+      <Card className="overflow-hidden">
         <CardHeader className="border-b border-white/65 pb-5 dark:border-white/10">
           <CardTitle className="text-sm font-medium">
             {metricLabel} — Historical & forecast
@@ -223,7 +230,7 @@ export function ForecastChart({
         <CardContent>
           <div
             className={cn(
-              "rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(255,255,255,0.42))] px-2 pb-2 pt-3 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.48),rgba(15,23,42,0.14))]",
+              "rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-2 pb-2 pt-3",
               chartHeightClassName
             )}
           >
@@ -240,20 +247,28 @@ export function ForecastChart({
                 >
                 <defs>
                   <linearGradient id={gradActual} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
+                    <stop offset="0%" stopColor={CHART_SERIES} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={CHART_SERIES} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id={gradPred} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f472b6" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#f472b6" stopOpacity={0} />
+                    <stop offset="0%" stopColor={CHART_COMPARE} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={CHART_COMPARE} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id={gradBand} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.04} />
+                    <stop
+                      offset="0%"
+                      stopColor={seriesPalette().compareMid}
+                      stopOpacity={0.14}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={seriesPalette().compareMid}
+                      stopOpacity={0.03}
+                    />
                   </linearGradient>
                 </defs>
                 <CartesianGrid
-                  stroke="rgba(148, 163, 184, 0.18)"
+                  stroke={CHART_GRID}
                   strokeDasharray="4 6"
                   vertical={false}
                   opacity={0.9}
@@ -262,14 +277,14 @@ export function ForecastChart({
                   dataKey="date"
                   tick={fcTick}
                   tickLine={false}
-                  axisLine={{ stroke: "hsl(220, 13%, 91%)", strokeWidth: 1 }}
+                  axisLine={{ stroke: CHART_GRID, strokeWidth: 1 }}
                   tickMargin={8}
                   tickFormatter={(v) => formatChartAxisDate(v)}
                   interval={fcInterval}
                   minTickGap={fcMinGap}
                 />
                 <YAxis
-                  tick={{ fill: "hsl(220, 9%, 46%)", fontSize: 11, fontWeight: 500 }}
+                  tick={{ fill: CHART_MUTED, fontSize: 11, fontWeight: 500 }}
                   tickLine={false}
                   axisLine={false}
                   width={52}
@@ -306,7 +321,7 @@ export function ForecastChart({
                 {lastHistorical && (
                   <ReferenceLine
                     x={lastHistorical}
-                    stroke="hsl(220, 13%, 71%)"
+                    stroke={CHART_MUTED}
                     strokeDasharray="4 4"
                     label={{ value: "Now", position: "top", fontSize: 11 }}
                   />
@@ -332,7 +347,7 @@ export function ForecastChart({
                 <Area
                   type="monotone"
                   dataKey="actual"
-                  stroke="#06b6d4"
+                  stroke={CHART_SERIES}
                   strokeWidth={2.5}
                   fill={`url(#${gradActual})`}
                   fillOpacity={1}
@@ -340,12 +355,17 @@ export function ForecastChart({
                   name="Actual"
                   connectNulls={false}
                   isAnimationActive={false}
-                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "#06b6d4" }}
+                  activeDot={{
+                    r: 5,
+                    strokeWidth: 2,
+                    stroke: "var(--card)",
+                    fill: CHART_SERIES,
+                  }}
                 />
                 <Area
                   type="monotone"
                   dataKey="predicted"
-                  stroke="#ec4899"
+                  stroke={CHART_COMPARE}
                   strokeWidth={2.5}
                   strokeDasharray="6 5"
                   fill={`url(#${gradPred})`}
@@ -354,7 +374,12 @@ export function ForecastChart({
                   name="Forecast"
                   connectNulls={false}
                   isAnimationActive={false}
-                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "#ec4899" }}
+                  activeDot={{
+                    r: 5,
+                    strokeWidth: 2,
+                    stroke: "var(--card)",
+                    fill: CHART_COMPARE,
+                  }}
                 />
                 </AreaChart>
               </ResponsiveContainer>

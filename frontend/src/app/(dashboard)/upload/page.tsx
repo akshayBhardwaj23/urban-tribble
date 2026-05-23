@@ -126,10 +126,10 @@ export default function UploadPage() {
     flow === "guided" && guidedTemplate ? guidedTemplate.id : "manual";
 
   return (
-    <div className="dashboard-page max-w-5xl">
+    <div className="max-w-5xl space-y-6">
       {flow === "choose" && (
         <>
-          <header className="dashboard-hero-card dashboard-inner-accent space-y-8">
+          <header className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3.5 py-1.5 text-xs font-medium text-primary">
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Add data
@@ -146,7 +146,7 @@ export default function UploadPage() {
             </div>
 
             <section
-              className="dashboard-surface overflow-hidden"
+              className="rounded-lg border bg-card shadow-sm overflow-hidden"
               aria-labelledby="templates-heading"
             >
               <div className="px-6 sm:px-8 pt-7 pb-5 border-b border-border/50 bg-muted/15">
@@ -202,7 +202,7 @@ export default function UploadPage() {
               </ul>
 
               <div className="px-6 pb-8 pt-0 sm:px-8">
-                <div className="dashboard-surface-muted flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="rounded-lg border bg-muted/40 flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex gap-3 min-w-0">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background border border-border/80">
                       <Compass className="h-5 w-5 text-muted-foreground" aria-hidden />
@@ -261,7 +261,7 @@ export default function UploadPage() {
               </header>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <div className="dashboard-surface px-5 py-5">
+                <div className="rounded-lg border bg-card px-5 py-5 shadow-sm">
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Files to bring
                   </h2>
@@ -279,7 +279,7 @@ export default function UploadPage() {
                     </p>
                   )}
                 </div>
-                <div className="dashboard-surface dashboard-inner-accent px-5 py-5">
+                <div className="rounded-lg border bg-muted/40 px-5 py-5">
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-primary">
                     What you&apos;ll get
                   </h2>
@@ -289,7 +289,7 @@ export default function UploadPage() {
                 </div>
               </div>
 
-              <Card className="dashboard-surface overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+              <Card className="overflow-hidden">
                 <CardHeader className="border-b bg-muted/15 pb-5 pt-6 px-6 sm:px-8">
                   <CardTitle className="text-lg font-semibold tracking-tight">
                     Files
@@ -326,14 +326,14 @@ export default function UploadPage() {
                 </p>
               </header>
 
-              <div className="dashboard-surface px-5 py-4">
+              <div className="rounded-lg border bg-card px-5 py-4 shadow-sm">
                 <ExpectedInputsList
                   items={CUSTOM_ANALYSIS_TEMPLATE.recommendedInputs}
                   label="Typical inputs"
                 />
               </div>
 
-              <Card className="dashboard-surface overflow-hidden border-white/70 bg-white/78 dark:border-white/10 dark:bg-slate-950/45">
+              <Card className="overflow-hidden">
                 <CardHeader className="border-b bg-muted/15 pb-5 pt-6 px-6 sm:px-8">
                   <CardTitle className="text-lg font-semibold tracking-tight">
                     Files

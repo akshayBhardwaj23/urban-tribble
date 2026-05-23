@@ -39,7 +39,7 @@ _FREE_LIFETIME = {"uploads": 2, "analyses": 2}
 # Per-calendar-month caps for starter/pro (per workspace for uploads & analyses).
 _MONTHLY_CAPS = {
     "starter": {"uploads": 10, "analyses": 15},
-    "pro": {"uploads": 30, "analyses": None},
+    "pro": {"uploads": 30, "analyses": 50},
     # Same generous caps as Pro but higher upload ceiling for fixture-heavy testing.
     "internal": {"uploads": 500, "analyses": None},
 }

@@ -70,7 +70,7 @@ export function WorkspaceUsageStrip({
   return (
     <div
       className={cn(
-        "dashboard-surface-muted px-3 py-3 sm:px-4",
+        "rounded-lg border bg-muted/40 px-3 py-3 sm:px-4",
         className
       )}
     >

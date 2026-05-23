@@ -321,20 +321,17 @@ export default function DatasetPage() {
   const summary = data.data_summary as Record<string, unknown> | null;
 
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-hero-card dashboard-inner-accent grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(16rem,0.85fr)] xl:items-start">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <span className="dashboard-chip">Source dashboard</span>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-            {data.name}
-          </h1>
-          <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-300">
+          <h1 className="text-2xl font-semibold tracking-tight">{data.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {summary?.rows ? `${summary.rows} rows` : ""}{" "}
             {summary?.columns ? `· ${summary.columns} columns` : ""} · Imported{" "}
             {new Date(data.created_at).toLocaleDateString()}
           </p>
         </div>
-        <div className="dashboard-surface-muted flex flex-wrap items-center gap-2 p-4 md:p-5">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -373,7 +370,7 @@ export default function DatasetPage() {
         <PlanLimitCallout detail={analysesLimitDetail} />
       ) : null}
 
-      <div className="dashboard-surface px-5 py-4">
+      <div className="rounded-md border bg-card px-4 py-3">
         <TimeframeToolbar
           value={timeframe}
           onChange={setTimeframe}
@@ -385,23 +382,21 @@ export default function DatasetPage() {
       </div>
 
       {dashboardData.data?.dataset_brief ? (
-        <div className="dashboard-surface dashboard-inner-accent px-5 py-4 text-sm leading-relaxed">
-          <span className="font-bold uppercase tracking-wide text-slate-600">
-            Source read
-          </span>
+        <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm leading-relaxed">
+          <span className="font-medium text-foreground">About this source</span>
           {dashboardData.data.dashboard_plan_source === "ai" ? (
-            <span className="ml-2 text-xs font-semibold text-violet-600">
-              · Layout from model
+            <span className="ml-2 text-xs text-muted-foreground">
+              · AI-chosen layout
             </span>
           ) : null}
-          <p className="mt-2 text-slate-600">
+          <p className="mt-1.5 text-muted-foreground">
             {dashboardData.data.dataset_brief}
           </p>
         </div>
       ) : null}
 
-      {/* KPI row — HR-style tiles with gradient trend orbs */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {/* KPI row */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {(dashboardData.data?.kpis?.length ?? 0) > 0
           ? dashboardData.data!.kpis.map((kpi, i) => {
               const details =
@@ -418,7 +413,6 @@ export default function DatasetPage() {
               return (
                 <DashboardKpiTile
                   key={kpi.id}
-                  index={i}
                   title={kpi.title}
                   value={kpi.formatted}
                   subtitle={kpi.subtitle ?? undefined}
@@ -433,7 +427,6 @@ export default function DatasetPage() {
               return (
                 <DashboardKpiTile
                   key={col}
-                  index={i}
                   title={title}
                   value={
                     total != null
@@ -464,7 +457,6 @@ export default function DatasetPage() {
         {(dashboardData.data?.kpis?.length ?? 0) === 0 ? (
           <>
             <DashboardKpiTile
-              index={100}
               title="Rows"
               value={Number(summary?.rows ?? 0).toLocaleString()}
               details={buildStaticSummaryKpiDetails({
@@ -477,7 +469,6 @@ export default function DatasetPage() {
               })}
             />
             <DashboardKpiTile
-              index={101}
               title="Columns"
               value={Number(summary?.columns ?? 0).toLocaleString()}
               details={buildStaticSummaryKpiDetails({
@@ -500,7 +491,7 @@ export default function DatasetPage() {
       />
 
       <Tabs defaultValue="dashboard">
-        <TabsList className="dashboard-pill-tabs">
+        <TabsList>
           <TabsTrigger value="dashboard">Overview</TabsTrigger>
           <TabsTrigger value="analysis">Briefing</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
@@ -519,14 +510,14 @@ export default function DatasetPage() {
               ))}
             </div>
           ) : (dashboardData.data?.charts?.length ?? 0) === 0 ? (
-            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+            <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 No charts for this source with the current fields and time range. Adjust columns
                 or the range above and try again.
               </CardContent>
             </Card>
           ) : (
-            <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2 md:[grid-auto-flow:row_dense]">
+            <div className="grid gap-4 md:grid-cols-2">
               {dashboardData.data?.charts.map((chart, i) => (
                 <div
                   key={chart.id}
@@ -548,7 +539,7 @@ export default function DatasetPage() {
               traceContext={aiTraceContext}
             />
           ) : (
-            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+            <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
                   {DATASET_ANALYSIS_EMPTY_INVITE}
@@ -604,7 +595,7 @@ export default function DatasetPage() {
                 valueColumn={forecastMutation.data.value_column}
               />
             ) : (
-              <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+              <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <p className="text-sm text-muted-foreground mb-4">
                     Extends the historical series with a simple linear fit—helpful for planning,
@@ -627,7 +618,7 @@ export default function DatasetPage() {
               </Card>
             )
           ) : (
-            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+            <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 Add at least one date field and one revenue or numeric amount to build a forecast.
               </CardContent>
@@ -636,7 +627,7 @@ export default function DatasetPage() {
         </TabsContent>
 
         <TabsContent value="data" className="mt-4">
-          <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">
                 Row preview{" "}
@@ -656,7 +647,7 @@ export default function DatasetPage() {
                   Preview could not be loaded
                 </p>
               ) : (
-                <div className="dashboard-table-shell max-h-96 overflow-auto">
+                <div className="max-h-96 overflow-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -693,7 +684,7 @@ export default function DatasetPage() {
 
         <TabsContent value="details" className="space-y-4 mt-4">
           {schema && (
-            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Column roles</CardTitle>
               </CardHeader>
@@ -751,7 +742,7 @@ export default function DatasetPage() {
           )}
 
           {data.cleaned_report && data.cleaned_report.steps.length > 0 && (
-            <Card className="dashboard-surface border-white/70 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">File preparation</CardTitle>
               </CardHeader>

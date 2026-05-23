@@ -46,13 +46,11 @@ export default function DatasetsPage() {
   });
 
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-hero-card dashboard-inner-accent flex items-center justify-between gap-4">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-[2.15rem] font-semibold leading-none tracking-[-0.04em]">
-            Sources
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Sources</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Files in this workspace—used for the overview, source views, and briefings.
           </p>
         </div>
@@ -71,7 +69,7 @@ export default function DatasetsPage() {
           ))}
         </div>
       ) : !datasets || datasets.length === 0 ? (
-        <Card className="dashboard-empty-card">
+        <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-sm text-muted-foreground mb-4">
               No sources yet. Import a spreadsheet to anchor your first metrics.
@@ -89,7 +87,7 @@ export default function DatasetsPage() {
           {datasets.map((ds) => (
             <Card
               key={ds.id}
-              className="dashboard-surface transition-colors hover:bg-white/90 dark:hover:bg-slate-900/60"
+              className="transition-colors hover:bg-muted/30"
             >
               <CardContent className="flex items-center justify-between py-4">
                 <Link
@@ -139,7 +137,7 @@ export default function DatasetsPage() {
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <DialogContent className="dashboard-surface border-white/70 bg-white/90 dark:border-white/10 dark:bg-slate-950/90">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove source</DialogTitle>
           </DialogHeader>

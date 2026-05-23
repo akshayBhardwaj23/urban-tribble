@@ -18,27 +18,23 @@ import {
   Label,
   LabelList,
 } from "recharts";
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   formatChartAxisDate,
   formatChartTooltipDate,
 } from "@/lib/chart-dates";
+import {
+  CHART_GRID,
+  CHART_MUTED,
+  CHART_SERIES,
+  CHART_TRACK,
+  pieSegmentFill,
+  seriesPalette,
+} from "@/lib/chart-theme";
 import { ChartFrame } from "@/components/charts/chart-frame";
 
-/** Reference-driven palette: vivid but still readable in app UI. */
-const REF_VIOLET = "#7c3aed";
-const REF_FUCHSIA = "#ec4899";
-const REF_SKY = "#06b6d4";
-const REF_BLUE = "#3b82f6";
-const REF_AMBER = "#f59e0b";
-const REF_LIME = "#84cc16";
-
-const BAR_PALETTE = [REF_VIOLET, REF_FUCHSIA, REF_SKY, REF_BLUE, REF_AMBER, REF_LIME];
-
-/** SaaS area charts — Stripe / Notion vibe */
-const SAAS_GRID = "rgba(148, 163, 184, 0.18)";
-const CHART_MUTED = "#64748b";
-const TRACK_FILL = "rgba(148, 163, 184, 0.13)";
+const SAAS_GRID = CHART_GRID;
+const TRACK_FILL = CHART_TRACK;
 
 const tickStyle = {
   fill: CHART_MUTED,
@@ -346,41 +342,8 @@ function prepareChart(chart: ChartConfig): PreparedChart | null {
   }
 }
 
-function getSaaSPalette(accentIndex: number, kind: "line" | "area") {
-  const variants = [
-    {
-      primary: REF_VIOLET,
-      primaryMid: "#a78bfa",
-      primaryStroke: "#6d28d9",
-      compare: REF_FUCHSIA,
-      compareMid: "#f9a8d4",
-      compareStroke: "#db2777",
-    },
-    {
-      primary: REF_SKY,
-      primaryMid: "#67e8f9",
-      primaryStroke: "#0891b2",
-      compare: REF_VIOLET,
-      compareMid: "#c4b5fd",
-      compareStroke: "#7c3aed",
-    },
-    {
-      primary: REF_AMBER,
-      primaryMid: "#fcd34d",
-      primaryStroke: "#d97706",
-      compare: REF_BLUE,
-      compareMid: "#93c5fd",
-      compareStroke: "#2563eb",
-    },
-  ];
-  const selected = variants[accentIndex % variants.length];
-  if (kind === "area") {
-    return {
-      ...selected,
-      primaryMid: selected.primaryMid,
-    };
-  }
-  return selected;
+function getSaaSPalette(_accentIndex: number, _kind: "line" | "area") {
+  return seriesPalette();
 }
 
 function LegendPills({
@@ -506,52 +469,44 @@ export function AutoChart({
 
   if (!prepared) {
     return (
-      <div
-        className={cn(
-          "dashboard-surface flex flex-col p-6"
-        )}
-      >
-        <h3 className="text-sm font-semibold text-foreground">{chart.title}</h3>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Not enough valid numeric data to plot this chart.
-        </p>
-      </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">{chart.title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Not enough valid numeric data to plot this chart.
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
   const insight = insightForPrepared(prepared, chart);
 
   return (
-    <div
-      className={cn(
-        "dashboard-surface dashboard-inner-accent flex flex-col overflow-hidden transition-shadow duration-300 hover:shadow-[0_28px_54px_-34px_rgba(15,23,42,0.3)]"
-      )}
-    >
-      <div className="border-b border-white/65 px-5 pb-4 pt-5 dark:border-white/10">
-        <h3 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          {chart.title}
-        </h3>
+    <Card>
+      <CardHeader className="space-y-1 pb-2">
+        <CardTitle className="text-sm font-medium">{chart.title}</CardTitle>
         {insight.line1 ? (
-          <div className="mt-3 max-w-2xl space-y-1.5">
-            <p className="text-[13px] font-medium leading-snug text-foreground">
-              {insight.line1}
-            </p>
+          <div className="max-w-2xl space-y-1">
+            <p className="text-sm text-foreground">{insight.line1}</p>
             {insight.line2 ? (
-              <p className="text-xs leading-relaxed text-muted-foreground">{insight.line2}</p>
+              <p className="text-xs text-muted-foreground">{insight.line2}</p>
             ) : null}
           </div>
         ) : null}
-      </div>
-      <div className="px-3 pb-3 pt-3 sm:px-4">
-        <div className="rounded-[1.6rem] border border-slate-100/80 bg-white px-2 pb-2 pt-3 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(30,41,59,0.5),rgba(15,23,42,0.14))]">
-          <ChartFrame className="h-[19rem]">
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="h-72 min-h-[18rem] w-full rounded-lg bg-gradient-to-b from-muted/20 to-transparent px-1 pb-1 pt-2">
+          <ChartFrame className="h-full">
             <ResponsiveContainer width="100%" height="100%">
               {renderChart(prepared, safeId, accentIndex)}
             </ResponsiveContainer>
           </ChartFrame>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -726,14 +681,12 @@ function renderChart(
           />
           <Bar
             dataKey="value"
+            fill={CHART_SERIES}
             barSize={18}
             radius={[999, 999, 999, 999]}
             background={{ fill: TRACK_FILL, radius: 999 }}
             isAnimationActive={false}
           >
-            {data.map((_, i) => (
-              <Cell key={i} fill={BAR_PALETTE[i % BAR_PALETTE.length]} />
-            ))}
             <LabelList
               dataKey="value"
               position="right"
@@ -766,20 +719,28 @@ function renderChart(
             isAnimationActive={false}
           >
             {data.map((_, i) => (
-              <Cell
-                key={i}
-                fill={BAR_PALETTE[i % BAR_PALETTE.length]}
-                opacity={0.92}
-              />
+              <Cell key={i} fill={pieSegmentFill(i, data.length)} />
             ))}
             <Label
               position="center"
               content={() => (
                 <text textAnchor="middle" dominantBaseline="middle">
-                  <tspan x="50%" y="44%" fill="#64748b" fontSize="11" fontWeight="600">
+                  <tspan
+                    x="50%"
+                    y="44%"
+                    fill="var(--muted-foreground)"
+                    fontSize="11"
+                    fontWeight="600"
+                  >
                     Total
                   </tspan>
-                  <tspan x="50%" y="58%" fill="#0f172a" fontSize="18" fontWeight="700">
+                  <tspan
+                    x="50%"
+                    y="58%"
+                    fill="var(--foreground)"
+                    fontSize="18"
+                    fontWeight="700"
+                  >
                     {formatTooltip(pieTotal)}
                   </tspan>
                 </text>
@@ -801,7 +762,7 @@ function renderChart(
         <BarChart data={data} layout="vertical">
           <Bar
             dataKey="value"
-            fill={REF_AMBER}
+            fill={CHART_SERIES}
             radius={[0, 12, 12, 0]}
             isAnimationActive={false}
           />
