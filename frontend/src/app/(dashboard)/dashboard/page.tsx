@@ -26,6 +26,10 @@ import {
 } from "@/components/dashboard/analysis-panel";
 import { ChatOverlay } from "@/components/chat/chat-panel";
 import { api, isApiPlanLimitError } from "@/lib/api";
+import {
+  API_RETRY_HINT,
+  formatUserFacingApiError,
+} from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
@@ -424,12 +428,9 @@ export default function OverviewPage() {
         <Card className="border-destructive/30 shadow-sm">
           <CardContent className="py-8 space-y-4">
             <p className="text-sm text-destructive">
-              {error instanceof Error ? error.message : "Request failed"}
+              {formatUserFacingApiError(error)}
             </p>
-            <p className="text-xs text-muted-foreground">
-              Check that the API is running and you are still signed in. If you switched
-              workspaces, try once more.
-            </p>
+            <p className="text-xs text-muted-foreground">{API_RETRY_HINT}</p>
             <Button type="button" size="sm" onClick={() => refetch()}>
               Retry
             </Button>

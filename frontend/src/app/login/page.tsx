@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { BrandLogo } from "@/components/brand-logo";
 import { LOGIN_HEADLINE } from "@/lib/brand";
 import { ThemeMenuCompact } from "@/components/theme-menu";
+import { formatUserFacingApiError } from "@/lib/api-errors";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -64,11 +65,17 @@ export default function LoginPage() {
   }
 
   async function requestOtp(): Promise<boolean> {
-    const res = await fetch(`${API_BASE}/api/auth/otp/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/auth/otp/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+    } catch (e) {
+      setError(formatUserFacingApiError(e));
+      return false;
+    }
     const text = await res.text();
     if (!res.ok) {
       try {

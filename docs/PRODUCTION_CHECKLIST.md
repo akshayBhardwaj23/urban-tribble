@@ -36,7 +36,7 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 
 - **Backend:** structured logging, alerts on 5xx; track OpenAI and Razorpay failures.
 - **Frontend:** optional **Sentry** (or similar) via `NEXT_PUBLIC_SENTRY_DSN` and SDK init in Next.js.
-- **Product analytics:** optional GA4 / Plausible; the app includes a small `trackEvent` helper in `frontend/src/lib/analytics.ts` you can wire to `gtag` or your API.
+- **Product analytics:** set `NEXT_PUBLIC_GA_MEASUREMENT_ID` (e.g. `G-67RYHHW462`) on the frontend; `GoogleAnalytics` in the root layout loads gtag and existing `trackEvent` calls in `frontend/src/lib/analytics.ts` send custom events.
 
 ## Legal
 

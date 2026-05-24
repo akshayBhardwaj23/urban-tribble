@@ -1,4 +1,5 @@
 import type { IngestionProfile } from "@/lib/ingestion";
+import { formatUserFacingApiError, sanitizeApiErrorMessage } from "@/lib/api-errors";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -226,10 +227,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers["X-User-Email"] = _userEmail;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (e) {
+    throw new Error(formatUserFacingApiError(e));
+  }
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
@@ -256,7 +262,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
           : detail != null
             ? String(detail)
             : res.statusText;
-    throw new Error(message || "Request failed");
+    throw new Error(sanitizeApiErrorMessage(message || "Request failed"));
   }
 
   return res.json();

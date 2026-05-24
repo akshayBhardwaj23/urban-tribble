@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter, Fraunces } from "next/font/google";
+import { GoogleAnalytics } from "@/components/google-analytics";
 import { Providers } from "@/lib/providers";
 import {
   CANONICAL_SITE_URL,
@@ -89,6 +90,7 @@ export default function RootLayout({
       className={`${inter.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <GoogleAnalytics />
         <Providers>{children}</Providers>
       </body>
     </html>

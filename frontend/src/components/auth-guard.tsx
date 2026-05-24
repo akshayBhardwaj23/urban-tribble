@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { setApiUserEmail } from "@/lib/api";
+import {
+  API_UNAVAILABLE_DESCRIPTION,
+  API_UNAVAILABLE_TITLE,
+} from "@/lib/api-errors";
 import { Button } from "@/components/ui/button";
 
+const IS_DEV = process.env.NODE_ENV === "development";
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -51,23 +56,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="max-w-md space-y-2">
           <h1 className="text-lg font-semibold tracking-tight">
-            Can&apos;t reach the API
+            {API_UNAVAILABLE_TITLE}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            The app could not load your account from the backend. Start the API
-            (usually port 8000), confirm{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              NEXT_PUBLIC_API_URL
-            </code>{" "}
-            in{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              frontend/.env.local
-            </code>{" "}
-            matches that server, then retry.
+            {API_UNAVAILABLE_DESCRIPTION}
           </p>
-          <p className="text-xs text-muted-foreground break-all">
-            {API_URL}
-          </p>
+          {IS_DEV ? (
+            <p className="text-xs text-muted-foreground break-all">{API_URL}</p>
+          ) : null}
         </div>
         <Button
           type="button"
