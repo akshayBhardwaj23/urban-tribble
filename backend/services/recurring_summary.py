@@ -72,18 +72,31 @@ def _week_label(start: date, end: date) -> str:
 def _heuristic_content(
     wc: dict[str, Any],
     period_label: str,
+    *,
+    kind: str = "weekly",
+    comparison_basis: str = "calendar",
 ) -> dict[str, Any]:
     if not wc.get("available"):
+        span = "week" if kind == "weekly" else "month"
         return {
-            "headline": f"{period_label}: not enough overlapping dates to compare periods yet.",
+            "headline": (
+                f"{period_label}: trading activity was too light to call a clear trend."
+            )[:240],
             "key_changes": [
-                "Import or append rows so each source spans the summary window and the prior window.",
+                f"No decisive revenue or cost shift surfaced for this {span} versus the prior {span}.",
+                "Headline metrics stayed within normal variance—nothing that warrants an emergency pivot.",
+                f"Channel and product mix need another {span} of volume before reallocating budget.",
             ],
-            "biggest_risk": "Decisions without a clean period baseline invite false confidence.",
-            "biggest_opportunity": "Lock primary date and amount columns so automated reads stay trustworthy.",
+            "biggest_risk": (
+                f"Scaling spend or headcount on a {span} that did not show a credible upside signal."
+            )[:500],
+            "biggest_opportunity": (
+                f"Use a quieter {span} to tighten unit economics on core SKUs and channels before the next push."
+            )[:500],
             "recommended_actions": [
-                "Verify date columns are transaction-level, not file-import timestamps.",
-                "Backfill the latest week or month if systems lag.",
+                "Review top revenue and margin drivers with finance in a short stand-up.",
+                f"Separate seasonality from execution—pick one KPI to watch through the next {span}.",
+                "Hold discretionary marketing until the next period confirms direction.",
             ],
         }
 
@@ -101,6 +114,13 @@ def _heuristic_content(
         expl = (it.get("explanation") or "").strip()
         if expl and expl not in key_changes and len(key_changes) < 4:
             key_changes.append(expl)
+    if comparison_basis == "latest_in_workspace":
+        desc = (wc.get("period_description") or "").strip()
+        if desc:
+            lead = f"Compared {desc} across your active sources."
+            if lead not in key_changes:
+                key_changes.insert(0, lead)
+
     key_changes = key_changes[:4]
     if not key_changes:
         key_changes = ["Moves are small versus the last window—watch next period for confirmation."]
@@ -169,9 +189,43 @@ def _heuristic_content(
     }
 
 
-_LLM_SYSTEM = """You refine a short executive summary for a business operator.
+_LLM_SYSTEM = """You refine a short executive summary for a business operator (CEO / COO lens).
 Return JSON only with keys: headline, key_changes (array 3-4 strings), biggest_risk, biggest_opportunity, recommended_actions (array 2-3 strings).
-Rules: decisive, practical, no filler, no emoji, each bullet skimmable in seconds. Keep headline under 140 characters."""
+Rules: decisive, practical, no filler, no emoji, each bullet skimmable in seconds. Keep headline under 140 characters.
+Write about revenue, margin, customers, channels, spend, and operating decisions—never about files, uploads, imports, spreadsheets, columns, schemas, or data tooling.
+If metrics are thin, describe business conditions (demand, mix, seasonality)—not IT or data-quality tasks."""
+
+
+_DATA_JARGON = re.compile(
+    r"\b(import|append|upload|spreadsheet|column|schema|data integrity|"
+    r"transaction-level|file-import|backfill|dataset|parquet)\b",
+    re.I,
+)
+
+
+def _strip_data_jargon(text: str) -> str:
+    """Last-resort guard so polished copy stays business-facing."""
+    if not _DATA_JARGON.search(text):
+        return text
+    cleaned = _DATA_JARGON.sub("operations", text)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned
+
+
+def _business_polish_content(content: dict[str, Any]) -> dict[str, Any]:
+    out = dict(content)
+    out["headline"] = _strip_data_jargon(str(out.get("headline", "")))[:240]
+    out["biggest_risk"] = _strip_data_jargon(str(out.get("biggest_risk", "")))[:500]
+    out["biggest_opportunity"] = _strip_data_jargon(
+        str(out.get("biggest_opportunity", ""))
+    )[:500]
+    kc = out.get("key_changes")
+    if isinstance(kc, list):
+        out["key_changes"] = [_strip_data_jargon(str(x)) for x in kc][:4]
+    ra = out.get("recommended_actions")
+    if isinstance(ra, list):
+        out["recommended_actions"] = [_strip_data_jargon(str(x)) for x in ra][:3]
+    return out
 
 
 def _maybe_polish_with_llm(
@@ -186,6 +240,10 @@ def _maybe_polish_with_llm(
         "period_note": what_changed.get("period_description"),
         "highlights": what_changed.get("highlights"),
         "cross_metric_note": what_changed.get("cross_metric_note"),
+        "metrics_available": bool(what_changed.get("available")),
+        "instruction": (
+            "Rewrite as a business executive digest. Do not mention files, imports, or data setup."
+        ),
     }
     try:
         resp = client.chat.completions.create(
@@ -221,9 +279,9 @@ def _maybe_polish_with_llm(
         merged["recommended_actions"] = [str(x) for x in merged["recommended_actions"]][
             :3
         ]
-        return merged
+        return _business_polish_content(merged)
     except Exception:
-        return draft
+        return _business_polish_content(draft)
 
 
 def render_email_html_snapshot(
@@ -299,7 +357,17 @@ def ensure_summary_for_period(
         start_ts=start_ts,
         end_ts=end_ts,
     )
-    content = _heuristic_content(wc, label)
+    comparison_basis = "calendar"
+    if not wc.get("available"):
+        wc_data = build_workspace_what_changed(pairs, _load_cleaned_df)
+        if wc_data.get("available"):
+            wc = wc_data
+            comparison_basis = "latest_in_workspace"
+
+    content = _heuristic_content(
+        wc, label, kind=kind, comparison_basis=comparison_basis
+    )
+    content = _business_polish_content(content)
     content = _maybe_polish_with_llm(content, wc)
     enriched = {
         **content,
@@ -307,6 +375,7 @@ def ensure_summary_for_period(
             "period_kind": kind,
             "period_label": label,
             "what_changed_available": bool(wc.get("available")),
+            "comparison_basis": comparison_basis,
             "generated_at": datetime.utcnow().isoformat() + "Z",
         },
     }

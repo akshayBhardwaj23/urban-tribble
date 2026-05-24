@@ -105,7 +105,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
             Latest summary
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-            Calendar weekly and monthly digests—built to skim in under ten seconds.
+            Weekly and monthly executive digests on revenue, spend, and margin—skim in under ten seconds.
           </p>
         </div>
         <div className="flex gap-2">
@@ -188,8 +188,8 @@ export function LatestSummaryCard({ className }: { className?: string }) {
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No weekly summary yet—data may still be importing, or there are no
-                    dated rows spanning the last full week versus the prior week.
+                    No weekly summary yet—there was not enough trading activity in the
+                    last full week (versus the week before) to produce a digest.
                   </p>
                 )}
               </TabsContent>
@@ -206,8 +206,8 @@ export function LatestSummaryCard({ className }: { className?: string }) {
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No monthly summary yet—needs dated history across the prior calendar month
-                    and the month before that.
+                    No monthly summary yet—not enough revenue or cost movement across the
+                    prior calendar month versus the month before.
                   </p>
                 )}
               </TabsContent>
