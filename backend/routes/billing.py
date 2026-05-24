@@ -88,7 +88,7 @@ def razorpay_verify_checkout(
 
 @router.post("/razorpay/webhook")
 async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
-    """Razorpay webhooks — raw body + HMAC. Configure URL in Razorpay Dashboard."""
+    """Razorpay webhooks - raw body + HMAC. Configure URL in Razorpay Dashboard."""
     if not razorpay_configured() or not webhook_configured():
         raise HTTPException(
             503,

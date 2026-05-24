@@ -12,7 +12,7 @@ import { api, isApiPlanLimitError, type WorkspaceTimelineEvent } from "@/lib/api
 import { useWorkspace } from "@/lib/workspace-context";
 
 function fmtNum(n: number): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   const a = Math.abs(n);
   if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (a >= 10_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -122,7 +122,7 @@ export default function HistoryPage() {
           History
         </h1>
         <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-          Imports, row appends, and briefings leave snapshots so you can see what changed—not
+          Imports, row appends, and briefings leave snapshots so you can see what changed-not
           a blank slate every time.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -280,7 +280,7 @@ export default function HistoryPage() {
                     </p>
                     {compareQuery.data.kpi_changes.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
-                        No overlapping KPI labels to diff—imports may use different schemas.
+                        No overlapping KPI labels to diff-imports may use different schemas.
                       </p>
                     ) : (
                       <ul className="list-none m-0 p-0 space-y-1.5">
@@ -328,7 +328,7 @@ export default function HistoryPage() {
             {events.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-sm text-muted-foreground">
-                  No snapshots yet. Import a file or run a workspace briefing—they are recorded
+                  No snapshots yet. Import a file or run a workspace briefing-they are recorded
                   automatically from here on. Existing activity may appear after the next app
                   restart (one-time backfill).
                 </CardContent>

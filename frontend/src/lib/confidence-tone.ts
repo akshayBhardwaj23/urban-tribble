@@ -1,14 +1,14 @@
 import type { ConfidenceBand } from "@/lib/analysis-normalize";
 
 /**
- * UI copy that explains how conviction maps to language—honest uncertainty, no overclaiming.
+ * UI copy that explains how conviction maps to language-honest uncertainty, no overclaiming.
  */
 
 /** One line under the conviction meter on each signal card */
 export function confidenceToneCardLine(level: ConfidenceBand): string {
   switch (level) {
     case "high":
-      return "High conviction: copy reads direct when the summaries back the claim—no artificial hedging.";
+      return "High conviction: copy reads direct when the summaries back the claim-no artificial hedging.";
     case "medium":
       return "Medium conviction: copy uses measured phrasing; a fuller slice of the business could shift the read.";
     case "low":
@@ -32,6 +32,6 @@ export const CONFIDENCE_TONE_LEGEND = [
   {
     band: "low",
     title: "Low",
-    body: "Careful language (for example: this may indicate expense pressure—validate with more complete cost data) and an explicit path to better data before big commitments.",
+    body: "Careful language (for example: this may indicate expense pressure-validate with more complete cost data) and an explicit path to better data before big commitments.",
   },
 ] as const;

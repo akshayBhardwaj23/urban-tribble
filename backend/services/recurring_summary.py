@@ -84,7 +84,7 @@ def _heuristic_content(
             )[:240],
             "key_changes": [
                 f"No decisive revenue or cost shift surfaced for this {span} versus the prior {span}.",
-                "Headline metrics stayed within normal variance—nothing that warrants an emergency pivot.",
+                "Headline metrics stayed within normal variance-nothing that warrants an emergency pivot.",
                 f"Channel and product mix need another {span} of volume before reallocating budget.",
             ],
             "biggest_risk": (
@@ -95,7 +95,7 @@ def _heuristic_content(
             )[:500],
             "recommended_actions": [
                 "Review top revenue and margin drivers with finance in a short stand-up.",
-                f"Separate seasonality from execution—pick one KPI to watch through the next {span}.",
+                f"Separate seasonality from execution-pick one KPI to watch through the next {span}.",
                 "Hold discretionary marketing until the next period confirms direction.",
             ],
         }
@@ -123,7 +123,7 @@ def _heuristic_content(
 
     key_changes = key_changes[:4]
     if not key_changes:
-        key_changes = ["Moves are small versus the last window—watch next period for confirmation."]
+        key_changes = ["Moves are small versus the last window-watch next period for confirmation."]
 
     def _mag(it: dict[str, Any]) -> float:
         p = it.get("delta_pct")
@@ -137,19 +137,19 @@ def _heuristic_content(
     if unfav:
         worst = max(unfav, key=_mag)
         risk_line = str(worst.get("explanation") or "").strip() or (
-            f"{worst.get('label')} weakened versus the prior window—trace drivers before you scale."
+            f"{worst.get('label')} weakened versus the prior window-trace drivers before you scale."
         )
     elif cross and re.search(r"spend|cost|expense", str(cross), re.I):
         risk_line = str(cross).strip()
     else:
         risk_line = (
-            "No single metric screams downside in this scan—still pressure-test assumptions with finance."
+            "No single metric screams downside in this scan-still pressure-test assumptions with finance."
         )
 
     if fav:
         best = max(fav, key=_mag)
         opp_line = str(best.get("explanation") or "").strip() or (
-            f"{best.get('label')} improved versus the prior window—validate repeatability."
+            f"{best.get('label')} improved versus the prior window-validate repeatability."
         )
     else:
         opp_line = "Hunt for mix, timing, or segment stories the headline KPIs may be hiding."
@@ -192,8 +192,8 @@ def _heuristic_content(
 _LLM_SYSTEM = """You refine a short executive summary for a business operator (CEO / COO lens).
 Return JSON only with keys: headline, key_changes (array 3-4 strings), biggest_risk, biggest_opportunity, recommended_actions (array 2-3 strings).
 Rules: decisive, practical, no filler, no emoji, each bullet skimmable in seconds. Keep headline under 140 characters.
-Write about revenue, margin, customers, channels, spend, and operating decisions—never about files, uploads, imports, spreadsheets, columns, schemas, or data tooling.
-If metrics are thin, describe business conditions (demand, mix, seasonality)—not IT or data-quality tasks."""
+Write about revenue, margin, customers, channels, spend, and operating decisions-never about files, uploads, imports, spreadsheets, columns, schemas, or data tooling.
+If metrics are thin, describe business conditions (demand, mix, seasonality)-not IT or data-quality tasks."""
 
 
 _DATA_JARGON = re.compile(

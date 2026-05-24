@@ -151,7 +151,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
 
   return (
     <>
-      {/* Floating trigger — pill with label when closed; compact close when open */}
+      {/* Floating trigger - pill with label when closed; compact close when open */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -179,7 +179,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
         )}
       </button>
 
-      {/* Chat panel — anchored to bottom-right, capped to viewport */}
+      {/* Chat panel - anchored to bottom-right, capped to viewport */}
       {open && (
         <div
           className="fixed z-50 flex flex-col rounded-xl border bg-card shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-200"
@@ -242,7 +242,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
             </select>
           </div>
 
-          {/* Messages — this is the only scrollable/flexible section */}
+          {/* Messages - this is the only scrollable/flexible section */}
           <div
             ref={scrollRef}
             className="flex-1 min-h-0 overflow-y-auto px-4 py-3"

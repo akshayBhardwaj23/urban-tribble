@@ -627,7 +627,7 @@ export default function LandingPage() {
               <p className="fade-up mx-auto mt-7 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
                 <span className="font-semibold text-slate-800 dark:text-slate-100">{PRODUCT_TAGLINE}</span>{" "}
                 Upload Excel and CSV, auto-build dashboards and AI summaries, compare periods,
-                forecast trends, and ask questions in plain language—one workspace you use as your
+                forecast trends, and ask questions in plain language-one workspace you use as your
                 numbers evolve, not a one-off file drop.
               </p>
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
@@ -639,7 +639,7 @@ export default function LandingPage() {
                 </Link>
               </div>
               <p className="fade-up mx-auto mt-5 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                Free to start, no card on the free tier. Add workspaces as you grow—your data stays
+                Free to start, no card on the free tier. Add workspaces as you grow-your data stays
                 in your account.
               </p>
             </div>

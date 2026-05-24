@@ -90,7 +90,7 @@ export function AlertsSignalsSection({
             Alerts &amp; signals
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-            Thresholds, data checks, and briefing flags—sorted by what needs attention first.
+            Thresholds, data checks, and briefing flags-sorted by what needs attention first.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -128,7 +128,7 @@ export function AlertsSignalsSection({
           <p className="text-xs text-muted-foreground mt-2 leading-relaxed max-w-lg">
             {briefingReady
               ? "Numbers are stable versus thresholds, or date coverage is too thin to compare. Refresh data or widen the history to re-run scans."
-              : "Run a workspace briefing—combined with live scans, that surfaces risks, upside, and data quality you should act on."}
+              : "Run a workspace briefing-combined with live scans, that surfaces risks, upside, and data quality you should act on."}
           </p>
         </div>
       ) : (

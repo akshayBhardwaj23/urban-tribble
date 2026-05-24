@@ -86,8 +86,8 @@ export function PricingTierCTA({
 
       const description =
         planId === "pro"
-          ? "Pro — monthly subscription (authorisation)"
-          : "Starter — monthly subscription (authorisation)";
+          ? "Pro - monthly subscription (authorisation)"
+          : "Starter - monthly subscription (authorisation)";
 
       const userEmail = session.user.email ?? undefined;
       const userName =

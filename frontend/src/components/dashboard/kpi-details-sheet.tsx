@@ -51,7 +51,7 @@ export function KpiDetailsBody({ d }: { d: KpiDrillDownDetails }) {
         <Row label="Rows in scope">
           {d.row_count > 0
             ? d.row_count.toLocaleString()
-            : "— (see definition for scope)"}
+            : "- (see definition for scope)"}
         </Row>
         <Row label="Date range">{d.date_range_label}</Row>
         <Row label="Date column (filter)">

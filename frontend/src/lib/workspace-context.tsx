@@ -97,7 +97,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setProfile(data);
       return data;
     } catch {
-      /* Timeout (AbortError), offline, or bad JSON — avoid unhandled rejections */
+      /* Timeout (AbortError), offline, or bad JSON - avoid unhandled rejections */
       return null;
     } finally {
       window.clearTimeout(timeoutId);

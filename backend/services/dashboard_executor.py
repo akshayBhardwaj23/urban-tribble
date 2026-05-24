@@ -12,9 +12,9 @@ from services.daily_metrics import (
 
 
 def _format_kpi_number(val: float, agg: str, is_row_count: bool) -> str:
-    """Human-readable KPI string with comma grouping — never scientific notation."""
+    """Human-readable KPI string with comma grouping - never scientific notation."""
     if not math.isfinite(val):
-        return "—"
+        return "-"
     if is_row_count or agg == "count":
         return f"{int(round(val)):,}"
     s = f"{val:,.2f}"
@@ -25,7 +25,7 @@ def _format_kpi_number(val: float, agg: str, is_row_count: bool) -> str:
 
 def _fmt_x(val: Any) -> str:
     if pd.isna(val):
-        return "—"
+        return "-"
     if hasattr(val, "strftime"):
         try:
             return val.strftime("%Y-%m-%d")

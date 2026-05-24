@@ -205,7 +205,7 @@ export default function DatasetPage() {
     timeframe.preset !== "all" &&
     dashboardData.data?.timeframe &&
     !dashboardData.data.timeframe.applied
-      ? "This range could not be applied—check the date column format on this source."
+      ? "This range could not be applied-check the date column format on this source."
       : null;
 
   const resolvedTfRange =
@@ -433,7 +433,7 @@ export default function DatasetPage() {
                       ? Number(total).toLocaleString(undefined, {
                           maximumFractionDigits: 0,
                         })
-                      : "—"
+                      : "-"
                   }
                   subtitle={
                     mean != null
@@ -465,7 +465,7 @@ export default function DatasetPage() {
                 aggregationLabel: "count",
                 formula_summary: "data_summary.rows (or equivalent) from dataset ingest.",
                 scopeNote:
-                  "Row count reflects the full cleaned file at ingest—not the filtered slice used for charts.",
+                  "Row count reflects the full cleaned file at ingest-not the filtered slice used for charts.",
               })}
             />
             <DashboardKpiTile
@@ -550,7 +550,7 @@ export default function DatasetPage() {
                 </p>
                 {analysesLimitDetail ? (
                   <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    Briefings use an analysis run from your plan. Your allowance is full—see the
+                    Briefings use an analysis run from your plan. Your allowance is full-see the
                     notice under the page title, or{" "}
                     <Link
                       href="/pricing"
@@ -602,7 +602,7 @@ export default function DatasetPage() {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <p className="text-sm text-muted-foreground mb-4">
-                    Extends the historical series with a simple linear fit—helpful for planning,
+                    Extends the historical series with a simple linear fit-helpful for planning,
                     not a forecast of record on its own.
                   </p>
                   <Button
@@ -673,7 +673,7 @@ export default function DatasetPage() {
                               key={col}
                               className="whitespace-nowrap text-xs"
                             >
-                              {row[col] != null ? String(row[col]) : "—"}
+                              {row[col] != null ? String(row[col]) : "-"}
                             </TableCell>
                           ))}
                         </TableRow>

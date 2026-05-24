@@ -33,7 +33,7 @@ _PLAN_LABELS = {
     "internal": "Internal",
 }
 
-# Lifetime totals (free tier) — uploads & AI analyses across all owned workspaces.
+# Lifetime totals (free tier) - uploads & AI analyses across all owned workspaces.
 _FREE_LIFETIME = {"uploads": 2, "analyses": 2}
 
 # Per-calendar-month caps for starter/pro (per workspace for uploads & analyses).
@@ -53,7 +53,7 @@ _CHAT_USER_CAPS = {"free": 3, "starter": 50, "pro": 200, "internal": 1_000_000}
 
 
 def _internal_test_login_user(user: User) -> bool:
-    """Allowlisted mailbox with test sign-in enabled — treated as internal (no practical limits)."""
+    """Allowlisted mailbox with test sign-in enabled - treated as internal (no practical limits)."""
     if not getattr(settings, "AUTH_TEST_LOGIN_ENABLED", False):
         return False
     allowed = (getattr(settings, "AUTH_TEST_LOGIN_EMAIL", None) or "").strip()
@@ -278,7 +278,7 @@ def build_workspace_usage_payload(
         nudges.append({
             "tone": "approaching" if meter_a["at_limit"] else "soft",
             "message": (
-                f"You've used {analyses_used}/{meter_a['limit']} {analyses_label}—"
+                f"You've used {analyses_used}/{meter_a['limit']} {analyses_label}-"
                 f"higher plans include more runs."
             ),
             "href": "/pricing",
@@ -304,7 +304,7 @@ def build_workspace_usage_payload(
         nudges.append({
             "tone": "soft",
             "message": (
-                "History and alerts are on paid plans—see Starter and Pro on the pricing page."
+                "History and alerts are on paid plans-see Starter and Pro on the pricing page."
             ),
             "href": "/pricing",
         })

@@ -318,7 +318,7 @@ def compute_evolution(
                     "window_size": n,
                     "narrative": (
                         f"{_BUCKET_LABELS.get(b, b)} has shown up in {c} of the last {n} "
-                        f"briefings—treat it as persistent, not a one-off."
+                        f"briefings-treat it as persistent, not a one-off."
                     ),
                 })
 
@@ -342,7 +342,7 @@ def compute_evolution(
                 improving.append({
                     "theme_key": "margin_profit",
                     "narrative": (
-                        f"{label} is up about {abs(pct):.1f}% vs your prior snapshot—"
+                        f"{label} is up about {abs(pct):.1f}% vs your prior snapshot-"
                         f"confirm what changed before you bank the win."
                     ),
                 })
@@ -351,7 +351,7 @@ def compute_evolution(
                 improving.append({
                     "theme_key": "revenue_growth",
                     "narrative": (
-                        f"{label} moved up about {abs(pct):.1f}% vs the prior snapshot—"
+                        f"{label} moved up about {abs(pct):.1f}% vs the prior snapshot-"
                         f"check mix so growth is not a single-file artifact."
                     ),
                 })

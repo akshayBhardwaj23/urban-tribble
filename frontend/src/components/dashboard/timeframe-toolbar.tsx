@@ -94,7 +94,7 @@ export function TimeframeToolbar({
   value: TimeframeValue;
   onChange: (next: TimeframeValue) => void;
   hasDateColumn: boolean;
-  /** From API `date_bounds.max` — previews custom / label fallback */
+  /** From API `date_bounds.max` - previews custom / label fallback */
   dataEnd?: string | null;
   /** Actual range from API after load (`timeframe.start`/`end`) */
   resolvedRange?: { start: string; end: string } | null;

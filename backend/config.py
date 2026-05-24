@@ -22,17 +22,17 @@ class Settings(BaseSettings):
     # Optional: passwordless test sign-in for one mailbox (see /api/auth/test-login). Never commit real values.
     AUTH_TEST_LOGIN_ENABLED: bool = False
     AUTH_TEST_LOGIN_EMAIL: str = ""
-    # If set, /api/auth/test-login requires this secret; the web login flow does not send it—leave empty for email-only test sign-in.
+    # If set, /api/auth/test-login requires this secret; the web login flow does not send it-leave empty for email-only test sign-in.
     AUTH_TEST_LOGIN_SECRET: str = ""
     AUTH_TEST_LOGIN_NAME: str = "Test user"
-    # Resend (https://resend.com) — email OTP
+    # Resend (https://resend.com) - email OTP
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "Snaptix <onboarding@resend.dev>"
     # HMAC pepper for OTP hashes (set in production)
     OTP_PEPPER: str = "dev-otp-pepper-change-in-production"
     OTP_EXPIRE_MINUTES: int = 10
     OTP_RESEND_SECONDS: int = 60
-    # Razorpay Subscriptions (https://razorpay.com/docs/subscriptions/) — leave key empty to disable checkout/webhooks.
+    # Razorpay Subscriptions (https://razorpay.com/docs/subscriptions/) - leave key empty to disable checkout/webhooks.
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = ""

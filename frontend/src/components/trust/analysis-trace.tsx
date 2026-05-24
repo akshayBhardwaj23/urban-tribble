@@ -152,7 +152,7 @@ export function TraceDetailsBody({
   );
 }
 
-/** Collapsible block — default closed; keeps the page clean. */
+/** Collapsible block - default closed; keeps the page clean. */
 export function TraceCollapsible({
   context,
   summaryHint,

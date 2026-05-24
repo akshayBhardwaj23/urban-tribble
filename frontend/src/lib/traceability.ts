@@ -1,6 +1,6 @@
 import { TRACE_SCOPE_FALLBACK_NOTE } from "@/lib/analysis-fallback-copy";
 
-/** Provenance for AI analysis and metrics—used for trust / verification UX. */
+/** Provenance for AI analysis and metrics-used for trust / verification UX. */
 
 export interface TraceSourceFile {
   name: string;
@@ -86,7 +86,7 @@ export function buildDatasetAiTraceContext(input: {
     );
   }
   caveats.push(
-    "Date filters on the Overview tab affect charts and live KPIs—they do not automatically re-slice the saved aggregate used for this briefing unless stated."
+    "Date filters on the Overview tab affect charts and live KPIs-they do not automatically re-slice the saved aggregate used for this briefing unless stated."
   );
 
   const sheetName =
@@ -114,10 +114,10 @@ export function buildDatasetAiTraceContext(input: {
         : "Row count from latest ingest",
     modelLabel: "Structured model output (backend config)",
     methodNote:
-      "The model sees column roles and statistical summaries from the cleaned file—not raw row exports.",
+      "The model sees column roles and statistical summaries from the cleaned file-not raw row exports.",
     caveats,
     assumptions: [
-      "Column roles are inferred—wrong labels skew the read.",
+      "Column roles are inferred-wrong labels skew the read.",
       "Unless an insight cites a specific cut, treat figures as operational aggregates, not audited financials.",
     ],
   };
@@ -168,7 +168,7 @@ export function buildDatasetDashboardTraceContext(input: {
       "Values reflect the schema detected at import and any timeframe you set above. Open Preview to spot-check underlying rows.",
     caveats,
     assumptions: [
-      "Numeric and date roles are inferred—misclassified columns will skew visuals.",
+      "Numeric and date roles are inferred-misclassified columns will skew visuals.",
     ],
   };
 }
@@ -197,11 +197,11 @@ export function buildWorkspaceAiTraceContext(input: {
     rowBasisLabel: `${input.totalRows.toLocaleString()} rows combined (ingest counts)`,
     modelLabel: "Structured model output (workspace)",
     methodNote:
-      "Each file’s schema and summaries are stacked for one pass—align column names before you act on cross-file claims.",
+      "Each file’s schema and summaries are stacked for one pass-align column names before you act on cross-file claims.",
     caveats,
     assumptions: [
-      "Column detail lives on each file’s Schema tab—this pass only sees merged summaries.",
-      "File order and naming can nudge emphasis—use each insight’s backing line before you commit.",
+      "Column detail lives on each file’s Schema tab-this pass only sees merged summaries.",
+      "File order and naming can nudge emphasis-use each insight’s backing line before you commit.",
       "No double-entry or audit validation.",
     ],
   };

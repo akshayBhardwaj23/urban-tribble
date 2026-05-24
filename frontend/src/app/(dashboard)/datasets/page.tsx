@@ -51,7 +51,7 @@ export default function DatasetsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Sources</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Files in this workspace—used for the overview, source views, and briefings.
+            Files in this workspace-used for the overview, source views, and briefings.
           </p>
         </div>
         <Link

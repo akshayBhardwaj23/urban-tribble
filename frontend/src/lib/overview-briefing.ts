@@ -195,12 +195,12 @@ export function keyChangeLine(analysis: WorkspaceAnalysis | null): string {
   }
   const neutral = analysis.insights.find((i) => i.type === "neutral");
   if (neutral) {
-    const bit = `${neutral.finding} — ${neutral.why_it_matters}`;
+    const bit = `${neutral.finding} - ${neutral.why_it_matters}`;
     return bit.length > 240 ? `${bit.slice(0, 237)}…` : bit;
   }
   const any = analysis.insights[0];
   if (any) {
-    const bit = `${any.finding} — ${any.why_it_matters}`;
+    const bit = `${any.finding} - ${any.why_it_matters}`;
     return bit.length > 240 ? `${bit.slice(0, 237)}…` : bit;
   }
   return "";

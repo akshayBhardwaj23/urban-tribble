@@ -219,7 +219,7 @@ def _build_change_item(
     else:
         expl = (
             f"{label} moved from {_fmt_money(prev_v)} to {_fmt_money(cur_v)} vs the prior period "
-            f"(prior period near zero—% change not shown)."
+            f"(prior period near zero-% change not shown)."
         )
 
     item: dict[str, Any] = {
@@ -359,7 +359,7 @@ def build_what_changed_for_dataframe(
                     margin_expl = "Profit margin was steady between this period and the last."
                 elif delta_pts < 0:
                     margin_expl = (
-                        f"Profit margin tightened by {abs(delta_pts)} points—costs or "
+                        f"Profit margin tightened by {abs(delta_pts)} points-costs or "
                         f"mix may be pressuring returns."
                     )
                 else:
@@ -471,12 +471,12 @@ def _compose_cross_metric_line(items: list[dict[str, Any]]) -> str:
         return ""
     if ep > rp + 3:
         return (
-            "Spend grew faster than revenue—review campaign efficiency and "
+            "Spend grew faster than revenue-review campaign efficiency and "
             "fixed cost creep before you scale."
         )
     if rp > ep + 5 and ep >= 0:
         return (
-            "Revenue outpaced spend this period—sanity-check attribution before you lock in the story."
+            "Revenue outpaced spend this period-sanity-check attribution before you lock in the story."
         )
     return ""
 

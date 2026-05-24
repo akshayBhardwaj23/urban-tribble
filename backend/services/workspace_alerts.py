@@ -138,7 +138,7 @@ def _scan_single_dataset(
                 "title": "Duplicate rows detected",
                 "detail": (
                     f"{dataset_name}: {dup_n:,} exact duplicate rows ({ratio * 100:.1f}% of file). "
-                    "Totals and pivots may be inflated—dedupe or filter before trusting headline metrics."
+                    "Totals and pivots may be inflated-dedupe or filter before trusting headline metrics."
                 ),
                 "category": "data_issue",
                 "priority": "high" if ratio >= 0.08 else "medium",
@@ -162,7 +162,7 @@ def _scan_single_dataset(
                 "title": f"Non-unique keys in `{col}`",
                 "detail": (
                     f"{dataset_name}: `{col}` has {dup_keys} values repeated across rows. "
-                    "Joins and revenue rollups can double-count—inspect before you report."
+                    "Joins and revenue rollups can double-count-inspect before you report."
                 ),
                 "category": "data_issue",
                 "priority": "high" if repeated > n * 0.05 else "medium",
@@ -217,7 +217,7 @@ def _scan_single_dataset(
                         "title": "High spend, weak return in one segment",
                         "detail": (
                             f"{dataset_name}: category “{worst_cat}” drives ~{se * 100:.0f}% of spend but only "
-                            f"~{sr * 100:.0f}% of revenue—reallocate or prove incremental lift before scaling."
+                            f"~{sr * 100:.0f}% of revenue-reallocate or prove incremental lift before scaling."
                         ),
                         "category": "efficiency",
                         "priority": "high" if se >= 0.28 else "medium",

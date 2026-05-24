@@ -29,7 +29,7 @@ export function formatChartAxisDate(value: unknown): string {
   return d.toLocaleDateString("en-US", opts);
 }
 
-/** Tooltip / title line — slightly fuller than axis ticks. */
+/** Tooltip / title line - slightly fuller than axis ticks. */
 export function formatChartTooltipDate(value: unknown): string {
   const s = String(value ?? "");
   const d = parseISODateLocal(s);

@@ -18,7 +18,7 @@ export interface ChatChartPayload {
 
 function formatTooltipValue(value: unknown): string {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 

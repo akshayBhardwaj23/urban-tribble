@@ -54,7 +54,7 @@ export function RecommendedActionsSection({
           Recommended actions
         </h2>
         <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl leading-relaxed">
-          Concrete moves you can assign—sourced from your briefing, live signals, and
+          Concrete moves you can assign-sourced from your briefing, live signals, and
           period comparisons. Not generic advice.
         </p>
       </div>
@@ -67,7 +67,7 @@ export function RecommendedActionsSection({
           <p className="text-xs text-muted-foreground mt-1.5 max-w-lg leading-relaxed">
             {briefingAvailable
               ? "Run or re-run a workspace briefing so model-backed moves appear here, or wait for sharper period-over-period signals from your data."
-              : "Import data, then run a workspace briefing—the action list anchors on what the briefing and metrics surface."}
+              : "Import data, then run a workspace briefing-the action list anchors on what the briefing and metrics surface."}
           </p>
           {!briefingAvailable && analysesCapDetail ? (
             <p className="text-xs text-muted-foreground mt-3 max-w-lg leading-relaxed">

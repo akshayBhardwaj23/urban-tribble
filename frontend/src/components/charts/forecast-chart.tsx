@@ -50,7 +50,7 @@ function mean(nums: number[]): number {
 }
 
 function formatInsightNum(n: number): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return n.toLocaleString(undefined, {
     notation: "standard",
     maximumFractionDigits: 2,
@@ -212,7 +212,7 @@ export function ForecastChart({
       <Card className="overflow-hidden">
         <CardHeader className="border-b border-white/65 pb-5 dark:border-white/10">
           <CardTitle className="text-sm font-medium">
-            {metricLabel} — Historical & forecast
+            {metricLabel} - Historical & forecast
           </CardTitle>
           {chartInsight ? (
             <div className="mt-3 space-y-1.5">
@@ -303,7 +303,7 @@ export function ForecastChart({
                           notation: "standard",
                           maximumFractionDigits: 2,
                         })
-                      : "—",
+                      : "-",
                     String(name ?? ""),
                   ]}
                   contentStyle={{

@@ -133,7 +133,7 @@ export function WorkspaceSwitcher() {
             New workspace
             {atWorkspaceCap ? (
               <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
-                Limit reached — see Plans
+                Limit reached - see Plans
               </span>
             ) : null}
           </DropdownMenuItem>

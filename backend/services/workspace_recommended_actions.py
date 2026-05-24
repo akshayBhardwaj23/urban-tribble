@@ -79,7 +79,7 @@ def _alert_to_action(alert: dict[str, Any]) -> Optional[str]:
         )
     if "missing dates" in tl or "non-unique keys" in tl:
         return (
-            "Fix source exports—dates and keys—before anyone bets on period-over-period "
+            "Fix source exports-dates and keys-before anyone bets on period-over-period "
             "comparisons from this workspace."
         )
     if "high spend" in tl and "weak return" in tl:
@@ -153,7 +153,7 @@ def _from_top_priority(raw: dict[str, Any]) -> Optional[tuple[str, str]]:
     if not title or not expl:
         return None
     if kind in ("next_action", "nextaction"):
-        action = title if _VERB_START.match(title) else _truncate(f"{title} — {expl}")
+        action = title if _VERB_START.match(title) else _truncate(f"{title} - {expl}")
     elif kind == "risk":
         action = (
             title if _VERB_START.match(title) else _truncate(f"Address risk: {title}. {expl}")

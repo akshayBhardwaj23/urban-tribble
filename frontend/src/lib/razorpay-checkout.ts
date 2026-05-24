@@ -16,7 +16,7 @@ export function checkoutSuccessPath(): string {
   return "/pricing/success";
 }
 
-/** Razorpay `callback_url` — must accept POST (see `/api/billing/razorpay/callback`). */
+/** Razorpay `callback_url` - must accept POST (see `/api/billing/razorpay/callback`). */
 export function checkoutCallbackPath(): string {
   return "/api/billing/razorpay/callback";
 }

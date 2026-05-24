@@ -1,4 +1,4 @@
-/** Marketing copy for `/pricing` — enforced caps live in `backend/services/subscription_usage.py` + route checks. */
+/** Marketing copy for `/pricing` - enforced caps live in `backend/services/subscription_usage.py` + route checks. */
 
 export type PricingPlan = {
   id: "free" | "starter" | "pro";
@@ -75,7 +75,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Deeper AI insights and briefings",
       "Priority processing",
     ],
-    valueLine: "Built for ongoing use — not one-time analysis.",
+    valueLine: "Built for ongoing use - not one-time analysis.",
     cta: "Upgrade to Pro",
     featured: true,
   },

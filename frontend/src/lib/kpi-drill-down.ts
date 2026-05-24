@@ -40,7 +40,7 @@ export function parseKpiDrillDown(raw: unknown): KpiDrillDownDetails | null {
     aggregation: str(o.aggregation) || null,
     source_column: str(o.source_column) || null,
     date_column: str(o.date_column) || null,
-    date_range_label: str(o.date_range_label) || "—",
+    date_range_label: str(o.date_range_label) || "-",
     row_count: num(o.row_count),
   };
 }
@@ -52,7 +52,7 @@ export function buildStaticSummaryKpiDetails(input: {
   column?: string;
   aggregationLabel: string;
   formula_summary: string;
-  /** Shown under row count — clarify full-file vs filtered */
+  /** Shown under row count - clarify full-file vs filtered */
   scopeNote: string;
 }): KpiDrillDownDetails {
   const col = input.column;

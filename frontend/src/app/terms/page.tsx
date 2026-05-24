@@ -6,13 +6,13 @@ import {
 } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: `Terms — ${PRODUCT_NAME}`,
+  title: `Terms - ${PRODUCT_NAME}`,
   description: `Terms of use for ${PRODUCT_NAME}.`,
   alternates: {
     canonical: "/terms",
   },
   openGraph: {
-    title: `Terms — ${PRODUCT_NAME}`,
+    title: `Terms - ${PRODUCT_NAME}`,
     description: `Terms of use for ${PRODUCT_NAME}.`,
     url: `${CANONICAL_SITE_URL}/terms`,
   },

@@ -137,7 +137,7 @@ export default function AccountPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Name
             </p>
-            <p className="mt-0.5 text-foreground">{me.name ?? "—"}</p>
+            <p className="mt-0.5 text-foreground">{me.name ?? "-"}</p>
           </div>
         </CardContent>
       </Card>
@@ -179,7 +179,7 @@ export default function AccountPage() {
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/60 pt-3">
             Manage payment method or cancel in the Razorpay customer flow linked from
-            your subscription email, or from the hosted page after checkout—hosted
+            your subscription email, or from the hosted page after checkout-hosted
             &quot;manage subscription&quot; links can be added here later.
           </p>
         </CardContent>

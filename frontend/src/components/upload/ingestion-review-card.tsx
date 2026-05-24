@@ -211,7 +211,7 @@ export function IngestionReviewCard({
             ))}
           </select>
           <p className="text-[11px] text-muted-foreground">
-            Drives trends over time—choose the column that represents your calendar or period.
+            Drives trends over time-choose the column that represents your calendar or period.
           </p>
         </div>
 
@@ -242,7 +242,7 @@ export function IngestionReviewCard({
       <div className="space-y-2">
         <p className="text-xs font-medium text-foreground">Breakdowns</p>
         <p className="text-[11px] text-muted-foreground">
-          Region, product, customer, campaign—pick fields to treat as segments.
+          Region, product, customer, campaign-pick fields to treat as segments.
         </p>
         <div className="flex flex-wrap gap-2">
           {segmentChoices.length === 0 ? (
@@ -315,7 +315,7 @@ export function IngestionReviewCard({
       {!confirmed && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1 border-t border-border/60">
           <p className="text-xs text-muted-foreground max-w-md">
-            When this matches how you think about the file, confirm—we save your choices for
+            When this matches how you think about the file, confirm-we save your choices for
             charts and briefings.
           </p>
           <Button type="button" onClick={() => void handleConfirm()} disabled={saving}>

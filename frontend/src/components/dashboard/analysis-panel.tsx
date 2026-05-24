@@ -497,7 +497,7 @@ export function AnalysisPanel({
           <div className="border-t border-slate-200/70 dark:border-slate-800 px-4 py-3 space-y-2.5">
             <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 m-0">
               Each signal carries a conviction label so the tone matches how strong the evidence
-              is—no false confidence when the extract is thin.
+              is-no false confidence when the extract is thin.
             </p>
             <ul className="space-y-2 m-0 pl-0 list-none">
               {CONFIDENCE_TONE_LEGEND.map((row) => (
@@ -508,7 +508,7 @@ export function AnalysisPanel({
                   <span className="font-semibold text-slate-700 dark:text-slate-200">
                     {row.title}
                   </span>
-                  {" — "}
+                  {" - "}
                   {row.body}
                 </li>
               ))}
@@ -527,7 +527,7 @@ export function AnalysisPanel({
       <TopPrioritiesBlock items={topPriorities} traceContext={traceContext} />
 
       <section>
-        <SectionHeading hint="One or two sentences: net position and whether to act, wait, or dig deeper—specific to this scope, not generic praise.">
+        <SectionHeading hint="One or two sentences: net position and whether to act, wait, or dig deeper-specific to this scope, not generic praise.">
           Bottom line
         </SectionHeading>
         <div className="rounded-2xl border border-slate-200/90 bg-slate-50/60 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/30">
@@ -616,7 +616,7 @@ export function AnalysisPanel({
 
       {anomalies.length > 0 ? (
         <section>
-          <SectionHeading hint="Skew, gaps, or duplication that could misstate revenue, cost, or risk—fix or footnote before you lock the plan.">
+          <SectionHeading hint="Skew, gaps, or duplication that could misstate revenue, cost, or risk-fix or footnote before you lock the plan.">
             Quality flags
           </SectionHeading>
           <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 px-5 py-4 dark:border-amber-900/50 dark:bg-amber-950/20">

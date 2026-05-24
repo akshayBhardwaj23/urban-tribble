@@ -765,7 +765,7 @@ export const api = {
       }
     ),
 
-  /** After Standard Checkout success — verifies HMAC per Razorpay subscription docs. */
+  /** After Standard Checkout success - verifies HMAC per Razorpay subscription docs. */
   razorpayVerifyCheckout: (body: {
     razorpay_payment_id: string;
     razorpay_subscription_id: string;

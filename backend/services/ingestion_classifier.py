@@ -116,7 +116,7 @@ def _flags(
                 {
                     "kind": "warning",
                     "code": "missing_values",
-                    "message": "Some cells were empty—we filled or flagged gaps where it mattered.",
+                    "message": "Some cells were empty-we filled or flagged gaps where it mattered.",
                 }
             )
         if "date format" in s or "converted" in s and "date" in s:
@@ -135,7 +135,7 @@ def _flags(
             {
                 "kind": "warning",
                 "code": "no_date_column",
-                "message": "No clear date column yet—trend charts may need you to point us to one later.",
+                "message": "No clear date column yet-trend charts may need you to point us to one later.",
             }
         )
 
@@ -144,7 +144,7 @@ def _flags(
             {
                 "kind": "warning",
                 "code": "no_amount_column",
-                "message": "We did not find an obvious amount column—KPIs may need a quick mapping.",
+                "message": "We did not find an obvious amount column-KPIs may need a quick mapping.",
             }
         )
 
@@ -153,7 +153,7 @@ def _flags(
             {
                 "kind": "warning",
                 "code": "narrow_schema",
-                "message": "Very few columns—if this is a fragment, consider joining with another file.",
+                "message": "Very few columns-if this is a fragment, consider joining with another file.",
             }
         )
 
@@ -181,7 +181,7 @@ def _interpretations(metadata: Dict[str, Any]) -> List[str]:
     if cc:
         lines.append(f"Breakdown fields: {', '.join(cc[:5])}{'…' if len(cc) > 5 else ''}")
     if not lines:
-        lines.append("Columns are mostly text or numeric—we will infer roles as you explore.")
+        lines.append("Columns are mostly text or numeric-we will infer roles as you explore.")
     return lines
 
 

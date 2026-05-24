@@ -106,7 +106,7 @@ export function insightContextLine(headline: string, finding: string): string | 
   const fl = f.toLowerCase();
   const hl = h.toLowerCase();
   if (fl.startsWith(hl)) {
-    const rest = f.slice(h.length).replace(/^[.\s—:,-]+/, "").trim();
+    const rest = f.slice(h.length).replace(/^[.\s-:,-]+/, "").trim();
     return rest.length >= 12 ? rest : null;
   }
   return f;
@@ -141,7 +141,7 @@ export function splitConfidenceRationale(
   let t = confidenceRaw.trim();
   t = t
     .replace(
-      new RegExp(`^${level}\\b\\s*[—\\-\\:\\.]?\\s*`, "i"),
+      new RegExp(`^${level}\\b\\s*[\u2014\\-:\\.]?\\s*`, "i"),
       ""
     )
     .trim();

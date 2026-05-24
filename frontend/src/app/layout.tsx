@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   applicationName: PRODUCT_NAME,
   title: {
     default: SEO_TITLE,
-    template: `%s — ${PRODUCT_NAME}`,
+    template: `%s - ${PRODUCT_NAME}`,
   },
   description: META_DESCRIPTION,
   keywords: SEO_KEYWORDS,

@@ -247,7 +247,7 @@ export function FileDropzone({
           <div>
             <p className="text-sm font-medium">Understanding your file</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              We read the structure, classify the dataset, and get it ready for metrics—not
+              We read the structure, classify the dataset, and get it ready for metrics-not
               just store the upload.
             </p>
           </div>
@@ -342,7 +342,7 @@ export function FileDropzone({
                 <div>
                   <span className="font-medium">{e.file.name}</span>
                   {e.planLimitDetail ? null : (
-                    <span className="text-muted-foreground"> — {e.error}</span>
+                    <span className="text-muted-foreground"> - {e.error}</span>
                   )}
                 </div>
                 {e.planLimitDetail ? (
@@ -505,7 +505,7 @@ export function FileDropzone({
             {isDragActive ? "Release to add files" : "Drop files here or click to browse"}
           </p>
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            Excel or CSV exports from your systems work well. Queue several files if needed—each
+            Excel or CSV exports from your systems work well. Queue several files if needed-each
             is prepared and reviewed before charts and briefings run.
           </p>
         </div>

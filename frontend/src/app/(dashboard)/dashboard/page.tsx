@@ -17,7 +17,7 @@ import {
   AutoChart,
   type ChartConfig,
 } from "@/components/charts/auto-chart";
-/* Workspace Outlook (linear projection chart) — disabled; uncomment import + block below to restore.
+/* Workspace Outlook (linear projection chart) - disabled; uncomment import + block below to restore.
 import { ForecastChart } from "@/components/charts/forecast-chart";
 */
 import {
@@ -130,7 +130,7 @@ function BriefTile({
           showEmpty ? "text-muted-foreground" : "text-foreground"
         }`}
       >
-        {showEmpty ? emptyHint ?? "—" : body}
+        {showEmpty ? emptyHint ?? "-" : body}
       </p>
       </CardContent>
     </Card>
@@ -169,7 +169,7 @@ export default function OverviewPage() {
     name: string;
   } | null>(null);
   /*
-  // --- Workspace Outlook (disabled — user-facing value low; same-line linear extension)
+  // --- Workspace Outlook (disabled - user-facing value low; same-line linear extension)
   const [outlookPeriods, setOutlookPeriods] = useState(90);
   const [outlookDatasetId, setOutlookDatasetId] = useState("");
   const [outlookDateCol, setOutlookDateCol] = useState("");
@@ -453,7 +453,7 @@ export default function OverviewPage() {
             Overview
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            What moved, what it may imply, and what to do next—across your sources.
+            What moved, what it may imply, and what to do next-across your sources.
           </p>
           {emptyHints && (
             <div className="mt-3 space-y-1.5 text-xs text-muted-foreground max-w-xl leading-relaxed">
@@ -552,7 +552,7 @@ export default function OverviewPage() {
               <span className="font-medium text-slate-600 dark:text-slate-300">
                 AI-generated from your sources
               </span>
-              —verify important figures in your files.
+              -verify important figures in your files.
             </p>
             {habits && (
               <div className="mt-3 max-w-2xl space-y-1.5">
@@ -710,7 +710,7 @@ export default function OverviewPage() {
           <span className="shrink-0 text-[10px] text-muted-foreground">AI briefing</span>
         </div>
         <p className="text-xs text-slate-500 max-w-2xl -mt-1 leading-relaxed">
-          Updates after you run a workspace briefing—model-generated read of your sources here.
+          Updates after you run a workspace briefing-model-generated read of your sources here.
         </p>
         {analysisBusy && !analysisReady ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -758,7 +758,7 @@ export default function OverviewPage() {
         )}
       </section>
 
-      {/* Full model output — right after Snapshot so depth isn’t buried below charts */}
+      {/* Full model output - right after Snapshot so depth isn’t buried below charts */}
       {analysisReady && overviewAnalysis.data?.result_json && (
         <section id="workspace-full-briefing" className="space-y-3 scroll-mt-6">
           <details open className="group rounded-lg border bg-card shadow-sm">
@@ -805,7 +805,7 @@ export default function OverviewPage() {
         </section>
       )}
 
-      {/* 2. Operator summary — narrative from latest workspace briefing */}
+      {/* 2. Operator summary - narrative from latest workspace briefing */}
       <section id="workspace-operator-summary" className="space-y-3">
         <SectionLabel>Operator summary</SectionLabel>
         <p className="text-xs text-slate-500 max-w-2xl -mt-1 leading-relaxed">

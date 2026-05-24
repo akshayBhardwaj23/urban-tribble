@@ -51,7 +51,7 @@ export function IngestionPipeline({
     if (!ingestion) return STAGES[4].subtitleLoading;
     const warns = ingestion.flags.filter((f) => f.kind === "warning");
     if (warns.length === 0 && ingestion.flags.length === 0) {
-      return "No structure issues at import—still run your normal read on trends and margin.";
+      return "No structure issues at import-still run your normal read on trends and margin.";
     }
     if (warns.length === 0) {
       return `${ingestion.flags.length} note${ingestion.flags.length === 1 ? "" : "s"} for you below.`;
@@ -64,7 +64,7 @@ export function IngestionPipeline({
     : STAGES[3].subtitleLoading;
 
   const classifySubtitle = ingestion
-    ? `${ingestion.classification.label} · ${ingestion.classification.confidence === "high" ? "Strong match" : ingestion.classification.confidence === "medium" ? "Likely match—confirm if unsure" : "Uncertain—confirm before you rely on it"}`
+    ? `${ingestion.classification.label} · ${ingestion.classification.confidence === "high" ? "Strong match" : ingestion.classification.confidence === "medium" ? "Likely match-confirm if unsure" : "Uncertain-confirm before you rely on it"}`
     : STAGES[2].subtitleLoading;
 
   const subtitles: string[] = [

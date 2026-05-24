@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     canonical: "/pricing",
   },
   openGraph: {
-    title: `Pricing — ${PRODUCT_NAME}`,
+    title: `Pricing - ${PRODUCT_NAME}`,
     description:
       "Compare Snaptix plans for AI spreadsheet dashboards, business briefings, forecasting, and workspace analytics.",
     url: `${CANONICAL_SITE_URL}/pricing`,
@@ -117,7 +117,7 @@ export default function PricingPage() {
           Run your business with clarity, not guesswork.
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300 sm:text-[17px] sm:leading-8">
-          Snaptix turns your spreadsheets into ongoing business insights—so you know what changed,
+          Snaptix turns your spreadsheets into ongoing business insights-so you know what changed,
           what matters, and what to do next.
         </p>
         <p className="mx-auto mt-6 max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-400">
@@ -125,7 +125,7 @@ export default function PricingPage() {
         </p>
       </section>
 
-      {/* Cards — Pro visually dominant on lg+; stacked readable on small screens */}
+      {/* Cards - Pro visually dominant on lg+; stacked readable on small screens */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:pb-28">
         <div
           className={cn(

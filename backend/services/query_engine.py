@@ -474,7 +474,7 @@ class QueryEngine:
 
         elif any(w in q for w in ["total", "sum", "overall", "revenue", "sales"]):
             answer_parts.append(
-                "Revenue by source (do not add these totals — overlapping grains):"
+                "Revenue by source (do not add these totals - overlapping grains):"
             )
             with_rev = catalog_with_revenue(cat)
             for c in with_rev:

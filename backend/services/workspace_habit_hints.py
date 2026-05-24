@@ -86,7 +86,7 @@ def build_workspace_habit_hints(
     briefing_cta: str
     if not has_datasets:
         next_check = (
-            "Once you import a file, run a briefing—then come back after each new drop "
+            "Once you import a file, run a briefing-then come back after each new drop "
             "of data or about weekly if volumes are steady."
         )
         briefing_cta = "After your first import."
@@ -94,7 +94,7 @@ def build_workspace_habit_hints(
         gentle_nudge = "Add a source to start an ongoing rhythm here."
     elif briefing_at is None:
         next_check = (
-            "Run a workspace briefing to lock the baseline—then revisit after imports, "
+            "Run a workspace briefing to lock the baseline-then revisit after imports, "
             "appends, or about once a week."
         )
         briefing_cta = "Run the first briefing on this workspace."
@@ -108,17 +108,17 @@ def build_workspace_habit_hints(
         )
     elif last_data_change_at and briefing_at and last_data_change_at > briefing_at:
         next_check = (
-            "New data landed after your last briefing—re-run when you want alerts, "
+            "New data landed after your last briefing-re-run when you want alerts, "
             "actions, and summaries aligned with the latest extracts."
         )
         briefing_cta = "After adding new data."
         activity_nudge = (
-            "You have fresh data since the last briefing—worth a refresh."
+            "You have fresh data since the last briefing-worth a refresh."
         )
         gentle_nudge = None
     elif days_since_briefing is not None and days_since_briefing >= 7:
         next_check = (
-            "It’s been a week or more since the last briefing—check again after new "
+            "It’s been a week or more since the last briefing-check again after new "
             "figures land, or run a quick refresh if you rely on this view for decisions."
         )
         briefing_cta = "Weekly or after new data."
@@ -126,8 +126,8 @@ def build_workspace_habit_hints(
         gentle_nudge = _gentle_data_line(days_since_data)
     else:
         next_check = (
-            "Next recommended check: after your next import or row append—or next week "
-            "if your files rarely change—to keep the story current."
+            "Next recommended check: after your next import or row append-or next week "
+            "if your files rarely change-to keep the story current."
         )
         briefing_cta = "After adding new data."
         activity_nudge = _activity_line(days_since_activity)

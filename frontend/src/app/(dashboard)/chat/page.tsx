@@ -94,7 +94,7 @@ export default function ChatPage() {
           Q&A on your data
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Questions in plain language, scoped to one source—the answers use what you imported,
+          Questions in plain language, scoped to one source-the answers use what you imported,
           not the open web.
         </p>
       </div>

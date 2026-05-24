@@ -87,6 +87,6 @@ def generate_summary(
     if not row:
         raise HTTPException(
             400,
-            "No datasets in this workspace—import data before generating a summary.",
+            "No datasets in this workspace-import data before generating a summary.",
         )
     return serialize_summary_row(row)

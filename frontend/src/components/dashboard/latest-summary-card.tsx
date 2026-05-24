@@ -63,7 +63,7 @@ function SummaryBody({ row }: { row: RecurringSummaryRecord }) {
       </div>
       <p className="text-[11px] text-muted-foreground border-t border-slate-200/80 pt-3 dark:border-slate-800">
         Saved for history and comparison. Email delivery can plug into the stored HTML
-        snapshot when you enable it—nothing sends automatically today.
+        snapshot when you enable it-nothing sends automatically today.
       </p>
     </div>
   );
@@ -105,7 +105,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
             Latest summary
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-            Weekly and monthly executive digests on revenue, spend, and margin—skim in under ten seconds.
+            Weekly and monthly executive digests on revenue, spend, and margin-skim in under ten seconds.
           </p>
         </div>
         <div className="flex gap-2">
@@ -188,7 +188,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No weekly summary yet—there was not enough trading activity in the
+                    No weekly summary yet-there was not enough trading activity in the
                     last full week (versus the week before) to produce a digest.
                   </p>
                 )}
@@ -206,7 +206,7 @@ export function LatestSummaryCard({ className }: { className?: string }) {
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No monthly summary yet—not enough revenue or cost movement across the
+                    No monthly summary yet-not enough revenue or cost movement across the
                     prior calendar month versus the month before.
                   </p>
                 )}

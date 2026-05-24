@@ -15,7 +15,7 @@ export const CHART_SERIES_MID = "var(--chart-3)";
 export const CHART_COMPARE = "var(--chart-4)";
 export const CHART_COMPARE_MID = "var(--chart-5)";
 
-/** Distinct donut/pie fills — cycles when there are more slices than slots. */
+/** Distinct donut/pie fills - cycles when there are more slices than slots. */
 export const PIE_SEGMENT_COUNT = 8;
 
 export function seriesPalette() {

@@ -60,7 +60,7 @@ export interface ChartConfig {
   y_label?: string;
 }
 
-/** Cap after daily merge — keeps charts readable; backend also aggregates by day. */
+/** Cap after daily merge - keeps charts readable; backend also aggregates by day. */
 const MAX_LINE_AREA_POINTS = 480;
 const MAX_BAR_POINTS = 120;
 const MAX_PIE_SLICES = 24;
@@ -130,7 +130,7 @@ function dayKeyForX(x: string): string {
   return x;
 }
 
-/** One point per calendar day — sums y when timestamps fall on the same day. */
+/** One point per calendar day - sums y when timestamps fall on the same day. */
 function mergePointsByDay(points: { x: string; y: number }[]): { x: string; y: number }[] {
   const acc = new Map<string, number>();
   for (const { x, y } of points) {
@@ -151,7 +151,7 @@ function sortByXAsc(points: { x: string; y: number }[]): { x: string; y: number 
   });
 }
 
-/** 3-point rolling median — dampens single-point spikes (display only). */
+/** 3-point rolling median - dampens single-point spikes (display only). */
 function smoothMedian3(values: number[]): number[] {
   const n = values.length;
   if (n < 3) return values.map((v) => v);
@@ -286,7 +286,7 @@ function mean(nums: number[]): number {
 }
 
 function formatInsightMetric(value: number): string {
-  if (!Number.isFinite(value)) return "—";
+  if (!Number.isFinite(value)) return "-";
   return value.toLocaleString(undefined, {
     notation: "standard",
     maximumFractionDigits: 2,
@@ -390,7 +390,7 @@ function barOrPieInsight(
     if (second.value > 0) {
       const vsPrev = ((top.value - second.value) / second.value) * 100;
       if (Math.abs(vsPrev) < 0.5) {
-        line2 = `Nearly tied with "${secondName}" — less than 1% apart.`;
+        line2 = `Nearly tied with "${secondName}" - less than 1% apart.`;
       } else {
         line2 = `${vsPrev.toFixed(0)}% ahead of "${secondName}".`;
       }
@@ -941,7 +941,7 @@ function formatNumber(value: unknown) {
 
 function formatTooltip(value: unknown) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return n.toLocaleString(undefined, {
     notation: "standard",
     maximumFractionDigits: 2,

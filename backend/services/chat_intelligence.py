@@ -199,10 +199,10 @@ def try_workspace_shortcut(
         ]
         for c in catalog:
             rev_note = (
-                f" — primary metric: {_format_inr(c['revenue_total'])} "
+                f" - primary metric: {_format_inr(c['revenue_total'])} "
                 f"({c['revenue_column']})"
                 if c.get("has_revenue")
-                else " — no revenue column detected"
+                else " - no revenue column detected"
             )
             lines.append(
                 f"• {c['label']} ({c['rows']:,} rows, {c['grain']}){rev_note}"
@@ -211,7 +211,7 @@ def try_workspace_shortcut(
             [
                 "",
                 f"{len(with_rev)} of {len(catalog)} sources have a revenue-style column. "
-                "They measure different grains — do not add those totals together.",
+                "They measure different grains - do not add those totals together.",
             ]
         )
         return {"answer": "\n".join(lines), "chart_data": chart_revenue_by_source(with_rev)}
@@ -230,7 +230,7 @@ def try_workspace_shortcut(
         return _answer_revenue_by_source(
             catalog,
             headline=(
-                "There is no single “total revenue” number across all sources — "
+                "There is no single “total revenue” number across all sources - "
                 "they overlap (orders, monthly rollups, ads, SKUs). "
                 "Here is revenue per source (one primary column each):"
             ),
@@ -261,13 +261,13 @@ def _answer_revenue_by_source(
 
     lines = [
         headline
-        or "Here is one primary revenue metric per source (do not sum these — grains overlap):",
+        or "Here is one primary revenue metric per source (do not sum these - grains overlap):",
         "",
     ]
     for c in sorted(with_rev, key=lambda x: float(x["revenue_total"]), reverse=True):
         dr = f" · dates {c['date_range']}" if c.get("date_range") else ""
         lines.append(
-            f"• {c['label']} — {_format_inr(float(c['revenue_total']))} "
+            f"• {c['label']} - {_format_inr(float(c['revenue_total']))} "
             f"({c['revenue_column']}, {c['grain']}{dr})"
         )
 
@@ -277,7 +277,7 @@ def _answer_revenue_by_source(
             [
                 "",
                 f"For a single company revenue figure, use “{canonical['label']}” "
-                f"({_format_inr(float(canonical['revenue_total']))}) — "
+                f"({_format_inr(float(canonical['revenue_total']))}) - "
                 f"{canonical['grain']}. Other files are breakdowns or overlapping views.",
             ]
         )
@@ -304,7 +304,7 @@ def _answer_canonical_revenue(catalog: list[dict[str, Any]]) -> dict[str, Any]:
             f"Use “{canonical['label']}” as your primary revenue view: "
             f"{_format_inr(float(canonical['revenue_total']))} "
             f"on column {canonical['revenue_column']} ({canonical['grain']}).{dr} "
-            "Other sources overlap this — avoid adding their revenue totals."
+            "Other sources overlap this - avoid adding their revenue totals."
         ),
         "chart_data": None,
     }
@@ -327,7 +327,7 @@ def chart_revenue_by_source(with_rev: list[dict[str, Any]]) -> Optional[dict[str
 def format_catalog_for_prompt(catalog: list[dict[str, Any]]) -> str:
     """Text block injected into LLM prompts."""
     lines = [
-        "WORKSPACE SOURCE CATALOG (use for business answers — not file paths in user text):",
+        "WORKSPACE SOURCE CATALOG (use for business answers - not file paths in user text):",
         "RULE: Never sum revenue totals across sources unless the user explicitly asks for a sum "
         "AND you explain double-counting risk. Prefer one canonical source for company revenue.",
         "",

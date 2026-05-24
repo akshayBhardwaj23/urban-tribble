@@ -137,7 +137,7 @@ export default function UploadPage() {
 
             <div className="space-y-3 max-w-2xl">
               <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-foreground">
-                Start from an outcome—or upload freely
+                Start from an outcome-or upload freely
               </h1>
               <p className="text-base text-muted-foreground leading-relaxed">
                 Pick a briefing template for guided file hints and framing, or go
@@ -157,7 +157,7 @@ export default function UploadPage() {
                   Briefing templates
                 </h2>
                 <p className="mt-2 text-sm text-foreground/90 leading-relaxed max-w-xl">
-                  Common decision reviews—each shows what to upload and how the briefing
+                  Common decision reviews-each shows what to upload and how the briefing
                   will be framed before you add files.
                 </p>
               </div>

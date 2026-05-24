@@ -118,7 +118,7 @@ def verify_subscription_auth_signature(
 def _normalize_subscription_short_url(short_url: str) -> str:
     """Razorpay sometimes returns ``api.razorpay.com`` ``short_url`` values that render
     *Hosted page is not available* in a normal browser session. The subscription auth UI
-    is served from ``checkout.razorpay.com`` — swap the host when the path is a checkout link.
+    is served from ``checkout.razorpay.com`` - swap the host when the path is a checkout link.
     """
     u = short_url.strip()
     parsed = urlparse(u)
@@ -201,7 +201,7 @@ def create_subscription_checkout(db: Session, user: User, tier: str) -> dict[str
     return {
         "short_url": str(short_url),
         "subscription_id": str(sub_id),
-        # Public key — required for Razorpay Standard Checkout (subscription auth); do not use short_url redirect alone.
+        # Public key - required for Razorpay Standard Checkout (subscription auth); do not use short_url redirect alone.
         "key_id": settings.RAZORPAY_KEY_ID.strip(),
     }
 
