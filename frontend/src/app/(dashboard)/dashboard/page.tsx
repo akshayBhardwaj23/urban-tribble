@@ -154,7 +154,7 @@ function TrendBadge({ trend }: { trend: "up" | "down" | "stable" | null }) {
 }
 
 export default function OverviewPage() {
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { activeWorkspace, loading: workspaceLoading, switching } = useWorkspace();
   // When restoring Outlook: add syncUser back to useWorkspace() for forecastMutation.
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +173,7 @@ export default function OverviewPage() {
   */
 
   const overviewEnabled =
-    !workspaceLoading && Boolean(activeWorkspace?.id);
+    !workspaceLoading && !switching && Boolean(activeWorkspace?.id);
 
   const {
     data,
@@ -346,7 +346,7 @@ export default function OverviewPage() {
       Boolean(data && data.total_datasets > 0),
   });
 
-  if (workspaceLoading) {
+  if (workspaceLoading || switching) {
     return (
       <div className="space-y-10 max-w-6xl">
         <Skeleton className="h-9 w-64" />

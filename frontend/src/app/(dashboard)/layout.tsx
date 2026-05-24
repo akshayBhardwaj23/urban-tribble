@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { WorkspaceQueryInvalidator } from "@/components/workspace-query-invalidator";
+import { WorkspaceSwitchOverlay } from "@/components/workspace-switch-overlay";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
@@ -78,8 +79,9 @@ export default function DashboardLayout({
         </aside>
         <main
           id="dashboard-main"
-          className="flex-1 overflow-auto bg-background p-6"
+          className="relative flex-1 overflow-auto bg-background p-6"
         >
+          <WorkspaceSwitchOverlay />
           {children}
         </main>
       </div>

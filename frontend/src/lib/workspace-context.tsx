@@ -8,8 +8,10 @@ import {
   useState,
 } from "react";
 import { useSession } from "next-auth/react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { api, planLimitErrorFromJson, setApiUserEmail } from "@/lib/api";
+import { clearWorkspaceScopedQueries } from "@/lib/workspace-queries";
 
 interface Workspace {
   id: string;
@@ -39,6 +41,9 @@ interface WorkspaceContextValue {
   activeWorkspace: Workspace | null;
   workspaces: Workspace[];
   loading: boolean;
+  /** True while activating another workspace and refetching scoped data. */
+  switching: boolean;
+  switchingWorkspaceName: string | null;
   syncUser: () => Promise<UserProfile | null>;
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (name: string) => Promise<Workspace>;
@@ -50,6 +55,8 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   activeWorkspace: null,
   workspaces: [],
   loading: true,
+  switching: false,
+  switchingWorkspaceName: null,
   syncUser: async () => null,
   switchWorkspace: async () => {},
   createWorkspace: async () => ({ id: "", name: "", created_at: "" }),
@@ -60,8 +67,13 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
+  const queryClient = useQueryClient();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
+  const [switchingWorkspaceName, setSwitchingWorkspaceName] = useState<
+    string | null
+  >(null);
 
   const syncUser = useCallback(async () => {
     if (!session?.user?.email) return null;
@@ -95,15 +107,44 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const switchWorkspace = useCallback(
     async (workspaceId: string) => {
       if (!session?.user?.email) return;
+      if (profile?.active_workspace_id === workspaceId) return;
 
-      await fetch(`${API_BASE}/api/workspaces/${workspaceId}/activate`, {
-        method: "POST",
-        headers: { "X-User-Email": session.user.email },
-      });
+      const target = profile?.workspaces.find((w) => w.id === workspaceId);
+      setSwitching(true);
+      setSwitchingWorkspaceName(target?.name ?? null);
+      clearWorkspaceScopedQueries(queryClient);
 
-      await syncUser();
+      setProfile((prev) =>
+        prev ? { ...prev, active_workspace_id: workspaceId } : prev
+      );
+
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/workspaces/${workspaceId}/activate`,
+          {
+            method: "POST",
+            headers: { "X-User-Email": session.user.email },
+          }
+        );
+        if (!res.ok) {
+          throw new Error("Failed to switch workspace");
+        }
+        await syncUser();
+      } catch {
+        await syncUser();
+        throw new Error("Could not switch workspace");
+      } finally {
+        setSwitching(false);
+        setSwitchingWorkspaceName(null);
+      }
     },
-    [session?.user?.email, syncUser]
+    [
+      session?.user?.email,
+      profile?.active_workspace_id,
+      profile?.workspaces,
+      queryClient,
+      syncUser,
+    ]
   );
 
   const createWorkspace = useCallback(
@@ -166,6 +207,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         activeWorkspace,
         workspaces: profile?.workspaces ?? [],
         loading,
+        switching,
+        switchingWorkspaceName,
         syncUser,
         switchWorkspace,
         createWorkspace,

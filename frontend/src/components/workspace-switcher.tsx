@@ -20,11 +20,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ChevronDown } from "lucide-react";
+import { toast } from "sonner";
+import { ChevronDown, Loader2 } from "lucide-react";
 
 export function WorkspaceSwitcher() {
-  const { activeWorkspace, workspaces, switchWorkspace, createWorkspace, profile } =
-    useWorkspace();
+  const {
+    activeWorkspace,
+    workspaces,
+    switchWorkspace,
+    createWorkspace,
+    profile,
+    switching,
+    switchingWorkspaceName,
+  } = useWorkspace();
   const showChevron = workspaces.length > 1;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -65,17 +73,27 @@ export function WorkspaceSwitcher() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="w-full text-left rounded-md px-3 py-2 hover:bg-accent transition-colors outline-none focus:ring-2 focus:ring-ring data-[state=open]:[&_.workspace-chevron]:rotate-180">
+        <DropdownMenuTrigger
+          disabled={switching}
+          className="w-full text-left rounded-md px-3 py-2 hover:bg-accent transition-colors outline-none focus:ring-2 focus:ring-ring data-[state=open]:[&_.workspace-chevron]:rotate-180 disabled:opacity-70"
+        >
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex flex-col items-start gap-0.5 overflow-hidden flex-1 min-w-0">
               <span className="text-xs text-muted-foreground font-normal">
                 Workspace
               </span>
               <span className="text-sm font-medium truncate w-full">
-                {activeWorkspace?.name ?? "Choose workspace"}
+                {switching
+                  ? switchingWorkspaceName ?? "Switching…"
+                  : (activeWorkspace?.name ?? "Choose workspace")}
               </span>
             </div>
-            {showChevron ? (
+            {switching ? (
+              <Loader2
+                className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+                aria-hidden
+              />
+            ) : showChevron ? (
               <ChevronDown
                 className="workspace-chevron h-4 w-4 shrink-0 text-muted-foreground opacity-70 transition-transform duration-200"
                 aria-hidden
@@ -87,7 +105,12 @@ export function WorkspaceSwitcher() {
           {workspaces.map((ws) => (
             <DropdownMenuItem
               key={ws.id}
-              onClick={() => switchWorkspace(ws.id)}
+              disabled={switching}
+              onClick={() => {
+                void switchWorkspace(ws.id).catch(() => {
+                  toast.error("Could not switch workspace. Please try again.");
+                });
+              }}
               className={
                 ws.id === activeWorkspace?.id ? "bg-accent" : ""
               }
