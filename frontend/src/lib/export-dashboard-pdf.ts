@@ -1,281 +1,171 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
-let canvas2d: CanvasRenderingContext2D | null = null;
+const PDF_EXPORT_CLASS = "pdf-export-active";
 
-function getCanvas2d(): CanvasRenderingContext2D | null {
-  if (typeof document === "undefined") {
-    return null;
+/** html2canvas 1.x cannot parse these in stylesheet rules. */
+const MODERN_COLOR_FN = /oklch\(|lab\(|lch\(|color-mix\(/i;
+
+const PDF_SAFE_THEME = `
+:root, .dark, html {
+  color-scheme: light !important;
+  --background: #ffffff !important;
+  --foreground: #0f172a !important;
+  --card: #ffffff !important;
+  --card-foreground: #0f172a !important;
+  --popover: #ffffff !important;
+  --popover-foreground: #0f172a !important;
+  --primary: #1e293b !important;
+  --primary-foreground: #f8fafc !important;
+  --secondary: #f1f5f9 !important;
+  --secondary-foreground: #0f172a !important;
+  --muted: #f1f5f9 !important;
+  --muted-foreground: #64748b !important;
+  --accent: #f1f5f9 !important;
+  --accent-foreground: #0f172a !important;
+  --destructive: #dc2626 !important;
+  --border: #e2e8f0 !important;
+  --input: #e2e8f0 !important;
+  --ring: #94a3b8 !important;
+  --chart-1: #94a3b8 !important;
+  --chart-2: #475569 !important;
+  --chart-3: #64748b !important;
+  --chart-4: #78716c !important;
+  --chart-5: #57534e !important;
+  --pie-1: #b45309 !important;
+  --pie-2: #c2410c !important;
+  --pie-3: #4d7c0f !important;
+  --pie-4: #7e22ce !important;
+  --pie-5: #a16207 !important;
+  --pie-6: #9a3412 !important;
+  --pie-7: #0369a1 !important;
+  --pie-8: #ca8a04 !important;
+}
+body {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+`;
+
+function sanitizeCssText(css: string): string {
+  let out = css;
+  const patterns = [
+    /oklch\((?:[^()"]|\([^()]*\))*\)/gi,
+    /lab\((?:[^()"]|\([^()]*\))*\)/gi,
+    /lch\((?:[^()"]|\([^()]*\))*\)/gi,
+    /color-mix\([^;{}]+\)/gi,
+  ];
+  for (const re of patterns) {
+    out = out.replace(re, "#64748b");
   }
-  if (!canvas2d) {
-    canvas2d = document.createElement("canvas").getContext("2d");
-  }
-  return canvas2d;
+  return out;
 }
 
-/** html2canvas cannot parse lab/oklch/color-mix in stylesheet rules. */
-const MODERN_COLOR_FN = /(lab|oklch|lch|color-mix|color)\(/i;
-
-/**
- * html2canvas cannot parse modern CSS color serializations from stylesheets.
- * Canvas fillStyle accepts them and re-serializes to #hex/rgb.
- */
-function toCanvasSafeColor(value: string | null | undefined): string | null {
-  if (value == null) return null;
-  const t = value.trim();
-  if (
-    t === "" ||
-    t === "none" ||
-    t === "transparent" ||
-    t === "rgba(0, 0, 0, 0)"
-  ) {
-    return t;
-  }
-  if (MODERN_COLOR_FN.test(t)) {
-    const ctx = getCanvas2d();
-    if (!ctx) return null;
-    try {
-      ctx.fillStyle = "#000000";
-      ctx.fillStyle = t;
-      const out = String(ctx.fillStyle);
-      if (out.startsWith("#") || out.startsWith("rgb")) {
-        return out;
-      }
-    } catch {
-      return null;
+function rewriteStylesheetsInClone(doc: Document): void {
+  doc.querySelectorAll("style").forEach((node) => {
+    const text = node.textContent;
+    if (text && MODERN_COLOR_FN.test(text)) {
+      node.textContent = sanitizeCssText(text);
     }
-    return null;
-  }
-  if (t.startsWith("#") || t.startsWith("rgb")) {
-    return t;
-  }
-  const ctx = getCanvas2d();
-  if (!ctx) return t;
-  try {
-    ctx.fillStyle = "#000000";
-    ctx.fillStyle = t;
-    const out = String(ctx.fillStyle);
-    if (out.startsWith("#") || out.startsWith("rgb")) {
-      return out;
-    }
-  } catch {
-    return null;
-  }
-  return t;
-}
-
-const COLOR_PROPS = new Set([
-  "color",
-  "background-color",
-  "border-top-color",
-  "border-right-color",
-  "border-bottom-color",
-  "border-left-color",
-  "outline-color",
-  "text-decoration-color",
-  "column-rule-color",
-  "fill",
-  "stroke",
-  "stop-color",
-  "flood-color",
-  "lighting-color",
-]);
-
-/** Layout + typography mirrored as inline styles after stylesheets are stripped. */
-const MIRROR_PROPS = [
-  "display",
-  "position",
-  "box-sizing",
-  "top",
-  "right",
-  "bottom",
-  "left",
-  "width",
-  "height",
-  "min-width",
-  "max-width",
-  "min-height",
-  "max-height",
-  "margin-top",
-  "margin-right",
-  "margin-bottom",
-  "margin-left",
-  "padding-top",
-  "padding-right",
-  "padding-bottom",
-  "padding-left",
-  "flex",
-  "flex-direction",
-  "flex-wrap",
-  "flex-grow",
-  "flex-shrink",
-  "flex-basis",
-  "align-items",
-  "align-self",
-  "justify-content",
-  "gap",
-  "row-gap",
-  "column-gap",
-  "grid-template-columns",
-  "grid-template-rows",
-  "grid-column",
-  "grid-row",
-  "font-size",
-  "font-weight",
-  "font-family",
-  "line-height",
-  "letter-spacing",
-  "text-align",
-  "text-transform",
-  "white-space",
-  "word-break",
-  "border-top-width",
-  "border-right-width",
-  "border-bottom-width",
-  "border-left-width",
-  "border-top-style",
-  "border-right-style",
-  "border-bottom-style",
-  "border-left-style",
-  "border-top-color",
-  "border-right-color",
-  "border-bottom-color",
-  "border-left-color",
-  "border-radius",
-  "background-color",
-  "color",
-  "opacity",
-  "overflow",
-  "overflow-x",
-  "overflow-y",
-  "z-index",
-  "vertical-align",
-  "list-style-type",
-  "object-fit",
-];
-
-function stripStylesheets(doc: Document): void {
-  doc.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => {
-    node.remove();
   });
 }
 
-function safeStyleValue(prop: string, raw: string): string | null {
-  const t = raw.trim();
-  if (!t) return null;
-
-  if (prop === "background-image") {
-    if (MODERN_COLOR_FN.test(t)) return "none";
-    return t;
-  }
-
-  if (prop === "box-shadow" || prop === "text-shadow") {
-    if (MODERN_COLOR_FN.test(t)) return "none";
-    return t;
-  }
-
-  if (COLOR_PROPS.has(prop) || prop === "fill" || prop === "stroke") {
-    return toCanvasSafeColor(t) ?? (MODERN_COLOR_FN.test(t) ? null : t);
-  }
-
-  if (MODERN_COLOR_FN.test(t)) {
-    return null;
-  }
-
-  return t;
+function injectPdfTheme(doc: Document): void {
+  const el = doc.createElement("style");
+  el.setAttribute("data-pdf-theme", "true");
+  el.textContent = PDF_SAFE_THEME;
+  doc.head.appendChild(el);
 }
 
-function mirrorSvgPaint(orig: Element, copy: Element): void {
-  if (orig.namespaceURI !== "http://www.w3.org/2000/svg") {
-    return;
-  }
-  const cs = getComputedStyle(orig);
-  const fill = toCanvasSafeColor(cs.fill);
-  const stroke = toCanvasSafeColor(cs.stroke);
-  if (fill && fill !== "none") {
-    copy.setAttribute("fill", fill);
-  }
-  if (stroke && stroke !== "none") {
-    copy.setAttribute("stroke", stroke);
-  }
+function prepareClonedDocument(doc: Document): void {
+  doc.documentElement.classList.remove("dark");
+  rewriteStylesheetsInClone(doc);
+  injectPdfTheme(doc);
+  doc.body.style.background = "#ffffff";
+  doc.body.style.color = "#0f172a";
+  doc.querySelectorAll("[data-pdf-exclude]").forEach((node) => node.remove());
 }
 
-/**
- * Copy resolved computed styles onto the clone as inline rgb/hex so layout survives
- * after stylesheets are removed and html2canvas never sees lab/oklch rules.
- */
-function mirrorCloneStylesFromOriginal(
-  originalRoot: Element,
-  cloneRoot: Element
+function collectPdfBlocks(root: HTMLElement): HTMLElement[] {
+  const blocks: HTMLElement[] = [];
+  for (const child of Array.from(root.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (child.hasAttribute("data-pdf-exclude")) continue;
+    const h = Math.max(child.offsetHeight, child.scrollHeight);
+    if (h < 8) continue;
+    blocks.push(child);
+  }
+  return blocks.length > 0 ? blocks : [root];
+}
+
+async function waitForCharts(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 400);
+  });
+}
+
+async function captureElement(el: HTMLElement): Promise<HTMLCanvasElement> {
+  const width = Math.ceil(Math.max(el.scrollWidth, el.clientWidth, 320));
+  const height = Math.ceil(Math.max(el.scrollHeight, el.clientHeight, 40));
+
+  return html2canvas(el, {
+    scale: Math.min(2, window.devicePixelRatio || 2),
+    backgroundColor: "#ffffff",
+    useCORS: true,
+    logging: false,
+    width,
+    height,
+    windowWidth: width,
+    windowHeight: height,
+    scrollX: 0,
+    scrollY: -window.scrollY,
+    onclone: (clonedDoc) => {
+      prepareClonedDocument(clonedDoc);
+    },
+  });
+}
+
+function appendCanvasToPdf(
+  pdf: jsPDF,
+  canvas: HTMLCanvasElement,
+  state: { cursorY: number; pageWidth: number; pageHeight: number; margin: number }
 ): void {
-  const origEls: Element[] = [originalRoot, ...originalRoot.querySelectorAll("*")];
-  const cloneEls: Element[] = [cloneRoot, ...cloneRoot.querySelectorAll("*")];
-  const n = Math.min(origEls.length, cloneEls.length);
+  const contentWidth = state.pageWidth - state.margin * 2;
+  const usableHeight = state.pageHeight - state.margin * 2;
+  const gap = 14;
 
-  for (let i = 0; i < n; i += 1) {
-    const orig = origEls[i];
-    const copy = cloneEls[i] as HTMLElement;
-    if (!copy?.style || !orig.ownerDocument) continue;
+  const imgData = canvas.toDataURL("image/png", 0.92);
+  const imgHeight = (canvas.height * contentWidth) / canvas.width;
 
-    const cs = getComputedStyle(orig);
+  let offset = 0;
+  while (offset < imgHeight - 1) {
+    const chunk = Math.min(usableHeight, imgHeight - offset);
 
-    for (const prop of MIRROR_PROPS) {
-      const raw = cs.getPropertyValue(prop);
-      const safe = safeStyleValue(prop, raw);
-      if (safe) {
-        copy.style.setProperty(prop, safe, "important");
-      }
+    if (state.cursorY + chunk > state.pageHeight - state.margin) {
+      pdf.addPage();
+      state.cursorY = state.margin;
     }
 
-    const bgImage = cs.getPropertyValue("background-image");
-    if (bgImage && bgImage !== "none") {
-      const safeBg = safeStyleValue("background-image", bgImage);
-      copy.style.setProperty(
-        "background-image",
-        safeBg ?? "none",
-        "important"
-      );
-    }
+    pdf.addImage(
+      imgData,
+      "PNG",
+      state.margin,
+      state.cursorY - offset,
+      contentWidth,
+      imgHeight
+    );
 
-    for (const shadowProp of ["box-shadow", "text-shadow"] as const) {
-      const raw = cs.getPropertyValue(shadowProp);
-      if (!raw || raw === "none") continue;
-      const safe = safeStyleValue(shadowProp, raw);
-      copy.style.setProperty(shadowProp, safe ?? "none", "important");
-    }
-
-    mirrorSvgPaint(orig, copy);
-
-    const inlineStyle = copy.getAttribute("style");
-    if (inlineStyle && MODERN_COLOR_FN.test(inlineStyle)) {
-      for (const part of inlineStyle.split(";")) {
-        const idx = part.indexOf(":");
-        if (idx < 0) continue;
-        const key = part.slice(0, idx).trim();
-        const val = part.slice(idx + 1).trim();
-        if (!key || !MODERN_COLOR_FN.test(val)) continue;
-        const safe = safeStyleValue(key, val);
-        if (safe) {
-          copy.style.setProperty(key, safe, "important");
-        } else {
-          copy.style.removeProperty(key);
-        }
-      }
-    }
-
-    for (const attr of ["fill", "stroke"] as const) {
-      const attrVal = copy.getAttribute(attr);
-      if (
-        attrVal &&
-        (attrVal.includes("var(") || MODERN_COLOR_FN.test(attrVal))
-      ) {
-        const safe = toCanvasSafeColor(cs.getPropertyValue(attr));
-        if (safe) {
-          copy.setAttribute(attr, safe);
-        } else {
-          copy.removeAttribute(attr);
-        }
-      }
+    offset += chunk;
+    if (offset < imgHeight - 1) {
+      pdf.addPage();
+      state.cursorY = state.margin;
+    } else {
+      state.cursorY += chunk + gap;
     }
   }
 }
@@ -290,8 +180,8 @@ function sanitizeFilenamePart(name: string): string {
 }
 
 /**
- * Rasterizes a DOM subtree to a multi-page A4 PDF (portrait).
- * Temporarily opens `#workspace-full-briefing` if present so the full model output is included.
+ * Rasterizes the overview dashboard to a multi-page A4 PDF (portrait).
+ * Captures section-by-section so layout and charts stay intact.
  */
 export async function exportDashboardToPdf(
   root: HTMLElement,
@@ -305,44 +195,13 @@ export async function exportDashboardToPdf(
     details.open = true;
   }
 
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve());
-    });
-  });
+  const html = document.documentElement;
+  html.classList.add(PDF_EXPORT_CLASS);
+  window.scrollTo(0, 0);
+
+  await waitForCharts();
 
   try {
-    const canvas = await html2canvas(root, {
-      scale: Math.min(2, window.devicePixelRatio || 2),
-      useCORS: true,
-      logging: false,
-      backgroundColor: "#ffffff",
-      windowWidth: root.scrollWidth,
-      windowHeight: root.scrollHeight,
-      onclone: (clonedDoc, clonedElement) => {
-        clonedDoc.documentElement.classList.remove("dark");
-        clonedDoc.body.style.background = "#ffffff";
-        clonedDoc.body.style.color = "#0f172a";
-
-        clonedDoc.querySelectorAll("[data-pdf-exclude]").forEach((el) => {
-          el.remove();
-        });
-
-        const cloneRoot =
-          clonedElement ??
-          (clonedDoc.querySelector(".dashboard-pdf-root") as HTMLElement | null);
-
-        if (cloneRoot) {
-          mirrorCloneStylesFromOriginal(root, cloneRoot);
-          cloneRoot.style.setProperty("background", "#ffffff", "important");
-          cloneRoot.style.setProperty("color", "#0f172a", "important");
-        }
-
-        stripStylesheets(clonedDoc);
-      },
-    });
-
-    const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "pt",
@@ -351,26 +210,39 @@ export async function exportDashboardToPdf(
 
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 36;
-    const contentWidth = pageWidth - margin * 2;
-    const usableHeight = pageHeight - margin * 2;
-    const imgHeight = (canvas.height * contentWidth) / canvas.width;
+    const margin = 40;
+    const state = { cursorY: margin, pageWidth, pageHeight, margin };
 
-    let offset = 0;
-    pdf.addImage(imgData, "PNG", margin, margin - offset, contentWidth, imgHeight);
-    let remaining = imgHeight - usableHeight;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(16);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(options.workspaceName, margin, state.cursorY);
+    state.cursorY += 22;
 
-    while (remaining > 0) {
-      offset += usableHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", margin, margin - offset, contentWidth, imgHeight);
-      remaining -= usableHeight;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(
+      `Overview · ${new Date().toLocaleDateString(undefined, {
+        dateStyle: "long",
+      })}`,
+      margin,
+      state.cursorY
+    );
+    state.cursorY += 28;
+
+    const blocks = collectPdfBlocks(root);
+    for (const block of blocks) {
+      const canvas = await captureElement(block);
+      if (canvas.width < 2 || canvas.height < 2) continue;
+      appendCanvasToPdf(pdf, canvas, state);
     }
 
     const stamp = new Date().toISOString().slice(0, 10);
     const base = sanitizeFilenamePart(options.workspaceName);
     pdf.save(`${base}-overview-${stamp}.pdf`);
   } finally {
+    html.classList.remove(PDF_EXPORT_CLASS);
     if (details) {
       details.open = hadOpen;
     }

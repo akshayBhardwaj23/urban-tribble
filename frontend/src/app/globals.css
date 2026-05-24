@@ -139,6 +139,16 @@
   --sidebar-ring: oklch(0.62 0.09 74);
 }
 
+/* Overview PDF export — hide chrome; charts render before capture */
+html.pdf-export-active [data-pdf-exclude] {
+  display: none !important;
+}
+
+html.pdf-export-active .dashboard-pdf-root {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

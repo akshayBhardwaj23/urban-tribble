@@ -22,6 +22,10 @@ export function ChartFrame({
     if (!node) return;
 
     const update = () => {
+      if (document.documentElement.classList.contains("pdf-export-active")) {
+        setIsReady(true);
+        return;
+      }
       const rect = node.getBoundingClientRect();
       setIsReady(rect.width > 0 && rect.height > 0);
     };
