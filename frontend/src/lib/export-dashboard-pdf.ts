@@ -13,14 +13,12 @@ function getCanvas2d(): CanvasRenderingContext2D | null {
   return canvas2d;
 }
 
-function camelToKebab(prop: string): string {
-  return prop.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
-}
+/** html2canvas cannot parse lab/oklch/color-mix in stylesheet rules. */
+const MODERN_COLOR_FN = /(lab|oklch|lch|color-mix|color)\(/i;
 
 /**
- * html2canvas cannot parse modern CSS color serializations (e.g. lab/oklch from
- * getComputedStyle). The 2D canvas context accepts them and re-serializes to
- * #hex/rgb, which the library can read.
+ * html2canvas cannot parse modern CSS color serializations from stylesheets.
+ * Canvas fillStyle accepts them and re-serializes to #hex/rgb.
  */
 function toCanvasSafeColor(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -33,6 +31,24 @@ function toCanvasSafeColor(value: string | null | undefined): string | null {
   ) {
     return t;
   }
+  if (MODERN_COLOR_FN.test(t)) {
+    const ctx = getCanvas2d();
+    if (!ctx) return null;
+    try {
+      ctx.fillStyle = "#000000";
+      ctx.fillStyle = t;
+      const out = String(ctx.fillStyle);
+      if (out.startsWith("#") || out.startsWith("rgb")) {
+        return out;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  if (t.startsWith("#") || t.startsWith("rgb")) {
+    return t;
+  }
   const ctx = getCanvas2d();
   if (!ctx) return t;
   try {
@@ -43,65 +59,222 @@ function toCanvasSafeColor(value: string | null | undefined): string | null {
       return out;
     }
   } catch {
-    /* use fallback below */
+    return null;
   }
   return t;
 }
 
-const MODERN_COLOR_FN = /(lab|oklch|lch|color)\(/i;
-
-const COLOR_STYLE_PROPS: (keyof CSSStyleDeclaration)[] = [
+const COLOR_PROPS = new Set([
   "color",
-  "backgroundColor",
-  "borderTopColor",
-  "borderRightColor",
-  "borderBottomColor",
-  "borderLeftColor",
-  "outlineColor",
-  "textDecorationColor",
-  "columnRuleColor",
+  "background-color",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "outline-color",
+  "text-decoration-color",
+  "column-rule-color",
   "fill",
   "stroke",
+  "stop-color",
+  "flood-color",
+  "lighting-color",
+]);
+
+/** Layout + typography mirrored as inline styles after stylesheets are stripped. */
+const MIRROR_PROPS = [
+  "display",
+  "position",
+  "box-sizing",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "width",
+  "height",
+  "min-width",
+  "max-width",
+  "min-height",
+  "max-height",
+  "margin-top",
+  "margin-right",
+  "margin-bottom",
+  "margin-left",
+  "padding-top",
+  "padding-right",
+  "padding-bottom",
+  "padding-left",
+  "flex",
+  "flex-direction",
+  "flex-wrap",
+  "flex-grow",
+  "flex-shrink",
+  "flex-basis",
+  "align-items",
+  "align-self",
+  "justify-content",
+  "gap",
+  "row-gap",
+  "column-gap",
+  "grid-template-columns",
+  "grid-template-rows",
+  "grid-column",
+  "grid-row",
+  "font-size",
+  "font-weight",
+  "font-family",
+  "line-height",
+  "letter-spacing",
+  "text-align",
+  "text-transform",
+  "white-space",
+  "word-break",
+  "border-top-width",
+  "border-right-width",
+  "border-bottom-width",
+  "border-left-width",
+  "border-top-style",
+  "border-right-style",
+  "border-bottom-style",
+  "border-left-style",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "border-radius",
+  "background-color",
+  "color",
+  "opacity",
+  "overflow",
+  "overflow-x",
+  "overflow-y",
+  "z-index",
+  "vertical-align",
+  "list-style-type",
+  "object-fit",
 ];
 
-const EXTRA_SVG_KEBAB = ["stop-color", "flood-color", "lighting-color"] as const;
+function stripStylesheets(doc: Document): void {
+  doc.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => {
+    node.remove();
+  });
+}
+
+function safeStyleValue(prop: string, raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+
+  if (prop === "background-image") {
+    if (MODERN_COLOR_FN.test(t)) return "none";
+    return t;
+  }
+
+  if (prop === "box-shadow" || prop === "text-shadow") {
+    if (MODERN_COLOR_FN.test(t)) return "none";
+    return t;
+  }
+
+  if (COLOR_PROPS.has(prop) || prop === "fill" || prop === "stroke") {
+    return toCanvasSafeColor(t) ?? (MODERN_COLOR_FN.test(t) ? null : t);
+  }
+
+  if (MODERN_COLOR_FN.test(t)) {
+    return null;
+  }
+
+  return t;
+}
+
+function mirrorSvgPaint(orig: Element, copy: Element): void {
+  if (orig.namespaceURI !== "http://www.w3.org/2000/svg") {
+    return;
+  }
+  const cs = getComputedStyle(orig);
+  const fill = toCanvasSafeColor(cs.fill);
+  const stroke = toCanvasSafeColor(cs.stroke);
+  if (fill && fill !== "none") {
+    copy.setAttribute("fill", fill);
+  }
+  if (stroke && stroke !== "none") {
+    copy.setAttribute("stroke", stroke);
+  }
+}
 
 /**
- * Pairs the original and cloned nodes (same node order) and rewrites
- * color-related properties on the clone to rgb/#hex so html2canvas can parse them.
+ * Copy resolved computed styles onto the clone as inline rgb/hex so layout survives
+ * after stylesheets are removed and html2canvas never sees lab/oklch rules.
  */
-function rewriteCloneColorsToSrgb(
+function mirrorCloneStylesFromOriginal(
   originalRoot: Element,
   cloneRoot: Element
 ): void {
   const origEls: Element[] = [originalRoot, ...originalRoot.querySelectorAll("*")];
   const cloneEls: Element[] = [cloneRoot, ...cloneRoot.querySelectorAll("*")];
   const n = Math.min(origEls.length, cloneEls.length);
+
   for (let i = 0; i < n; i += 1) {
     const orig = origEls[i];
-    const copy = cloneEls[i] as Element & { style: CSSStyleDeclaration };
+    const copy = cloneEls[i] as HTMLElement;
     if (!copy?.style || !orig.ownerDocument) continue;
-    const style = getComputedStyle(orig);
-    for (const prop of COLOR_STYLE_PROPS) {
-      const raw = (style as CSSStyleDeclaration)[prop] as string | undefined;
-      if (typeof raw !== "string" || !raw) continue;
-      const safe = toCanvasSafeColor(raw);
-      if (safe == null) continue;
-      if (safe === raw && !MODERN_COLOR_FN.test(raw)) continue;
-      copy.style.setProperty(camelToKebab(String(prop)), safe, "important");
+
+    const cs = getComputedStyle(orig);
+
+    for (const prop of MIRROR_PROPS) {
+      const raw = cs.getPropertyValue(prop);
+      const safe = safeStyleValue(prop, raw);
+      if (safe) {
+        copy.style.setProperty(prop, safe, "important");
+      }
     }
-    for (const kebab of EXTRA_SVG_KEBAB) {
-      const raw = style.getPropertyValue(kebab);
-      if (!raw) continue;
-      const safe = toCanvasSafeColor(raw);
-      if (safe == null) continue;
-      if (safe === raw && !MODERN_COLOR_FN.test(raw)) continue;
-      copy.style.setProperty(kebab, safe, "important");
+
+    const bgImage = cs.getPropertyValue("background-image");
+    if (bgImage && bgImage !== "none") {
+      const safeBg = safeStyleValue("background-image", bgImage);
+      copy.style.setProperty(
+        "background-image",
+        safeBg ?? "none",
+        "important"
+      );
     }
+
     for (const shadowProp of ["box-shadow", "text-shadow"] as const) {
-      const raw = style.getPropertyValue(shadowProp);
-      if (raw && MODERN_COLOR_FN.test(raw)) {
-        copy.style.setProperty(shadowProp, "none", "important");
+      const raw = cs.getPropertyValue(shadowProp);
+      if (!raw || raw === "none") continue;
+      const safe = safeStyleValue(shadowProp, raw);
+      copy.style.setProperty(shadowProp, safe ?? "none", "important");
+    }
+
+    mirrorSvgPaint(orig, copy);
+
+    const inlineStyle = copy.getAttribute("style");
+    if (inlineStyle && MODERN_COLOR_FN.test(inlineStyle)) {
+      for (const part of inlineStyle.split(";")) {
+        const idx = part.indexOf(":");
+        if (idx < 0) continue;
+        const key = part.slice(0, idx).trim();
+        const val = part.slice(idx + 1).trim();
+        if (!key || !MODERN_COLOR_FN.test(val)) continue;
+        const safe = safeStyleValue(key, val);
+        if (safe) {
+          copy.style.setProperty(key, safe, "important");
+        } else {
+          copy.style.removeProperty(key);
+        }
+      }
+    }
+
+    for (const attr of ["fill", "stroke"] as const) {
+      const attrVal = copy.getAttribute(attr);
+      if (
+        attrVal &&
+        (attrVal.includes("var(") || MODERN_COLOR_FN.test(attrVal))
+      ) {
+        const safe = toCanvasSafeColor(cs.getPropertyValue(attr));
+        if (safe) {
+          copy.setAttribute(attr, safe);
+        } else {
+          copy.removeAttribute(attr);
+        }
       }
     }
   }
@@ -148,22 +321,24 @@ export async function exportDashboardToPdf(
       windowHeight: root.scrollHeight,
       onclone: (clonedDoc, clonedElement) => {
         clonedDoc.documentElement.classList.remove("dark");
-        const cloneRoot =
-          clonedElement ??
-          (clonedDoc.querySelector(".dashboard-pdf-root") as HTMLElement | null);
-        if (cloneRoot) {
-          rewriteCloneColorsToSrgb(root, cloneRoot);
-        }
+        clonedDoc.body.style.background = "#ffffff";
+        clonedDoc.body.style.color = "#0f172a";
+
         clonedDoc.querySelectorAll("[data-pdf-exclude]").forEach((el) => {
           el.remove();
         });
-        const clonedRoot = clonedDoc.querySelector(
-          ".dashboard-pdf-root"
-        ) as HTMLElement | null;
-        if (clonedRoot) {
-          clonedRoot.style.background = "#ffffff";
-          clonedRoot.style.color = "#0f172a";
+
+        const cloneRoot =
+          clonedElement ??
+          (clonedDoc.querySelector(".dashboard-pdf-root") as HTMLElement | null);
+
+        if (cloneRoot) {
+          mirrorCloneStylesFromOriginal(root, cloneRoot);
+          cloneRoot.style.setProperty("background", "#ffffff", "important");
+          cloneRoot.style.setProperty("color", "#0f172a", "important");
         }
+
+        stripStylesheets(clonedDoc);
       },
     });
 
