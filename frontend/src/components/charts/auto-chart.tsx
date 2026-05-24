@@ -32,6 +32,7 @@ import {
   seriesLabelsFromComparison,
 } from "@/lib/chart-period-comparison";
 import {
+  CHART_COMPARE,
   CHART_GRID,
   CHART_MUTED,
   CHART_SERIES,
@@ -470,7 +471,7 @@ function LegendPills({
       {payload.map((entry, i) => (
         <li
           key={i}
-          className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/86 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.25)] dark:border-white/10 dark:bg-slate-900/75 dark:text-slate-200"
+          className="inline-flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
         >
           <span
             className="inline-block h-2.5 w-2.5 rounded-full"
@@ -486,13 +487,14 @@ function LegendPills({
 function tooltipShell(): CSSProperties {
   return {
     borderRadius: 16,
-    border: "1px solid rgba(255, 255, 255, 0.82)",
+    border: "1px solid color-mix(in oklch, var(--border) 88%, transparent)",
     boxShadow:
-      "0 24px 60px -20px rgba(15, 23, 42, 0.16), 0 8px 18px -8px rgba(15, 23, 42, 0.08)",
-    background: "rgba(252, 248, 243, 0.96)",
+      "0 24px 60px -20px color-mix(in oklch, var(--foreground) 12%, transparent)",
+    background: "color-mix(in oklch, var(--card) 94%, transparent)",
     backdropFilter: "blur(12px)",
     padding: "13px 15px",
     minWidth: 160,
+    color: "var(--foreground)",
   };
 }
 
@@ -517,8 +519,8 @@ function SaaSTooltip({
   if (!row) return null;
   const cur = payload.find((p) => p.dataKey === "y");
   const prev = payload.find((p) => p.dataKey === "yPrev");
-  const curColor = cur?.color ?? "#312e81";
-  const prevColor = prev?.color ?? "#f97316";
+  const curColor = cur?.color ?? CHART_SERIES;
+  const prevColor = prev?.color ?? CHART_COMPARE;
   const curLabel = seriesLabels?.current ?? "Current period";
   const prevLabel = seriesLabels?.previous ?? "Previous period";
   const showCur = row.y != null && Number.isFinite(row.y);
@@ -530,7 +532,7 @@ function SaaSTooltip({
           margin: 0,
           fontSize: 11,
           fontWeight: 600,
-          color: "#64748b",
+          color: "var(--muted-foreground)",
           textTransform: "uppercase",
           letterSpacing: "0.04em",
         }}
@@ -540,13 +542,13 @@ function SaaSTooltip({
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
         {showCur ? (
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#475569", maxWidth: 160 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--muted-foreground)", maxWidth: 160 }}>
               <span
                 style={{
                   width: 8,
                   height: 8,
                   borderRadius: 9999,
-                  background: "#fff",
+                  background: "var(--card)",
                   border: `2px solid ${curColor}`,
                   boxSizing: "border-box",
                   flexShrink: 0,
@@ -554,14 +556,14 @@ function SaaSTooltip({
               />
               <span>{curLabel}</span>
             </span>
-            <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#0f172a" }}>
+            <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "var(--foreground)" }}>
               {formatTooltip(row.y)}
             </span>
           </div>
         ) : null}
         {showPrev ? (
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#64748b", maxWidth: 160 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--muted-foreground)", maxWidth: 160 }}>
               <span
                 style={{
                   width: 12,
@@ -572,7 +574,7 @@ function SaaSTooltip({
               />
               <span>{prevLabel}</span>
             </span>
-            <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "#64748b" }}>
+            <span style={{ fontSize: 13, fontWeight: 650, fontFeatureSettings: '"tnum"', color: "var(--muted-foreground)" }}>
               {formatTooltip(row.yPrev)}
             </span>
           </div>
@@ -748,7 +750,7 @@ function renderDualArea(
             r: 5,
             strokeWidth: 2,
             stroke: p.compareStroke,
-            fill: "#fff",
+            fill: "var(--card)",
           }}
           isAnimationActive={false}
         />
@@ -767,7 +769,7 @@ function renderDualArea(
           r: 5,
           strokeWidth: 2,
           stroke: p.primaryStroke,
-          fill: "#fff",
+          fill: "var(--card)",
         }}
         isAnimationActive={false}
       />
@@ -825,10 +827,10 @@ function renderChart(
               if (!row) return null;
               return (
                 <div style={tooltipShell()}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a", maxWidth: 280 }}>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "var(--foreground)", maxWidth: 280 }}>
                     {row.nameFull}
                   </p>
-                  <p style={{ margin: "6px 0 0", fontSize: 13, fontWeight: 650, color: "#475569" }}>
+                  <p style={{ margin: "6px 0 0", fontSize: 13, fontWeight: 650, color: "var(--muted-foreground)" }}>
                     {formatTooltip(row.value)}
                   </p>
                 </div>
@@ -847,7 +849,7 @@ function renderChart(
               dataKey="value"
               position="right"
               offset={8}
-              className="fill-slate-500 text-[11px] font-medium"
+              className="fill-muted-foreground text-[11px] font-medium"
               formatter={(value: unknown) => formatTooltip(value)}
             />
           </Bar>

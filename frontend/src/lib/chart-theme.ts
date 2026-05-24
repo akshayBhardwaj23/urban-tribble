@@ -1,6 +1,6 @@
 /**
  * Dashboard chart colors aligned with globals.css `--chart-*` tokens.
- * Light mode: neutral grays. Dark mode: restrained warm accents.
+ * Light mode: neutral grays. Dark mode: champagne + warm stone (no blue/cyan).
  */
 
 export const CHART_GRID = "var(--border)";
