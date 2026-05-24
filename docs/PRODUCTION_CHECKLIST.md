@@ -2,6 +2,8 @@
 
 Use this before pointing a public domain at Snaptix (or any deployment of this codebase).
 
+**Manual QA:** See **[QA_RELEASE_CHECKLIST.md](QA_RELEASE_CHECKLIST.md)** for step-by-step test cases before release.
+
 ## Data and storage
 
 - Set **`UPLOAD_DIR`** to an **absolute path** on a **persistent volume** (e.g. Render Disk) so uploads and `{upload_id}_cleaned.parquet` survive redeploys. The default `./data/uploads` is ephemeral on many PaaS hosts.
