@@ -16,6 +16,12 @@ export interface ChatChartPayload {
   data?: { name: string; value: number }[];
 }
 
+function formatTooltipValue(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 function formatValue(value: number): string {
   if (Math.abs(value) >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`;
@@ -68,10 +74,7 @@ export function ChatMiniChart({ chart }: { chart: ChatChartPayload }) {
             axisLine={false}
           />
           <Tooltip
-            formatter={(v: number) => [
-              v.toLocaleString(undefined, { maximumFractionDigits: 2 }),
-              "",
-            ]}
+            formatter={(value) => [formatTooltipValue(value), ""]}
             labelFormatter={(label) => String(label)}
             contentStyle={{
               fontSize: 11,
