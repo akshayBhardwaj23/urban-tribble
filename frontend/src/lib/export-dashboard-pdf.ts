@@ -187,8 +187,8 @@ export async function exportDashboardToPdf(
   root: HTMLElement,
   options: { workspaceName: string }
 ): Promise<void> {
-  const details = document.getElementById(
-    "workspace-full-briefing"
+  const details = document.querySelector(
+    "#workspace-full-briefing details"
   ) as HTMLDetailsElement | null;
   const hadOpen = details?.open ?? false;
   if (details) {

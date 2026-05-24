@@ -208,7 +208,7 @@ export default function OverviewPage() {
       });
       toast.success("Workspace AI briefing finished", {
         description:
-          "Snapshot and Operator summary are updated below. Open Full briefing at the bottom for the full model output.",
+          "Snapshot, full briefing, and Operator summary are updated below.",
       });
       trackEvent("workspace_briefing_completed", { workspace_id: wid });
       requestAnimationFrame(() => {
@@ -757,6 +757,53 @@ export default function OverviewPage() {
         )}
       </section>
 
+      {/* Full model output — right after Snapshot so depth isn’t buried below charts */}
+      {analysisReady && overviewAnalysis.data?.result_json && (
+        <section id="workspace-full-briefing" className="space-y-3 scroll-mt-6">
+          <details open className="group rounded-lg border bg-card shadow-sm">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>Full AI briefing</span>
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  Complete model output
+                </span>
+              </div>
+              <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">
+                ▾
+              </span>
+            </summary>
+            <div className="px-5 pb-6 pt-0 border-t border-slate-200/60 dark:border-slate-800">
+              <p className="text-xs text-slate-500 pt-4 leading-relaxed max-w-3xl">
+                Insights, metrics, anomalies, and recommendations from your latest workspace
+                briefing. Verify important figures against your original sources.
+              </p>
+              <div className="pt-4 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg mb-4"
+                  onClick={() => runOverviewAnalysis.mutate()}
+                  disabled={briefingActionsDisabled}
+                  title={
+                    analysesAtLimit
+                      ? "Your plan's analysis allowance is used up for this period."
+                      : undefined
+                  }
+                >
+                  {runOverviewAnalysis.isPending
+                    ? "Running…"
+                    : "Re-run briefing"}
+                </Button>
+              </div>
+              <AnalysisPanel
+                result={overviewAnalysis.data!.result_json as AnalysisResult}
+                traceContext={workspaceAiTraceContext}
+              />
+            </div>
+          </details>
+        </section>
+      )}
+
       {/* 2. Operator summary — narrative from latest workspace briefing */}
       <section id="workspace-operator-summary" className="space-y-3">
         <SectionLabel>Operator summary</SectionLabel>
@@ -1024,45 +1071,6 @@ export default function OverviewPage() {
           </Card>
         </div>
       </section>
-
-      {/* Full analysis (optional depth) */}
-      {analysisReady && overviewAnalysis.data?.result_json && (
-        <details id="workspace-full-briefing" className="group rounded-lg border bg-card shadow-sm">
-          <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center justify-between">
-            <span>Full briefing</span>
-            <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">
-              ▾
-            </span>
-          </summary>
-          <div className="px-5 pb-6 pt-0 border-t border-slate-200/60 dark:border-slate-800">
-            <p className="text-xs text-slate-500 pt-4 leading-relaxed max-w-3xl">
-              Full model output—verify important figures against your original sources.
-            </p>
-            <div className="pt-4 flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-lg mb-4"
-                onClick={() => runOverviewAnalysis.mutate()}
-                disabled={briefingActionsDisabled}
-                title={
-                  analysesAtLimit
-                    ? "Your plan's analysis allowance is used up for this period."
-                    : undefined
-                }
-              >
-                {runOverviewAnalysis.isPending
-                  ? "Running…"
-                  : "Re-run briefing"}
-              </Button>
-            </div>
-            <AnalysisPanel
-              result={overviewAnalysis.data!.result_json as AnalysisResult}
-              traceContext={workspaceAiTraceContext}
-            />
-          </div>
-        </details>
-      )}
 
       </div>
 
