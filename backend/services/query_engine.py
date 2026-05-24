@@ -7,6 +7,14 @@ import pandas as pd
 from openai import OpenAI
 
 from config import settings
+from services.chat_intelligence import (
+    build_source_catalog,
+    catalog_with_revenue,
+    chart_revenue_by_source,
+    format_catalog_for_prompt,
+    friendly_source_name,
+    try_workspace_shortcut,
+)
 
 QUERY_SYSTEM_PROMPT = """You are a data analyst assistant. The user will ask a question about a pandas DataFrame.
 
@@ -30,44 +38,40 @@ Rules:
 - Never modify the DataFrame in place
 - Keep code simple and readable"""
 
-MULTI_DF_SYSTEM_PROMPT = """You are a data analyst assistant. The user has MULTIPLE pandas DataFrames from different business datasets.
+MULTI_DF_SYSTEM_PROMPT = """You are a business data analyst. The user has MULTIPLE pandas DataFrames (imported business sources) in one workspace.
 
-You will receive:
-1. Schema info for each DataFrame (name, columns, types, sample rows)
-2. The user's question (and possibly earlier Q&A in the same thread)
+You will receive a SOURCE CATALOG (human labels, grain, primary revenue column per source) plus schema samples.
 
-Follow-up questions may refer to prior answers. Use the conversation when the latest question is ambiguous.
+Each DataFrame is `df_<slug>` (see catalog). Dict `datasets` maps slug → DataFrame.
 
-Each DataFrame is available as a variable named by its sanitized dataset name (e.g. `df_sales`, `df_expenses`).
-A dict called `datasets` maps dataset names to their DataFrames: datasets["sales"] = df_sales, etc.
-
-Respond with ONLY a JSON object:
+Respond with ONLY JSON:
 {
-  "pandas_code": "pandas code to answer the question. Use the named df variables (df_sales, df_expenses, etc.) or the datasets dict. The result must be assigned to a variable called `result`.",
-  "explanation_hint": "brief note about what the code does"
+  "pandas_code": "pandas code; final answer in `result`",
+  "explanation_hint": "brief note"
 }
 
-Rules:
-- Always assign the final answer to `result`
-- You can merge/join DataFrames if they share common columns
-- For aggregations, make result a simple value or small DataFrame
-- Use .to_dict() or .tolist() if the result is a Series/DataFrame so it's JSON-serializable
-- Never use exec(), eval(), import, open(), or any system calls
-- Never modify any DataFrame in place
-- Keep code simple and readable
-- If the question is about a specific dataset, use only that DataFrame
-- If the question spans multiple datasets, merge or concatenate as needed"""
+Critical rules:
+- Use ONE source for company-wide revenue unless comparing sources side-by-side
+- NEVER sum revenue columns across different sources (they double-count: orders + monthly rollups + ads + SKUs)
+- For "total revenue across workspace", return a per-source breakdown dict/Series, not one summed number
+- Prefer the catalog's canonical revenue source when a single number is needed
+- Join/merge only when keys clearly match (same channel names, dates, IDs)
+- Use friendly source labels from the catalog in result keys, not raw file names
+- result: number, string, list, dict, or small DataFrame/Series (≤50 rows)
+- No import/exec/eval/open; do not modify DataFrames in place"""
 
-EXPLAIN_SYSTEM_PROMPT = """You are a friendly business data analyst. Given a user's question about their data and the computed result, provide a clear, concise natural language answer.
+EXPLAIN_SYSTEM_PROMPT = """You are a friendly business analyst (CEO/COO audience). Turn computed results into a clear answer.
 
-If there is prior conversation, keep answers consistent with what was already said when relevant.
+Use prior conversation when relevant. Be specific with numbers and INR formatting.
 
-Be specific with numbers. If the result contains data suitable for a chart, also return chart configuration.
+Never mention files, uploads, schemas, or pandas. Use plain business language and friendly source names from the catalog.
 
-Respond with a JSON object:
+If results are per-source revenue, say clearly they must NOT be added together unless grains are independent.
+
+Respond with JSON:
 {
-  "answer": "your natural language answer",
-  "chart_data": null or {"type": "bar|line|pie", "data": [...], "title": "chart title"}
+  "answer": "natural language answer",
+  "chart_data": null or {"type": "bar|line|pie", "data": [{"name": "...", "value": n}], "title": "..."}
 }"""
 
 FORBIDDEN_TOKENS = [
@@ -127,14 +131,23 @@ class QueryEngine:
 
         dataframes: list of (name, df, schema, description) tuples
         """
-        if not self.client:
-            return self._fallback_multi(question, dataframes)
+        shortcut = try_workspace_shortcut(question, dataframes)
+        if shortcut:
+            return shortcut
 
-        schema_info = self._build_multi_schema_info(dataframes)
+        catalog = build_source_catalog(dataframes)
+        catalog_text = format_catalog_for_prompt(catalog)
+
+        if not self.client:
+            return self._fallback_multi(question, dataframes, catalog)
+
+        schema_info = self._build_multi_schema_info(dataframes, catalog_text)
         history = history or []
         pandas_code = self._generate_multi_query(question, schema_info, history)
         result = self._execute_multi_query(pandas_code, dataframes)
-        answer = self._explain_result(question, result, pandas_code, history)
+        answer = self._explain_result(
+            question, result, pandas_code, history, workspace_context=catalog_text
+        )
         return answer
 
     # ── single-df helpers ──
@@ -224,13 +237,16 @@ class QueryEngine:
     # ── multi-df helpers ──
 
     def _build_multi_schema_info(
-        self, dataframes: List[Tuple[str, pd.DataFrame, Dict[str, Any], Optional[str]]]
+        self,
+        dataframes: List[Tuple[str, pd.DataFrame, Dict[str, Any], Optional[str]]],
+        catalog_text: str = "",
     ) -> str:
-        parts = [f"You have {len(dataframes)} datasets available:\n"]
+        parts = [catalog_text, "", f"Detailed schemas ({len(dataframes)} sources):\n"]
 
         for name, df, schema, desc in dataframes:
             var_name = f"df_{_sanitize_name(name)}"
-            section = [f"--- DataFrame: {var_name} (from \"{name}\") ---"]
+            label = friendly_source_name(name)
+            section = [f"--- {label} (`{var_name}`) ---"]
             if desc:
                 section.append(f"Description: {desc}")
             section.append(f"Columns: {list(df.columns)}")
@@ -338,6 +354,8 @@ class QueryEngine:
         result: Any,
         code: str,
         history: Optional[List[Tuple[str, str]]] = None,
+        *,
+        workspace_context: str = "",
     ) -> Dict[str, Any]:
         history = history or []
         hist_use = self._explain_history_pairs(history)
@@ -347,13 +365,13 @@ class QueryEngine:
         for uq, aa in hist_use:
             messages.append({"role": "user", "content": uq})
             messages.append({"role": "assistant", "content": aa})
+        ctx = f"{workspace_context}\n\n" if workspace_context else ""
         messages.append(
             {
                 "role": "user",
                 "content": (
-                    f"Question: {question}\n"
-                    f"Pandas code used: {code}\n"
-                    f"Result: {json.dumps(result, default=str)}"
+                    f"{ctx}Question: {question}\n"
+                    f"Computed result: {json.dumps(result, default=str)}"
                 ),
             }
         )
@@ -434,29 +452,45 @@ class QueryEngine:
         self,
         question: str,
         dataframes: List[Tuple[str, pd.DataFrame, Dict[str, Any], Optional[str]]],
+        catalog: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Basic multi-dataset fallback when no OpenAI key is available."""
-        q = question.lower()
-        answer_parts = []
+        shortcut = try_workspace_shortcut(question, dataframes)
+        if shortcut:
+            return shortcut
 
-        for name, df, schema, _desc in dataframes:
-            revenue_cols = schema.get("revenue_columns", [])
-            if any(w in q for w in ["total", "sum", "overall"]):
-                for col in revenue_cols:
-                    if col in df.columns:
-                        total = df[col].sum()
-                        answer_parts.append(f"[{name}] Total {col}: {total:,.2f}")
-            elif any(w in q for w in ["how many", "count", "rows"]):
-                answer_parts.append(f"[{name}] {len(df)} rows, {len(df.columns)} columns")
+        q = question.lower()
+        answer_parts: List[str] = []
+        chart: Optional[Dict[str, Any]] = None
+        cat = catalog or build_source_catalog(dataframes)
+
+        if any(w in q for w in ["how many", "count", "rows", "source", "file"]):
+            answer_parts.append(
+                f"{len(cat)} sources in this workspace "
+                f"({sum(c['rows'] for c in cat):,} rows total)."
+            )
+            for c in cat:
+                answer_parts.append(f"• {c['label']}: {c['rows']:,} rows ({c['grain']})")
+
+        elif any(w in q for w in ["total", "sum", "overall", "revenue", "sales"]):
+            answer_parts.append(
+                "Revenue by source (do not add these totals — overlapping grains):"
+            )
+            with_rev = catalog_with_revenue(cat)
+            for c in with_rev:
+                answer_parts.append(
+                    f"• {c['label']}: INR {float(c['revenue_total']):,.2f} ({c['revenue_column']})"
+                )
+            chart = chart_revenue_by_source(with_rev)
 
         if not answer_parts:
-            summary = ", ".join(f"{name} ({len(df)} rows)" for name, df, _, _ in dataframes)
+            labels = ", ".join(c["label"] for c in cat[:6])
             answer_parts.append(
-                f"Available datasets: {summary}. "
-                f"Configure OPENAI_API_KEY for intelligent cross-dataset Q&A."
+                f"Sources available: {labels}. "
+                "Configure OPENAI_API_KEY for richer Q&A."
             )
 
         return {
             "answer": "\n".join(answer_parts),
-            "chart_data": None,
+            "chart_data": chart,
         }

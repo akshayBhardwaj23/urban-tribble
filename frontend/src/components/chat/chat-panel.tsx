@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { PRODUCT_NAME } from "@/lib/brand";
+import {
+  ChatMiniChart,
+  type ChatChartPayload,
+} from "@/components/chat/chat-mini-chart";
 
 const ALL_DATASETS_VALUE = "__all__";
 
@@ -13,6 +17,7 @@ interface Message {
   id?: string;
   role: "user" | "assistant";
   content: string;
+  chartData?: ChatChartPayload | null;
 }
 
 interface Dataset {
@@ -72,9 +77,13 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
         ? api.chatWorkspace(question)
         : api.chat(selectedDataset, question),
     onSuccess: (data) => {
+      const chart =
+        data.chart_data && typeof data.chart_data === "object"
+          ? (data.chart_data as ChatChartPayload)
+          : null;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.answer },
+        { role: "assistant", content: data.answer, chartData: chart },
       ]);
     },
     onError: (err: Error) => {
@@ -130,9 +139,9 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
 
   const suggestions = isAllDatasets
     ? [
-        "Summarize how my sources look together",
-        "What is total revenue across all sources?",
-        "Compare sales and expenses",
+        "How many sources are in this workspace?",
+        "Show revenue by source (do not add totals together)",
+        "Which source should I use for company revenue?",
       ]
     : [
         "What was total revenue?",
@@ -246,7 +255,7 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
                   </p>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {isAllDatasets
-                      ? "Answers use every source in this workspace."
+                      ? "Workspace mode compares sources without double-counting revenue."
                       : "Answers use this source only."}
                   </p>
                   <div className="space-y-1.5 pt-1">
@@ -277,6 +286,9 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
                       }`}
                     >
                       {msg.content}
+                      {msg.role === "assistant" && msg.chartData ? (
+                        <ChatMiniChart chart={msg.chartData} />
+                      ) : null}
                     </div>
                   </div>
                 ))}
