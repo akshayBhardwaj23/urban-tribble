@@ -35,7 +35,7 @@ export function seriesLabelsFromComparison(pc: PeriodComparison | null | undefin
   };
 }
 
-function addDaysYmd(ymd: string, delta: number): string {
+export function addDaysYmd(ymd: string, delta: number): string {
   const d = parseISODateLocal(ymd);
   if (!d) return ymd;
   d.setDate(d.getDate() + delta);
@@ -61,4 +61,13 @@ export function eachDayInRange(start: string, end: string): string[] {
 
 export function dayInRange(day: string, start: string, end: string): boolean {
   return day >= start && day <= end;
+}
+
+/** Whole-day offset from start → day (inclusive), e.g. same start gives 0. */
+export function daysBetweenYmd(start: string, day: string): number {
+  const a = parseISODateLocal(start);
+  const b = parseISODateLocal(day);
+  if (!a || !b) return 0;
+  const ms = b.getTime() - a.getTime();
+  return Math.max(0, Math.round(ms / 86_400_000));
 }

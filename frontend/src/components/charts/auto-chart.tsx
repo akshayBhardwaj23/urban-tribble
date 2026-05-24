@@ -25,7 +25,9 @@ import {
 } from "@/lib/chart-dates";
 import {
   type PeriodComparison,
+  addDaysYmd,
   dayInRange,
+  daysBetweenYmd,
   eachDayInRange,
   seriesLabelsFromComparison,
 } from "@/lib/chart-period-comparison";
@@ -179,7 +181,11 @@ function sanitizeLineAreaData(
   return downsampleOrdered(smoothed, MAX_LINE_AREA_POINTS);
 }
 
-/** Calendar current vs immediately prior window (same logic as What changed). */
+/**
+ * Current vs prior window on the **same x-axis** (current period dates).
+ * Each point's previous value is the aligned day in the prior window
+ * (e.g. May 15 vs Apr 15 when both periods are 30 days).
+ */
 function buildCalendarDualPeriod(
   points: { x: string; y: number }[],
   pc: PeriodComparison
@@ -190,17 +196,18 @@ function buildCalendarDualPeriod(
   for (const p of mergePointsByDay(points)) {
     byDay.set(p.x, (byDay.get(p.x) ?? 0) + p.y);
   }
-  const days = [
-    ...new Set([
-      ...eachDayInRange(prev.start, prev.end),
-      ...eachDayInRange(cur.start, cur.end),
-    ]),
-  ].sort();
-  return days.map((day) => ({
-    x: day,
-    y: dayInRange(day, cur.start, cur.end) ? (byDay.get(day) ?? 0) : null,
-    yPrev: dayInRange(day, prev.start, prev.end) ? (byDay.get(day) ?? 0) : null,
-  }));
+  const curDays = eachDayInRange(cur.start, cur.end);
+  return curDays.map((day) => {
+    const offset = daysBetweenYmd(cur.start, day);
+    const prevDay = addDaysYmd(prev.start, offset);
+    const prevAligned =
+      dayInRange(prevDay, prev.start, prev.end) && prevDay <= prev.end;
+    return {
+      x: day,
+      y: byDay.get(day) ?? 0,
+      yPrev: prevAligned ? (byDay.get(prevDay) ?? 0) : null,
+    };
+  });
 }
 
 function hasPreviousSeries(data: DualPoint[]): boolean {
