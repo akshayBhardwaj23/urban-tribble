@@ -72,6 +72,15 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  /* Pie / donut — spaced hues (not lightness-only ramps) */
+  --pie-1: oklch(0.52 0.14 55);
+  --pie-2: oklch(0.48 0.13 25);
+  --pie-3: oklch(0.5 0.11 145);
+  --pie-4: oklch(0.46 0.12 305);
+  --pie-5: oklch(0.54 0.1 95);
+  --pie-6: oklch(0.44 0.1 40);
+  --pie-7: oklch(0.5 0.11 210);
+  --pie-8: oklch(0.56 0.1 330);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -111,6 +120,15 @@
   --chart-3: oklch(0.68 0.06 72);
   --chart-4: oklch(0.62 0.028 68);
   --chart-5: oklch(0.54 0.02 65);
+  /* Pie / donut — warm-leaning but hue-separated for legibility */
+  --pie-1: oklch(0.78 0.1 74);
+  --pie-2: oklch(0.7 0.12 35);
+  --pie-3: oklch(0.72 0.09 145);
+  --pie-4: oklch(0.66 0.11 300);
+  --pie-5: oklch(0.74 0.08 100);
+  --pie-6: oklch(0.62 0.12 25);
+  --pie-7: oklch(0.65 0.09 210);
+  --pie-8: oklch(0.76 0.08 55);
   --sidebar: oklch(0.2 0.013 70);
   --sidebar-foreground: oklch(0.93 0.014 88);
   --sidebar-primary: oklch(0.78 0.076 74);

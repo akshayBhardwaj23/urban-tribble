@@ -871,8 +871,8 @@ function renderChart(
             outerRadius="82%"
             paddingAngle={2}
             cornerRadius={10}
-            stroke="rgba(255,255,255,0.92)"
-            strokeWidth={3}
+            stroke="var(--card)"
+            strokeWidth={2.5}
             label={false}
             labelLine={false}
             isAnimationActive={false}
