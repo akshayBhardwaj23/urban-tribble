@@ -84,6 +84,27 @@ export function ContactSection({
   );
 }
 
+/** Compact help line in the authenticated app sidebar */
+export function DashboardSidebarContact() {
+  const mailHref = contactMailto("Snaptix - help");
+  return (
+    <div className="mb-3 rounded-md border border-border/80 bg-muted/30 px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Need help?
+      </p>
+      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+        Questions, billing, or team rollout - email us at{" "}
+        <a
+          href={mailHref}
+          className="font-medium text-foreground underline underline-offset-2 break-all"
+        >
+          {CONTACT_EMAIL}
+        </a>
+      </p>
+    </div>
+  );
+}
+
 /** Inline footer link row */
 export function ContactFooterLinks({ className }: { className?: string }) {
   return (

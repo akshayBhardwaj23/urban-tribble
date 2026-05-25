@@ -9,6 +9,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
+import { DashboardSidebarContact } from "@/components/marketing/contact-section";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "◈" },
@@ -72,6 +73,8 @@ export default function DashboardLayout({
               );
             })}
           </nav>
+
+          <DashboardSidebarContact />
 
           <div className="shrink-0 border-t pt-3">
             <UserMenu />

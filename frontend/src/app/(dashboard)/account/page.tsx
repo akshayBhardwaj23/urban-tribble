@@ -9,6 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, setApiUserEmail } from "@/lib/api";
+import { CONTACT_EMAIL, contactMailto } from "@/lib/brand";
 import { useWorkspace } from "@/lib/workspace-context";
 import { maxWorkspacesForPlan } from "@/lib/workspace-plan-limits";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,13 @@ export default function AccountPage() {
           <Link href="/terms" className="text-foreground underline underline-offset-2">
             Terms
           </Link>
+          {" · "}
+          <a
+            href={contactMailto("Snaptix - support")}
+            className="text-foreground underline underline-offset-2"
+          >
+            {CONTACT_EMAIL}
+          </a>
         </p>
       </div>
 
