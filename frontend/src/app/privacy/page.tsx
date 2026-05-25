@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   CANONICAL_SITE_URL,
+  CONTACT_EMAIL,
   PRODUCT_NAME,
+  contactMailto,
 } from "@/lib/brand";
 
 export const metadata: Metadata = {
@@ -85,10 +87,13 @@ export default function PrivacyPage() {
             Contact
           </h2>
           <p>
-            For privacy requests, contact the team through the address shown on{" "}
-            <Link href="/" className="text-indigo-600 hover:underline dark:text-indigo-400">
-              {CANONICAL_SITE_URL}
-            </Link>
+            For privacy requests, email{" "}
+            <a
+              href={contactMailto("Privacy request")}
+              className="text-indigo-600 hover:underline dark:text-indigo-400"
+            >
+              {CONTACT_EMAIL}
+            </a>
             .
           </p>
         </section>

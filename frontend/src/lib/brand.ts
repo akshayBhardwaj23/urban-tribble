@@ -39,3 +39,12 @@ export const SEO_KEYWORDS = [
 
 /** Login screen subtitle (same intent as POSITIONING_LINE; split if you want login-only copy) */
 export const LOGIN_HEADLINE = POSITIONING_LINE;
+
+/** Public support and sales inbox */
+export const CONTACT_EMAIL = "hello@snaptix.ai";
+
+export function contactMailto(subject?: string): string {
+  const base = `mailto:${CONTACT_EMAIL}`;
+  if (!subject?.trim()) return base;
+  return `${base}?subject=${encodeURIComponent(subject.trim())}`;
+}

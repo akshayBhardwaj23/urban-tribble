@@ -8,6 +8,7 @@ import {
   LandingHeaderAuth,
   LandingHeroPrimaryCta,
 } from "@/components/landing-auth";
+import { ContactFooterLinks, ContactSection } from "@/components/marketing/contact-section";
 import {
   CANONICAL_SITE_URL,
   META_DESCRIPTION,
@@ -440,9 +441,7 @@ function Footer() {
           <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
             Pricing
           </Link>
-          <Link href="#cta" className="hover:text-slate-900 dark:hover:text-white">
-            Contact
-          </Link>
+          <ContactFooterLinks />
           <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white">
             Privacy
           </Link>
@@ -594,7 +593,7 @@ export default function LandingPage() {
               <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
                 Pricing
               </Link>
-              <Link href="#cta" className="hover:text-slate-900 dark:hover:text-white">
+              <Link href="#contact" className="hover:text-slate-900 dark:hover:text-white">
                 Contact
               </Link>
               <div className="flex items-center gap-4">
@@ -762,6 +761,8 @@ export default function LandingPage() {
       </section>
 
       <PricingTeaser />
+
+      <ContactSection />
 
       <section id="cta" className="mx-auto max-w-6xl px-6 py-24">
         <div className="fade-up rounded-[34px] border border-slate-200 bg-gradient-to-r from-[#eaf3ff] via-[#ede7ff] to-[#f9e7ef] px-8 py-14 text-center shadow-sm dark:border-white/[0.1] dark:from-[oklch(0.2_0.025_280_/_0.5)] dark:via-card/90 dark:to-[oklch(0.22_0.03_55_/_0.45)] md:px-14">
