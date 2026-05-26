@@ -42,6 +42,13 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 
 - Public inbox: **`hello@snaptix.ai`** (wired in `frontend/src/lib/brand.ts` as `CONTACT_EMAIL`).
 
+## Demo video
+
+- Upload to **YouTube (unlisted)** or Vimeo, then set on the frontend:
+  - `NEXT_PUBLIC_DEMO_VIDEO_URL=https://www.youtube.com/watch?v=YOUR_ID`
+- Embeds on **`/help`** (public) and **`/help`** inside the signed-in app (sidebar **Help**).
+- Redeploy frontend after changing the env var.
+
 ## Legal
 
 - Replace placeholder **Privacy** and **Terms** pages with counsel-approved documents for your entity and regions (`/privacy`, `/terms`).

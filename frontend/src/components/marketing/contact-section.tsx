@@ -93,7 +93,13 @@ export function DashboardSidebarContact() {
         Need help?
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-        Questions, billing, or team rollout - email us at{" "}
+        <Link
+          href="/help"
+          className="font-medium text-foreground underline underline-offset-2"
+        >
+          Demo & help
+        </Link>
+        {" · "}
         <a
           href={mailHref}
           className="font-medium text-foreground underline underline-offset-2 break-all"
@@ -109,6 +115,9 @@ export function DashboardSidebarContact() {
 export function ContactFooterLinks({ className }: { className?: string }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-x-5 gap-y-2", className)}>
+      <Link href="/help" className="hover:text-slate-900 dark:hover:text-white">
+        Help & demo
+      </Link>
       <Link
         href="/#contact"
         className="hover:text-slate-900 dark:hover:text-white"

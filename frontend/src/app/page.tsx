@@ -593,6 +593,9 @@ export default function LandingPage() {
               <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
                 Pricing
               </Link>
+              <Link href="/help" className="hover:text-slate-900 dark:hover:text-white">
+                Help
+              </Link>
               <Link href="#contact" className="hover:text-slate-900 dark:hover:text-white">
                 Contact
               </Link>
