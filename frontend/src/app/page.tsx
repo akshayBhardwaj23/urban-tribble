@@ -634,7 +634,7 @@ export default function LandingPage() {
               </p>
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
                 <LandingHeroPrimaryCta />
-                <Link href="#solutions">
+                <Link href="/help">
                   <Button variant="outline" size="lg" className="h-11 rounded-xl border-slate-300 bg-white px-7 text-slate-700 hover:bg-slate-50 dark:border-border dark:bg-secondary/40 dark:text-foreground dark:hover:bg-accent">
                     Book a Demo
                   </Button>
