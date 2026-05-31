@@ -20,8 +20,6 @@ import { cn } from "@/lib/utils";
 
 const serif = DM_Serif_Display({ subsets: ["latin"], weight: "400" });
 
-const trustLogos = ["ATLAS", "LINEAR", "NOTIONX", "OGILVY", "SONY", "TESCO"];
-
 function Tag({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <span
@@ -674,16 +672,6 @@ export default function LandingPage() {
           </section>
         </div>
       </div>
-
-      <section className="border-y border-slate-200/70 bg-white/60 py-7 dark:border-white/[0.08] dark:bg-secondary/35">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-6">
-          {trustLogos.map((logo) => (
-            <span key={logo} className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-              {logo}
-            </span>
-          ))}
-        </div>
-      </section>
 
       <section id="solutions" className="mx-auto max-w-6xl px-6 py-28">
         <div className="grid gap-12 lg:grid-cols-[1fr_1fr] lg:items-center">
