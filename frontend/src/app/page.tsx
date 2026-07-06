@@ -620,19 +620,25 @@ export default function LandingPage() {
                 </Tag>
               </div>
               <h1
-                className={`${serif.className} fade-up mt-7 flex flex-col items-center gap-y-2 text-slate-900 dark:text-white sm:gap-y-2.5`}
+                className={`${serif.className} fade-up isolate mt-7 flex flex-col items-center gap-y-2 text-slate-900 dark:text-white sm:gap-y-2.5`}
               >
-                <span className="block text-5xl leading-[1.05] md:text-6xl">Turn</span>
-                <span className="block text-6xl leading-[1.05] md:text-7xl lg:ml-10">
+                <span className="block text-[2.75rem] leading-[1.1] sm:text-5xl md:text-6xl">
+                  Turn
+                </span>
+                <span className="block whitespace-nowrap text-[2.85rem] leading-[1.1] sm:text-6xl md:text-7xl lg:ml-10">
                   Business Data
                 </span>
-                <span className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-5xl leading-[1.05] md:text-6xl lg:gap-x-4 lg:text-7xl">
-                  <span className="relative z-10">into</span>
-                  <span className="relative z-0 inline-flex rounded-md bg-[#fff6d8] px-2.5 py-1 text-slate-900 dark:bg-primary/25 dark:text-primary dark:ring-1 dark:ring-primary/35">
-                    Confident
+                <span className="block text-[2.85rem] leading-[1.15] sm:text-6xl md:text-7xl">
+                  <span className="inline-flex items-baseline justify-center whitespace-nowrap">
+                    <span className="relative z-20">into</span>
+                    <span className="relative z-0 -ml-px inline-flex rounded-md bg-[#fff6d8] px-2.5 py-1 text-slate-900 dark:bg-primary/25 dark:text-primary dark:ring-1 dark:ring-primary/35">
+                      Confident
+                    </span>
                   </span>
                 </span>
-                <span className="block text-6xl leading-[1.05] md:text-7xl lg:ml-16">Decisions</span>
+                <span className="block text-[2.85rem] leading-[1.1] sm:text-6xl md:text-7xl lg:ml-16">
+                  Decisions
+                </span>
               </h1>
               <p className="fade-up mx-auto mt-7 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
                 <span className="font-semibold text-slate-800 dark:text-slate-100">{PRODUCT_TAGLINE}</span>{" "}
