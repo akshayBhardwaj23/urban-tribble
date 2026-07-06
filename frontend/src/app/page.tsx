@@ -612,23 +612,27 @@ export default function LandingPage() {
             </div>
           </header>
 
-          <section className="relative pt-14 md:pt-16">
-            <div className="mx-auto max-w-5xl text-center lg:max-w-4xl">
+          <section className="relative z-20 pt-14 md:pt-16">
+            <div className="relative z-20 mx-auto max-w-5xl text-center lg:max-w-4xl">
               <div className="fade-up flex justify-center px-2">
                 <Tag className="max-w-xl text-balance normal-case text-[11px] font-semibold leading-snug tracking-[0.04em] text-slate-600 dark:text-slate-300 md:max-w-2xl md:px-4 md:py-2">
                   {POSITIONING_LINE}
                 </Tag>
               </div>
-              <h1 className={`${serif.className} fade-up mt-7 text-slate-900 dark:text-white`}>
-                <span className="block text-5xl leading-[0.9] md:text-6xl">Turn</span>
-                <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-10">Business Data</span>
-                <span className="mt-1 block text-5xl leading-[0.9] md:text-6xl lg:-ml-8">into</span>
-                <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-6">
-                  <span className="rounded-md bg-[#fff6d8] px-2 py-0.5 text-slate-900 dark:bg-primary/25 dark:text-primary dark:ring-1 dark:ring-primary/35 dark:shadow-[0_0_32px_-8px_oklch(0.62_0.09_74_/_0.45)]">
+              <h1
+                className={`${serif.className} fade-up mt-7 flex flex-col items-center gap-y-2 text-slate-900 dark:text-white sm:gap-y-2.5`}
+              >
+                <span className="block text-5xl leading-[1.05] md:text-6xl">Turn</span>
+                <span className="block text-6xl leading-[1.05] md:text-7xl lg:ml-10">
+                  Business Data
+                </span>
+                <span className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-5xl leading-[1.05] md:text-6xl lg:gap-x-4 lg:text-7xl">
+                  <span className="relative z-10">into</span>
+                  <span className="relative z-0 inline-flex rounded-md bg-[#fff6d8] px-2.5 py-1 text-slate-900 dark:bg-primary/25 dark:text-primary dark:ring-1 dark:ring-primary/35">
                     Confident
                   </span>
                 </span>
-                <span className="mt-1 block text-6xl leading-[0.88] md:text-7xl lg:ml-16">Decisions</span>
+                <span className="block text-6xl leading-[1.05] md:text-7xl lg:ml-16">Decisions</span>
               </h1>
               <p className="fade-up mx-auto mt-7 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
                 <span className="font-semibold text-slate-800 dark:text-slate-100">{PRODUCT_TAGLINE}</span>{" "}
