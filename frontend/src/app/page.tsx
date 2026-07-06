@@ -616,17 +616,17 @@ export default function LandingPage() {
             <div className="relative z-20 mx-auto max-w-5xl text-center lg:max-w-4xl">
               <div className="fade-up flex justify-center px-2">
                 <Tag className="max-w-xl text-balance normal-case text-[11px] font-semibold leading-snug tracking-[0.04em] text-slate-600 dark:text-slate-300 md:max-w-2xl md:px-4 md:py-2">
-                  {POSITIONING_LINE}
+                  The intelligence layer for revenue, cost, and operational tradeoffs
                 </Tag>
               </div>
               <h1
                 className={`${serif.className} fade-up isolate mt-7 flex flex-col items-center gap-y-2 text-slate-900 dark:text-white sm:gap-y-2.5`}
               >
                 <span className="block text-[2.75rem] leading-[1.1] sm:text-5xl md:text-6xl">
-                  Turn
+                  Transform
                 </span>
-                <span className="block whitespace-nowrap text-[2.85rem] leading-[1.1] sm:text-6xl md:text-7xl lg:ml-10">
-                  Business Data
+                <span className="block max-w-[16rem] text-balance text-[2.35rem] leading-[1.1] sm:max-w-none sm:whitespace-nowrap sm:text-6xl md:text-7xl lg:ml-10">
+                  Spreadsheet Chaos
                 </span>
                 <span className="block text-[2.85rem] leading-[1.15] sm:text-6xl md:text-7xl">
                   <span className="inline-flex items-baseline justify-center whitespace-nowrap">
@@ -636,15 +636,18 @@ export default function LandingPage() {
                     </span>
                   </span>
                 </span>
-                <span className="block text-[2.85rem] leading-[1.1] sm:text-6xl md:text-7xl lg:ml-16">
-                  Decisions
+                <span className="block max-w-[18rem] text-balance text-[2.35rem] leading-[1.1] sm:max-w-none sm:text-6xl md:text-7xl lg:ml-16">
+                  Strategic Decisions
                 </span>
               </h1>
               <p className="fade-up mx-auto mt-7 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-800 dark:text-slate-100">{PRODUCT_TAGLINE}</span>{" "}
-                Upload Excel and CSV, auto-build dashboards and AI summaries, compare periods,
-                forecast trends, and ask questions in plain language-one workspace you use as your
-                numbers evolve, not a one-off file drop.
+                <span className="font-semibold text-slate-800 dark:text-slate-100">
+                  {PRODUCT_NAME} is your AI business analyst — built for operators who need
+                  clarity, not another dashboard.
+                </span>{" "}
+                Upload Excel and CSV, auto-generate executive briefings, compare what changed
+                across periods, forecast what comes next, and interrogate your numbers in plain
+                English — one living workspace that compounds context every week.
               </p>
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
                 <LandingHeroPrimaryCta />
@@ -655,8 +658,8 @@ export default function LandingPage() {
                 </Link>
               </div>
               <p className="fade-up mx-auto mt-5 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                Free to start, no card on the free tier. Add workspaces as you grow-your data stays
-                in your account.
+                Free to start — no credit card required. Your data stays in your workspace as you
+                scale.
               </p>
             </div>
 
