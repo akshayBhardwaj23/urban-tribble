@@ -546,6 +546,103 @@ function HeroPricingGlance() {
   );
 }
 
+function WhoItsForSection() {
+  const segments = [
+    {
+      title: "Small business",
+      subtitle: "Sharper insight without hiring an analyst",
+      body: "You run on spreadsheets today — Snaptix turns them into dashboards, weekly briefings, and plain-English answers so you see what moved and what to fix, without a data team or BI project.",
+      advantages: [
+        "Upload once, get a clear read on revenue and costs",
+        "Weekly priorities you can act on immediately",
+        "Free tier to try a full business review",
+      ],
+      tone: "from-emerald-50 to-white border-emerald-100 dark:from-emerald-950/30 dark:to-card/50 dark:border-emerald-900/40",
+      accent: "text-emerald-700 dark:text-emerald-300",
+      bullet: "bg-emerald-500",
+    },
+    {
+      title: "Mid-size business",
+      subtitle: "Grow faster with limited resources",
+      body: "You're scaling but finance and ops are stretched. Snaptix unifies files across teams, tracks what changed each period, and keeps everyone aligned — so you expand with clarity, not more reporting overhead.",
+      advantages: [
+        "Workspaces per team, client, or region",
+        "What-changed insights across uploads",
+        "Monthly reviews without rebuilding decks",
+      ],
+      tone: "from-violet-50 to-white border-violet-100 dark:from-violet-950/30 dark:to-card/50 dark:border-violet-900/40",
+      accent: "text-violet-700 dark:text-violet-300",
+      bullet: "bg-violet-500",
+    },
+    {
+      title: "Enterprise teams",
+      subtitle: "Spreadsheet speed where BI is too slow",
+      body: "Large orgs already have Power BI or warehouses — but operators still live in Excel. Snaptix is the fast layer on top: upload, brief, and query in minutes for teams who need answers now, not another dashboard backlog.",
+      advantages: [
+        "No warehouse migration to get started",
+        "Grounded AI on real numbers, not slides",
+        "Complements existing BI for agile teams",
+      ],
+      tone: "from-sky-50 to-white border-sky-100 dark:from-sky-950/30 dark:to-card/50 dark:border-sky-900/40",
+      accent: "text-sky-700 dark:text-sky-300",
+      bullet: "bg-sky-500",
+    },
+  ] as const;
+
+  return (
+    <section id="who-its-for" className="scroll-mt-24 border-y border-slate-200/80 bg-[#f7f5f2] py-20 dark:border-white/10 dark:bg-secondary/20 md:py-28">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center fade-up">
+          <Tag>Who it&apos;s for</Tag>
+          <h2
+            className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
+          >
+            Built for every stage of growth
+          </h2>
+          <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+            Whether you&apos;re a founder with one spreadsheet or an enterprise team drowning in
+            exports — {PRODUCT_NAME} meets you where your data already lives.
+          </p>
+        </div>
+
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
+          {segments.map((segment, i) => (
+            <article
+              key={segment.title}
+              className={cn(
+                "fade-up flex flex-col rounded-[28px] border bg-gradient-to-b p-7 shadow-sm dark:shadow-none md:p-8",
+                segment.tone,
+              )}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <p className={cn("text-[10px] font-semibold uppercase tracking-[0.2em]", segment.accent)}>
+                {segment.title}
+              </p>
+              <h3 className="mt-3 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
+                {segment.subtitle}
+              </h3>
+              <p className="mt-3 flex-1 text-[14px] leading-7 text-slate-600 dark:text-slate-300">
+                {segment.body}
+              </p>
+              <ul className="mt-5 space-y-2.5 border-t border-slate-200/80 pt-5 dark:border-white/10">
+                {segment.advantages.map((item) => (
+                  <li
+                    key={item}
+                    className="flex gap-2 text-[13px] leading-6 text-slate-700 dark:text-slate-300"
+                  >
+                    <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", segment.bullet)} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PricingTeaser() {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-24 px-6 py-16 md:py-20">
@@ -778,6 +875,8 @@ export default function LandingPage() {
       </div>
 
       <PricingTeaser />
+
+      <WhoItsForSection />
 
       <section id="solutions" className="mx-auto max-w-6xl px-6 py-28">
         <div className="grid gap-12 lg:grid-cols-[1fr_1fr] lg:items-center">
