@@ -34,7 +34,7 @@ const FOUNDERS = [
     name: "Rishav Bhardwaj",
     role: "Co-Founder",
     image: "/founders/rishav-bhardwaj.png",
-    bio: "Driving product vision and go-to-market strategy — turning spreadsheet chaos into a category-defining decision platform for operators worldwide.",
+    bio: "Driving product vision and go-to-market at Snaptix — turning spreadsheet chaos into a category-defining decision platform for operators worldwide.",
   },
   {
     name: "Akshay Bhardwaj",
@@ -46,7 +46,7 @@ const FOUNDERS = [
     name: "Mayank Tyagi",
     role: "Co-Founder",
     image: "/founders/mayank-tyagi.png",
-    bio: "Shaping customer experience and growth — ensuring every upload becomes clarity, every briefing becomes action, and every team moves faster with confidence.",
+    bio: "Shaping customer experience and growth at Snaptix — ensuring every upload becomes clarity, every briefing becomes action, and every team moves faster with confidence.",
   },
 ] as const;
 
@@ -90,7 +90,7 @@ function FounderCard({
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/10 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/90">
-              {founder.role}
+              Co-Founder · {PRODUCT_NAME}
             </p>
             <h3
               className={cn(
@@ -131,7 +131,7 @@ export default function AboutPage() {
         <div className="pointer-events-none absolute -right-24 top-20 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-500/10" />
         <div className="relative mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 md:py-24">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
-            About {PRODUCT_NAME}
+            About Snaptix
           </p>
           <h1
             className={cn(
@@ -139,11 +139,12 @@ export default function AboutPage() {
               "fade-up mt-5 text-balance text-4xl leading-[1.05] text-slate-900 dark:text-white md:text-5xl lg:text-6xl",
             )}
           >
-            Reimagining how businesses turn data into decisions
+            The team building {PRODUCT_NAME}
           </h1>
           <p className="fade-up mx-auto mt-6 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
-            {PRODUCT_NAME} is building the intelligence layer for spreadsheet-first
-            organizations — {POSITIONING_LINE.toLowerCase()}. {PRODUCT_TAGLINE}
+            <strong className="font-semibold text-slate-900 dark:text-white">{PRODUCT_NAME}</strong>{" "}
+            is the AI business analyst for spreadsheet-first teams — {POSITIONING_LINE.toLowerCase()}.{" "}
+            {PRODUCT_TAGLINE}
           </p>
         </div>
       </section>
@@ -165,7 +166,7 @@ export default function AboutPage() {
           </p>
           <p className="mt-5 max-w-3xl text-[15px] leading-7 text-slate-600 dark:text-slate-300">
             Most companies do not fail from lack of information — they fail from delayed
-            clarity. Snaptix transforms familiar spreadsheets into automated dashboards,
+            clarity. {PRODUCT_NAME} transforms familiar spreadsheets into automated dashboards,
             executive briefings, and grounded answers so operators, finance teams, and
             founders can move with strategic velocity every single week.
           </p>
@@ -185,12 +186,12 @@ export default function AboutPage() {
                 "mt-4 text-3xl text-slate-900 dark:text-white md:text-4xl",
               )}
             >
-              Meet the founders
+              Meet the founders of {PRODUCT_NAME}
             </h2>
             <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-              Three builders united by one conviction: the future of business intelligence
-              is AI-native, spreadsheet-native, and built for the people who actually run
-              the numbers.
+              Three builders behind {PRODUCT_NAME} — united by one conviction: the future
+              of business intelligence is AI-native, spreadsheet-native, and built for the
+              people who actually run the numbers.
             </p>
           </div>
 
@@ -234,10 +235,10 @@ export default function AboutPage() {
               "text-3xl text-slate-900 dark:text-white md:text-4xl",
             )}
           >
-            Join us on the journey
+            Join the {PRODUCT_NAME} journey
           </h2>
           <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-            We are just getting started — and we are building for the teams who believe
+            We are just getting started — building {PRODUCT_NAME} for teams who believe
             better decisions should not wait for better tools.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">

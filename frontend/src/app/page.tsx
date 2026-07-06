@@ -440,7 +440,7 @@ function Footer() {
             Pricing
           </Link>
           <Link href="/about" className="hover:text-slate-900 dark:hover:text-white">
-            About
+            About us
           </Link>
           <ContactFooterLinks />
           <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white">
@@ -593,6 +593,9 @@ export default function LandingPage() {
               </Link>
               <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
                 Pricing
+              </Link>
+              <Link href="/about" className="hover:text-slate-900 dark:hover:text-white">
+                About us
               </Link>
               <Link href="/help" className="hover:text-slate-900 dark:hover:text-white">
                 Help
