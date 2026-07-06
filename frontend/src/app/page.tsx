@@ -439,6 +439,9 @@ function Footer() {
           <Link href="/pricing" className="hover:text-slate-900 dark:hover:text-white">
             Pricing
           </Link>
+          <Link href="/about" className="hover:text-slate-900 dark:hover:text-white">
+            About
+          </Link>
           <ContactFooterLinks />
           <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white">
             Privacy

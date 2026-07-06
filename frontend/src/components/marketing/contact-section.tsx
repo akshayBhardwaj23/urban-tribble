@@ -115,6 +115,9 @@ export function DashboardSidebarContact() {
 export function ContactFooterLinks({ className }: { className?: string }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-x-5 gap-y-2", className)}>
+      <Link href="/about" className="hover:text-slate-900 dark:hover:text-white">
+        About
+      </Link>
       <Link href="/help" className="hover:text-slate-900 dark:hover:text-white">
         Help & demo
       </Link>
