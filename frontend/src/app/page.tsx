@@ -615,39 +615,50 @@ export default function LandingPage() {
           <section className="relative z-20 pt-14 md:pt-16">
             <div className="relative z-20 mx-auto max-w-5xl text-center lg:max-w-4xl">
               <div className="fade-up flex justify-center px-2">
-                <Tag className="max-w-xl text-balance normal-case text-[11px] font-semibold leading-snug tracking-[0.04em] text-slate-600 dark:text-slate-300 md:max-w-2xl md:px-4 md:py-2">
-                  The intelligence layer for revenue, cost, and operational tradeoffs
+                <Tag className="max-w-xl text-balance border-slate-200/90 bg-white/90 px-4 py-2 normal-case text-[11px] font-semibold leading-snug tracking-[0.06em] text-slate-600 shadow-sm backdrop-blur-sm dark:border-white/15 dark:bg-white/5 dark:text-slate-300 md:max-w-2xl md:px-5">
+                  {POSITIONING_LINE}
                 </Tag>
               </div>
               <h1
-                className={`${serif.className} fade-up isolate mt-7 flex flex-col items-center gap-y-2 text-slate-900 dark:text-white sm:gap-y-2.5`}
+                className={`${serif.className} fade-up isolate mt-8 flex flex-col items-center gap-y-1.5 text-slate-900 dark:text-white sm:gap-y-2 md:gap-y-2.5`}
               >
-                <span className="block text-[2.75rem] leading-[1.1] sm:text-5xl md:text-6xl">
-                  Transform
+                <span
+                  className="block text-[2.75rem] leading-[1.08] tracking-[-0.02em] text-slate-800/90 sm:text-5xl md:text-6xl dark:text-white/90"
+                  style={{ animationDelay: "40ms" }}
+                >
+                  Turn
                 </span>
-                <span className="block max-w-[16rem] text-balance text-[2.35rem] leading-[1.1] sm:max-w-none sm:whitespace-nowrap sm:text-6xl md:text-7xl lg:ml-10">
-                  Spreadsheet Chaos
+                <span
+                  className="block whitespace-nowrap text-[2.85rem] leading-[1.06] tracking-[-0.03em] sm:text-6xl md:text-7xl lg:ml-10 lg:-translate-y-0.5"
+                  style={{ animationDelay: "90ms" }}
+                >
+                  Business Data
                 </span>
-                <span className="block text-[2.85rem] leading-[1.15] sm:text-6xl md:text-7xl">
+                <span
+                  className="block text-[2.85rem] leading-[1.12] tracking-[-0.03em] sm:text-6xl md:text-7xl lg:ml-6"
+                  style={{ animationDelay: "140ms" }}
+                >
                   <span className="inline-flex items-baseline justify-center whitespace-nowrap">
-                    <span className="relative z-20">into</span>
-                    <span className="relative z-0 -ml-px inline-flex rounded-md bg-[#fff6d8] px-2.5 py-1 text-slate-900 dark:bg-primary/25 dark:text-primary dark:ring-1 dark:ring-primary/35">
+                    <span className="relative z-20 text-slate-800/95 dark:text-white/95">into</span>
+                    <span className="relative z-0 -ml-px inline-flex rounded-lg bg-gradient-to-br from-[#fff9e6] via-[#fff6d8] to-[#ffefc4] px-3 py-1.5 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_18px_-6px_rgba(245,158,11,0.45)] ring-1 ring-amber-200/70 dark:from-primary/30 dark:via-primary/25 dark:to-primary/20 dark:text-primary dark:ring-primary/35">
                       Confident
                     </span>
                   </span>
                 </span>
-                <span className="block max-w-[18rem] text-balance text-[2.35rem] leading-[1.1] sm:max-w-none sm:text-6xl md:text-7xl lg:ml-16">
-                  Strategic Decisions
+                <span
+                  className="block text-[2.85rem] leading-[1.06] tracking-[-0.035em] sm:text-6xl md:text-7xl lg:ml-16 lg:translate-y-0.5"
+                  style={{ animationDelay: "190ms" }}
+                >
+                  Decisions
                 </span>
               </h1>
-              <p className="fade-up mx-auto mt-7 max-w-2xl text-[17px] leading-8 text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-800 dark:text-slate-100">
-                  {PRODUCT_NAME} is your AI business analyst — built for operators who need
-                  clarity, not another dashboard.
+              <p className="fade-up mx-auto mt-8 max-w-2xl text-[17px] leading-[1.75] text-slate-600 dark:text-slate-300">
+                <span className="font-semibold tracking-[-0.01em] text-slate-800 dark:text-slate-100">
+                  {PRODUCT_TAGLINE}
                 </span>{" "}
-                Upload Excel and CSV, auto-generate executive briefings, compare what changed
-                across periods, forecast what comes next, and interrogate your numbers in plain
-                English — one living workspace that compounds context every week.
+                Upload Excel and CSV, auto-build dashboards and AI summaries, compare periods,
+                forecast trends, and ask questions in plain language-one workspace you use as your
+                numbers evolve, not a one-off file drop.
               </p>
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
                 <LandingHeroPrimaryCta />
@@ -657,9 +668,9 @@ export default function LandingPage() {
                   </Button>
                 </Link>
               </div>
-              <p className="fade-up mx-auto mt-5 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                Free to start — no credit card required. Your data stays in your workspace as you
-                scale.
+              <p className="fade-up mx-auto mt-5 max-w-md text-xs leading-relaxed tracking-wide text-slate-500 dark:text-slate-400">
+                Free to start, no card on the free tier. Add workspaces as you grow-your data stays
+                in your account.
               </p>
             </div>
 
