@@ -507,7 +507,7 @@ function FeatureGrid() {
 
 function HeroPricingGlance() {
   return (
-    <div className="fade-up mx-auto mt-8 w-full max-w-xl">
+    <div id="pricing" className="fade-up mx-auto mt-8 w-full max-w-xl scroll-mt-24">
       <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
         Plans at a glance
       </p>
@@ -637,63 +637,6 @@ function WhoItsForSection() {
               </ul>
             </article>
           ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PricingTeaser() {
-  return (
-    <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-24 px-6 py-16 md:py-20">
-      <div className="fade-up rounded-[34px] border border-slate-200 bg-white/90 px-6 py-10 shadow-sm dark:border-white/[0.1] dark:bg-card/75 sm:px-8 md:px-12 md:py-12">
-        <div className="text-center">
-          <Tag>Pricing</Tag>
-          <h2
-            className={`${serif.className} mt-4 text-balance text-3xl text-slate-900 dark:text-white md:text-4xl`}
-          >
-            Free, Starter, and Pro
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-            Start free. Upgrade when you want continuous monitoring and deeper insights.
-          </p>
-        </div>
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          {PRICING_PLANS.map((plan) => (
-            <Link
-              key={plan.id}
-              href="/pricing"
-              className={cn(
-                "rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-md",
-                plan.featured
-                  ? "border-violet-200 bg-gradient-to-b from-[#f3f0ff] to-white ring-1 ring-violet-200/80 dark:border-violet-800/50 dark:from-violet-950/40 dark:to-card/50"
-                  : "border-slate-200/90 bg-slate-50/50 dark:border-white/10 dark:bg-white/[0.03]",
-              )}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{plan.name}</p>
-                {plan.badge ? (
-                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-200">
-                    {plan.badge}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-                {plan.priceDisplay}
-                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                  {plan.period}
-                </span>
-              </p>
-              <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{plan.subtitle}</p>
-            </Link>
-          ))}
-        </div>
-        <div className="mt-8 text-center">
-          <Link href="/pricing">
-            <Button size="lg" className="h-11 rounded-xl px-8 font-semibold">
-              View full pricing
-            </Button>
-          </Link>
         </div>
       </div>
     </section>
@@ -873,8 +816,6 @@ export default function LandingPage() {
           </section>
         </div>
       </div>
-
-      <PricingTeaser />
 
       <WhoItsForSection />
 
