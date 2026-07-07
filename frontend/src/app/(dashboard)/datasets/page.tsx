@@ -15,16 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 
-interface DatasetListItem {
-  id: string;
-  name: string;
-  upload_id: string;
-  row_count: number | null;
-  column_count: number | null;
-  status: string;
-  user_description: string | null;
-  created_at: string;
-}
+type DatasetListItem = Awaited<ReturnType<typeof api.listDatasets>>[number];
 
 export default function DatasetsPage() {
   const queryClient = useQueryClient();
