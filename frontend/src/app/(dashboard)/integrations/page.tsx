@@ -53,7 +53,8 @@ function ConnectFields({
   if (fields.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        OAuth sign-in for this provider is coming soon. Use an export link mode where available.
+        Sign-in with your account is coming soon. This provider will connect via OAuth — no
+        manual export links needed.
       </p>
     );
   }
@@ -117,6 +118,7 @@ export default function IntegrationsPage() {
 
   const openConnect = (provider: IntegrationProvider) => {
     const firstAvailable =
+      provider.connection_modes.find((m) => m.available !== false && m.recommended) ??
       provider.connection_modes.find((m) => m.available !== false) ??
       provider.connection_modes[0];
     setConnectProvider(provider);
@@ -371,9 +373,13 @@ export default function IntegrationsPage() {
                       onClick={() => setConnectionMode(mode.id)}
                     >
                       {mode.label}
+                      {mode.recommended && mode.available !== false ? " ★" : ""}
                     </Button>
                   ))}
                 </div>
+                {activeMode?.help ? (
+                  <p className="text-xs text-muted-foreground">{activeMode.help}</p>
+                ) : null}
               </div>
 
               <ConnectFields
@@ -419,7 +425,11 @@ export default function IntegrationsPage() {
                 </Button>
                 <Button
                   onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending || !integrationName.trim()}
+                  disabled={
+                    createMutation.isPending ||
+                    !integrationName.trim() ||
+                    activeMode?.available === false
+                  }
                 >
                   {createMutation.isPending ? "Connecting…" : "Connect & sync"}
                 </Button>

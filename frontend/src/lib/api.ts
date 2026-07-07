@@ -859,6 +859,8 @@ export type IntegrationConnectionMode = {
   label: string;
   fields: IntegrationConnectionField[];
   available?: boolean;
+  recommended?: boolean;
+  help?: string;
 };
 
 export type IntegrationProvider = {
