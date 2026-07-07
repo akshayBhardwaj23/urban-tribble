@@ -547,43 +547,49 @@ function HeroPricingGlance() {
 }
 
 function WhoItsForSection() {
-  const segments = [
+  const personas = [
     {
-      title: "Small business",
-      subtitle: "Sharper insight without hiring an analyst",
-      body: "You run on spreadsheets today — Snaptix turns them into dashboards, weekly briefings, and plain-English answers so you see what moved and what to fix, without a data team or BI project.",
+      title: "Small business owner",
+      subtitle: "Easy enough for non-technical teams",
+      body: "If you live in Excel but do not have an analyst, Snaptix gives you a simple path from upload to answer. You do not need SQL, Power BI, or dashboard setup to understand what changed.",
+      workflow: "Upload spreadsheet → get briefing → act on priorities",
       advantages: [
-        "Upload once, get a clear read on revenue and costs",
-        "Weekly priorities you can act on immediately",
-        "Free tier to try a full business review",
+        "Plain-English summaries instead of technical setup",
+        "See revenue, cost, and trends without learning BI tools",
+        "Useful from your first file, even if you are working solo",
       ],
-      tone: "from-emerald-50 to-white border-emerald-100 dark:from-emerald-950/30 dark:to-card/50 dark:border-emerald-900/40",
+      tone:
+        "from-emerald-50 to-white border-emerald-100 dark:from-emerald-950/30 dark:to-card/50 dark:border-emerald-900/40",
       accent: "text-emerald-700 dark:text-emerald-300",
       bullet: "bg-emerald-500",
     },
     {
-      title: "Mid-size business",
-      subtitle: "Grow faster with limited resources",
-      body: "You're scaling but finance and ops are stretched. Snaptix unifies files across teams, tracks what changed each period, and keeps everyone aligned — so you expand with clarity, not more reporting overhead.",
+      title: "Operations or finance lead",
+      subtitle: "Faster reviews with fewer reporting loops",
+      body: "For lean teams managing recurring reports, Snaptix cuts the time spent cleaning, comparing, and rewriting the same updates every month. It keeps decision-making moving without adding more overhead.",
+      workflow: "Combine files → compare periods → share one clear view",
       advantages: [
-        "Workspaces per team, client, or region",
-        "What-changed insights across uploads",
-        "Monthly reviews without rebuilding decks",
+        "Track what changed across weeks and months",
+        "Align teams around one workspace instead of scattered exports",
+        "Prepare reviews faster without rebuilding decks every cycle",
       ],
-      tone: "from-violet-50 to-white border-violet-100 dark:from-violet-950/30 dark:to-card/50 dark:border-violet-900/40",
+      tone:
+        "from-violet-50 to-white border-violet-100 dark:from-violet-950/30 dark:to-card/50 dark:border-violet-900/40",
       accent: "text-violet-700 dark:text-violet-300",
       bullet: "bg-violet-500",
     },
     {
-      title: "Enterprise teams",
-      subtitle: "Spreadsheet speed where BI is too slow",
-      body: "Large orgs already have Power BI or warehouses — but operators still live in Excel. Snaptix is the fast layer on top: upload, brief, and query in minutes for teams who need answers now, not another dashboard backlog.",
+      title: "Dedicated analyst",
+      subtitle: "A fast layer that complements your BI stack",
+      body: "Snaptix is not trying to replace every warehouse or dashboard tool. It helps analysts move faster on spreadsheet-heavy work, answer ad hoc questions quickly, and share stakeholder-friendly summaries without starting from scratch.",
+      workflow: "Upload/export data → validate insights → brief stakeholders",
       advantages: [
-        "No warehouse migration to get started",
-        "Grounded AI on real numbers, not slides",
-        "Complements existing BI for agile teams",
+        "Complements Excel, Power BI, and Tableau for fast-turn analysis",
+        "Turns raw exports into cleaner summaries for decision-makers",
+        "Useful when teams need answers now, not another dashboard backlog",
       ],
-      tone: "from-sky-50 to-white border-sky-100 dark:from-sky-950/30 dark:to-card/50 dark:border-sky-900/40",
+      tone:
+        "from-sky-50 to-white border-sky-100 dark:from-sky-950/30 dark:to-card/50 dark:border-sky-900/40",
       accent: "text-sky-700 dark:text-sky-300",
       bullet: "bg-sky-500",
     },
@@ -597,40 +603,59 @@ function WhoItsForSection() {
           <h2
             className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
           >
-            Built for every stage of growth
+            Built for the people actually using it
           </h2>
           <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-            Whether you&apos;re a founder with one spreadsheet or an enterprise team drowning in
-            exports — {PRODUCT_NAME} meets you where your data already lives.
+            Whether you&apos;re a founder, operator, finance lead, or analyst, {PRODUCT_NAME}
+            fits the spreadsheet workflows you already have and turns them into faster, clearer
+            decisions.
           </p>
         </div>
 
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+            Non-technical owner
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+            Ops or finance lead
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+            Analyst with existing BI tools
+          </span>
+        </div>
+
         <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {segments.map((segment, i) => (
+          {personas.map((persona, i) => (
             <article
-              key={segment.title}
+              key={persona.title}
               className={cn(
-                "fade-up flex flex-col rounded-[28px] border bg-gradient-to-b p-7 shadow-sm dark:shadow-none md:p-8",
-                segment.tone,
+                "fade-up group flex flex-col rounded-[28px] border bg-gradient-to-b p-7 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_44px_-26px_rgba(15,23,42,0.35)] dark:shadow-none md:p-8",
+                persona.tone,
               )}
               style={{ animationDelay: `${i * 80}ms` }}
             >
-              <p className={cn("text-[10px] font-semibold uppercase tracking-[0.2em]", segment.accent)}>
-                {segment.title}
+              <p className={cn("text-[10px] font-semibold uppercase tracking-[0.2em]", persona.accent)}>
+                {persona.title}
               </p>
               <h3 className="mt-3 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                {segment.subtitle}
+                {persona.subtitle}
               </h3>
               <p className="mt-3 flex-1 text-[14px] leading-7 text-slate-600 dark:text-slate-300">
-                {segment.body}
+                {persona.body}
               </p>
+              <div className="mt-5 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Typical flow
+                </p>
+                <p className="mt-1 font-medium">{persona.workflow}</p>
+              </div>
               <ul className="mt-5 space-y-2.5 border-t border-slate-200/80 pt-5 dark:border-white/10">
-                {segment.advantages.map((item) => (
+                {persona.advantages.map((item) => (
                   <li
                     key={item}
                     className="flex gap-2 text-[13px] leading-6 text-slate-700 dark:text-slate-300"
                   >
-                    <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", segment.bullet)} />
+                    <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", persona.bullet)} />
                     {item}
                   </li>
                 ))}
