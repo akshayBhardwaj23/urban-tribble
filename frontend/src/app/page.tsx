@@ -598,7 +598,76 @@ function WhoItsForSection() {
   return (
     <section id="who-its-for" className="scroll-mt-24 border-y border-slate-200/80 bg-[#f7f5f2] py-20 dark:border-white/10 dark:bg-secondary/20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center fade-up">
+        <div className="relative overflow-hidden rounded-[36px] border border-slate-200/80 bg-white/60 px-6 py-10 shadow-sm dark:border-white/10 dark:bg-white/[0.03] md:px-10 md:py-12">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-10 top-6 hidden opacity-60 lg:block dark:opacity-30"
+          >
+            <svg
+              width="360"
+              height="300"
+              viewBox="0 0 360 300"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="text-slate-300 dark:text-slate-600"
+            >
+              <path
+                d="M252 82C252 104.091 234.091 122 212 122C189.909 122 172 104.091 172 82C172 59.9086 189.909 42 212 42C234.091 42 252 59.9086 252 82Z"
+                stroke="currentColor"
+                strokeWidth="2.2"
+              />
+              <path
+                d="M146 262C150 220 168 183 196 165C207 158 219 154 233 154C254 154 272 164 287 182C302 200 310 225 313 262"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M116 168H241C248.732 168 255 174.268 255 182V257H130C122.268 257 116 250.732 116 243V168Z"
+                stroke="currentColor"
+                strokeWidth="2.2"
+              />
+              <path
+                d="M102 257H271"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M168 194C183 201 194 203 205 203C219 203 228 199 238 192"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M150 121C165 133 178 139 196 143"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M251 124C264 133 274 143 282 158"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M80 66C112 47 136 41 170 42"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeDasharray="5 7"
+              />
+              <path
+                d="M292 54C309 61 324 71 337 87"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeDasharray="5 7"
+              />
+            </svg>
+          </div>
+          <div className="mx-auto max-w-2xl text-center fade-up">
           <Tag>Who it&apos;s for</Tag>
           <h2
             className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
@@ -624,7 +693,7 @@ function WhoItsForSection() {
           </span>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="relative z-10 mt-12 grid gap-6 md:grid-cols-3">
           {personas.map((persona, i) => (
             <article
               key={persona.title}
@@ -662,6 +731,7 @@ function WhoItsForSection() {
               </ul>
             </article>
           ))}
+        </div>
         </div>
       </div>
     </section>
