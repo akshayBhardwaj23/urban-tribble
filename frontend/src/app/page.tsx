@@ -601,85 +601,89 @@ function WhoItsForSection() {
         <div className="relative overflow-hidden rounded-[36px] border border-slate-200/80 bg-white/60 px-6 py-10 shadow-sm dark:border-white/10 dark:bg-white/[0.03] md:px-10 md:py-12">
           <div
             aria-hidden
-            className="pointer-events-none absolute -right-10 top-6 hidden opacity-60 lg:block dark:opacity-30"
+            className="pointer-events-none absolute inset-y-0 right-0 w-[42%] bg-gradient-to-l from-slate-100/85 via-slate-50/45 to-transparent dark:from-white/[0.03] dark:via-white/[0.02]"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute right-[-1.5rem] top-3 hidden md:block opacity-90 dark:opacity-45"
           >
             <svg
-              width="360"
-              height="300"
-              viewBox="0 0 360 300"
+              width="460"
+              height="360"
+              viewBox="0 0 460 360"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              className="text-slate-300 dark:text-slate-600"
+              className="h-[240px] w-[300px] md:h-[280px] md:w-[360px] lg:h-[320px] lg:w-[420px] text-slate-400 dark:text-slate-500"
             >
               <path
-                d="M252 82C252 104.091 234.091 122 212 122C189.909 122 172 104.091 172 82C172 59.9086 189.909 42 212 42C234.091 42 252 59.9086 252 82Z"
+                d="M320 92C320 123.48 294.48 149 263 149C231.52 149 206 123.48 206 92C206 60.5198 231.52 35 263 35C294.48 35 320 60.5198 320 92Z"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
               />
               <path
-                d="M146 262C150 220 168 183 196 165C207 158 219 154 233 154C254 154 272 164 287 182C302 200 310 225 313 262"
+                d="M170 322C176 259 202 206 242 180C258 169 276 164 295 164C325 164 351 179 372 205C393 231 404 268 409 322"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
                 strokeLinecap="round"
               />
               <path
-                d="M116 168H241C248.732 168 255 174.268 255 182V257H130C122.268 257 116 250.732 116 243V168Z"
+                d="M128 182H306C317.046 182 326 190.954 326 202V300H148C136.954 300 128 291.046 128 280V182Z"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
               />
               <path
-                d="M102 257H271"
+                d="M108 300H348"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
                 strokeLinecap="round"
               />
               <path
-                d="M168 194C183 201 194 203 205 203C219 203 228 199 238 192"
+                d="M201 220C223 230 238 233 255 233C275 233 289 227 303 217"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
                 strokeLinecap="round"
               />
               <path
-                d="M150 121C165 133 178 139 196 143"
+                d="M174 147C196 164 215 173 241 179"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
                 strokeLinecap="round"
               />
               <path
-                d="M251 124C264 133 274 143 282 158"
+                d="M319 151C338 164 352 179 363 200"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.8"
                 strokeLinecap="round"
               />
               <path
-                d="M80 66C112 47 136 41 170 42"
+                d="M72 71C118 44 153 36 202 37"
                 stroke="currentColor"
-                strokeWidth="1.6"
+                strokeWidth="2"
                 strokeLinecap="round"
-                strokeDasharray="5 7"
+                strokeDasharray="6 8"
               />
               <path
-                d="M292 54C309 61 324 71 337 87"
+                d="M372 52C397 62 418 76 435 99"
                 stroke="currentColor"
-                strokeWidth="1.6"
+                strokeWidth="2"
                 strokeLinecap="round"
-                strokeDasharray="5 7"
+                strokeDasharray="6 8"
               />
             </svg>
           </div>
-          <div className="mx-auto max-w-2xl text-center fade-up">
-          <Tag>Who it&apos;s for</Tag>
-          <h2
-            className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
-          >
-            Built for the people actually using it
-          </h2>
-          <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-            Whether you&apos;re a founder, operator, finance lead, or analyst, {PRODUCT_NAME}
-            fits the spreadsheet workflows you already have and turns them into faster, clearer
-            decisions.
-          </p>
-        </div>
+          <div className="relative z-10 mx-auto max-w-2xl text-center fade-up">
+            <Tag>Who it&apos;s for</Tag>
+            <h2
+              className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
+            >
+              Built for the people actually using it
+            </h2>
+            <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+              Whether you&apos;re a founder, operator, finance lead, or analyst, {PRODUCT_NAME}
+              fits the spreadsheet workflows you already have and turns them into faster, clearer
+              decisions.
+            </p>
+          </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
