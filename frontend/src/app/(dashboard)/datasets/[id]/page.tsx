@@ -189,6 +189,19 @@ export default function DatasetPage() {
     },
   });
 
+  const integrationRefreshMutation = useMutation({
+    mutationFn: (integrationId: string) => api.refreshIntegration(integrationId),
+    onSuccess: () => {
+      toast.success("Data refreshed from integration");
+      queryClient.invalidateQueries({ queryKey: ["dataset", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-preview", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-data", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["analysis", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const handleAppendFile = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -329,9 +342,33 @@ export default function DatasetPage() {
             {summary?.rows ? `${summary.rows} rows` : ""}{" "}
             {summary?.columns ? `· ${summary.columns} columns` : ""} · Imported{" "}
             {new Date(data.created_at).toLocaleDateString()}
+            {data.integration ? (
+              <>
+                {" "}
+                ·{" "}
+                <Link href="/integrations" className="text-primary hover:underline">
+                  {data.integration.name}
+                </Link>{" "}
+                (syncs every {data.integration.refresh_interval_hours}h)
+              </>
+            ) : null}
+            {data.dashboard_plan_locked ? " · Stable dashboard" : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {data.integration ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                integrationRefreshMutation.isPending ||
+                data.integration.status === "syncing"
+              }
+              onClick={() => integrationRefreshMutation.mutate(data.integration!.id)}
+            >
+              {integrationRefreshMutation.isPending ? "Refreshing…" : "Refresh data"}
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"

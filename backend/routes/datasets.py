@@ -13,6 +13,7 @@ from deps import require_active_workspace
 from models.models import (
     Analysis,
     ChatMessage,
+    DataSourceIntegration,
     Dataset,
     DatasetRelation,
     Upload,
@@ -25,6 +26,7 @@ from services.workspace_query import (
     get_dataset_upload_in_workspace,
 )
 from services.ingestion_classifier import ALLOWED_CLASSIFICATION_IDS, CLASSIFICATIONS
+from services.dashboard_stability import parse_metadata_json, should_rebuild_dashboard_plan
 from services.column_detector import ColumnDetector
 from services.dashboard_planner import DashboardPlanner
 from services.data_cleaner import DataCleaner
@@ -62,6 +64,15 @@ def list_datasets(
 ):
     _, workspace_id = ws
     datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
+    integration_ids = [ds.integration_id for ds, _ in datasets if ds.integration_id]
+    integrations_by_id: dict[str, DataSourceIntegration] = {}
+    if integration_ids:
+        for row in (
+            db.query(DataSourceIntegration)
+            .filter(DataSourceIntegration.id.in_(integration_ids))
+            .all()
+        ):
+            integrations_by_id[row.id] = row
     return [
         {
             "id": ds.id,
@@ -73,6 +84,21 @@ def list_datasets(
             "user_description": up.user_description,
             "business_classification": ds.business_classification,
             "created_at": ds.created_at.isoformat(),
+            "integration_id": ds.integration_id,
+            "dashboard_plan_locked": bool(ds.dashboard_plan_locked),
+            "integration": (
+                {
+                    "id": integ.id,
+                    "provider": integ.provider,
+                    "name": integ.name,
+                    "status": integ.status.value,
+                    "refresh_interval_hours": integ.refresh_interval_hours,
+                    "last_sync_at": integ.last_sync_at.isoformat() if integ.last_sync_at else None,
+                    "next_sync_at": integ.next_sync_at.isoformat() if integ.next_sync_at else None,
+                }
+                if ds.integration_id and (integ := integrations_by_id.get(ds.integration_id))
+                else None
+            ),
         }
         for ds, up in datasets
     ]
@@ -90,6 +116,28 @@ def get_dataset(
         raise HTTPException(404, "Dataset not found")
     dataset, _upload = row
 
+    integration_payload = None
+    if dataset.integration_id:
+        integ = (
+            db.query(DataSourceIntegration)
+            .filter(
+                DataSourceIntegration.id == dataset.integration_id,
+                DataSourceIntegration.workspace_id == workspace_id,
+            )
+            .first()
+        )
+        if integ:
+            integration_payload = {
+                "id": integ.id,
+                "provider": integ.provider,
+                "name": integ.name,
+                "status": integ.status.value,
+                "refresh_interval_hours": integ.refresh_interval_hours,
+                "last_sync_at": integ.last_sync_at.isoformat() if integ.last_sync_at else None,
+                "next_sync_at": integ.next_sync_at.isoformat() if integ.next_sync_at else None,
+                "auto_analyze": bool(integ.auto_analyze),
+            }
+
     return {
         "id": dataset.id,
         "upload_id": dataset.upload_id,
@@ -99,6 +147,9 @@ def get_dataset(
         "cleaned_report": json.loads(dataset.cleaned_report_json) if dataset.cleaned_report_json else None,
         "business_classification": dataset.business_classification,
         "created_at": dataset.created_at.isoformat(),
+        "integration_id": dataset.integration_id,
+        "dashboard_plan_locked": bool(dataset.dashboard_plan_locked),
+        "integration": integration_payload,
     }
 
 
@@ -326,13 +377,23 @@ async def append_to_dataset(
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
     df_combined, clean_report = data_cleaner.clean(df_combined)
     metadata = column_detector.detect(df_combined)
+    metadata["all_columns"] = [str(c) for c in df_combined.columns]
     stats = column_detector.summary(df_combined, metadata)
-    plan = dashboard_planner.build_plan(
-        df_combined,
-        metadata,
-        stats,
-        user_description=upload.user_description,
+    old_metadata = parse_metadata_json(dataset.schema_json)
+    rebuild_plan = should_rebuild_dashboard_plan(
+        dashboard_plan_locked=bool(dataset.dashboard_plan_locked),
+        old_metadata=old_metadata,
+        new_metadata=metadata,
+        existing_plan_json=dataset.dashboard_plan_json,
     )
+    if rebuild_plan:
+        plan = dashboard_planner.build_plan(
+            df_combined,
+            metadata,
+            stats,
+            user_description=upload.user_description,
+        )
+        dataset.dashboard_plan_json = json.dumps(plan)
 
     df_combined.to_parquet(str(parquet_path), index=False)
 
@@ -342,7 +403,6 @@ async def append_to_dataset(
     dataset.schema_json = json.dumps(metadata)
     dataset.data_summary = json.dumps(stats)
     dataset.cleaned_report_json = json.dumps(clean_report)
-    dataset.dashboard_plan_json = json.dumps(plan)
 
     db.commit()
     db.refresh(dataset)

@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     FORECAST_ENGINE: str = "prophet"
     FORECAST_PROPHET_MIN_POINTS: int = 24
     FORECAST_PROPHET_MAX_HISTORY_ROWS: int = 4000
+    # Integrations: default refresh cadence and background scheduler
+    INTEGRATION_DEFAULT_REFRESH_HOURS: int = 24
+    INTEGRATION_MIN_REFRESH_HOURS: int = 1
+    INTEGRATION_MAX_REFRESH_HOURS: int = 168
+    INTEGRATION_SCHEDULER_ENABLED: bool = True
+    INTEGRATION_SCHEDULER_INTERVAL_SECONDS: int = 60
+    # Optional secret for external cron hitting POST /api/integrations/run-scheduled
+    INTEGRATION_CRON_SECRET: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

@@ -15,6 +15,7 @@ const navItems = [
   { href: "/dashboard", label: "Overview", icon: "◈" },
   { href: "/history", label: "History", icon: "⏱" },
   { href: "/upload", label: "Import", icon: "↑" },
+  { href: "/integrations", label: "Integrations", icon: "⇄" },
   { href: "/datasets", label: "Sources", icon: "◫" },
   { href: "/help", label: "Help", icon: "?" },
   { href: "/pricing", label: "Plans", icon: "◇" },
@@ -56,9 +57,11 @@ export default function DashboardLayout({
                       : item.href === "/pricing"
                         ? pathname === "/pricing"
                         : item.href === "/account"
-                        ? pathname === "/account"
-                        : pathname === item.href ||
-                          pathname.startsWith(`${item.href}/`);
+                          ? pathname === "/account"
+                          : item.href === "/integrations"
+                            ? pathname === "/integrations"
+                            : pathname === item.href ||
+                              pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}

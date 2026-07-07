@@ -47,19 +47,27 @@ export default function DatasetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Sources</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Files in this workspace-used for the overview, source views, and briefings.
+            Files and live integrations in this workspace—used for overview, source views, and briefings.
           </p>
         </div>
-        <Link
-          href="/upload"
-          className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          Import data
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/integrations"
+            className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Connect integration
+          </Link>
+          <Link
+            href="/upload"
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Import data
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (
@@ -104,16 +112,21 @@ export default function DatasetsPage() {
                     {ds.row_count?.toLocaleString()} rows ·{" "}
                     {ds.column_count} columns ·{" "}
                     {new Date(ds.created_at).toLocaleDateString()}
+                    {ds.integration ? ` · Live · ${ds.integration.provider}` : ""}
                   </p>
                 </Link>
                 <div className="flex items-center gap-2 ml-4">
                   <Badge
                     variant={
-                      ds.status === "completed" ? "default" : "secondary"
+                      ds.integration
+                        ? "secondary"
+                        : ds.status === "completed"
+                          ? "default"
+                          : "secondary"
                     }
                     className="text-xs"
                   >
-                    {ds.status}
+                    {ds.integration ? "live" : ds.status}
                   </Badge>
                   <Button
                     variant="ghost"

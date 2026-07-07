@@ -2,11 +2,14 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import AsyncGenerator, Dict, List, Tuple
 
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
 from database import Base, SessionLocal, engine
+from models import models as _models  # noqa: F401 — register ORM tables for create_all
 from routes import (
     analysis,
     auth,
@@ -14,6 +17,7 @@ from routes import (
     chat,
     dashboards,
     datasets,
+    integrations,
     relations,
     summaries,
     uploads,
@@ -135,9 +139,19 @@ def _ensure_dataset_business_classification_column() -> None:
     if not insp.has_table("datasets"):
         return
     cols = {c["name"] for c in insp.get_columns("datasets")}
-    if "business_classification" not in cols:
-        with engine.begin() as conn:
+    with engine.begin() as conn:
+        if "business_classification" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN business_classification VARCHAR"))
+        if "dashboard_plan_locked" not in cols:
+            conn.execute(
+                text("ALTER TABLE datasets ADD COLUMN dashboard_plan_locked INTEGER DEFAULT 0")
+            )
+        if "integration_id" not in cols:
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN integration_id VARCHAR"))
+
+
+def _ensure_integration_tables() -> None:
+    Base.metadata.create_all(bind=engine, tables=[Base.metadata.tables["data_source_integrations"]])
 
 
 def _ensure_user_subscription_columns() -> None:
@@ -173,10 +187,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _ensure_dataset_dashboard_plan_column()
     _ensure_workspace_outlook_forecast_columns()
     _ensure_dataset_business_classification_column()
+    _ensure_integration_tables()
     _ensure_user_subscription_columns()
     _backfill_upload_workspace_ids()
     _backfill_workspace_timeline_snapshots()
+
+    scheduler_task = None
+    if settings.INTEGRATION_SCHEDULER_ENABLED:
+        from services.integration_scheduler import integration_scheduler_loop
+
+        scheduler_task = asyncio.create_task(
+            integration_scheduler_loop(settings.INTEGRATION_SCHEDULER_INTERVAL_SECONDS)
+        )
+
     yield
+
+    if scheduler_task is not None:
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Snaptix", version="0.1.0", lifespan=lifespan)
@@ -194,6 +225,7 @@ app.include_router(billing.router)
 app.include_router(workspaces.router)
 app.include_router(uploads.router)
 app.include_router(datasets.router)
+app.include_router(integrations.router)
 app.include_router(analysis.router)
 app.include_router(dashboards.router)
 app.include_router(chat.router)

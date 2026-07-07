@@ -358,6 +358,17 @@ export const api = {
         user_description: string | null;
         business_classification: string | null;
         created_at: string;
+        integration_id: string | null;
+        dashboard_plan_locked: boolean;
+        integration: {
+          id: string;
+          provider: string;
+          name: string;
+          status: string;
+          refresh_interval_hours: number;
+          last_sync_at: string | null;
+          next_sync_at: string | null;
+        } | null;
       }[]
     >("/api/datasets"),
 
@@ -377,6 +388,18 @@ export const api = {
       cleaned_report: { steps: string[]; original_shape: number[]; cleaned_shape: number[] } | null;
       business_classification: string | null;
       created_at: string;
+      integration_id: string | null;
+      dashboard_plan_locked: boolean;
+      integration: {
+        id: string;
+        provider: string;
+        name: string;
+        status: string;
+        refresh_interval_hours: number;
+        last_sync_at: string | null;
+        next_sync_at: string | null;
+        auto_analyze: boolean;
+      } | null;
     }>(`/api/datasets/${id}`),
 
   getDatasetPreview: (id: string, n?: number) =>
@@ -779,4 +802,119 @@ export const api = {
         body: JSON.stringify(body),
       }
     ),
+
+  getIntegrationCatalog: () =>
+    request<{
+      providers: IntegrationProvider[];
+    }>("/api/integrations/catalog"),
+
+  listIntegrations: () =>
+    request<IntegrationRecord[]>("/api/integrations"),
+
+  createIntegration: (body: CreateIntegrationBody) =>
+    request<IntegrationSyncResult>("/api/integrations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  patchIntegration: (id: string, body: PatchIntegrationBody) =>
+    request<IntegrationRecord>(`/api/integrations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  deleteIntegration: (id: string) =>
+    request<{ ok: boolean; id: string }>(`/api/integrations/${id}`, {
+      method: "DELETE",
+    }),
+
+  testIntegration: (id: string) =>
+    request<{
+      ok: boolean;
+      row_count: number;
+      column_count: number;
+      columns: string[];
+    }>(`/api/integrations/${id}/test`, { method: "POST" }),
+
+  refreshIntegration: (id: string) =>
+    request<IntegrationSyncResult>(`/api/integrations/${id}/refresh`, {
+      method: "POST",
+    }),
+};
+
+export type IntegrationConnectionField = {
+  key: string;
+  label: string;
+  type: "text" | "url" | "password" | "number" | "textarea";
+  required?: boolean;
+  placeholder?: string;
+  help?: string;
+  default?: number | string;
+};
+
+export type IntegrationConnectionMode = {
+  id: string;
+  label: string;
+  fields: IntegrationConnectionField[];
+  available?: boolean;
+};
+
+export type IntegrationProvider = {
+  id: string;
+  name: string;
+  tier: number;
+  category: string;
+  description: string;
+  connection_modes: IntegrationConnectionMode[];
+};
+
+export type IntegrationRecord = {
+  id: string;
+  workspace_id: string;
+  provider: string;
+  provider_name: string;
+  name: string;
+  connection_mode: string;
+  dataset_id: string | null;
+  refresh_interval_hours: number;
+  auto_analyze: boolean;
+  dashboard_plan_locked: boolean;
+  status: string;
+  last_sync_at: string | null;
+  next_sync_at: string | null;
+  last_sync_error: string | null;
+  created_at: string;
+  updated_at: string | null;
+  has_credentials: boolean;
+};
+
+export type CreateIntegrationBody = {
+  provider: string;
+  name: string;
+  connection_mode: string;
+  config: Record<string, string | number>;
+  refresh_interval_hours?: number;
+  auto_analyze?: boolean;
+  dashboard_plan_locked?: boolean;
+  run_initial_sync?: boolean;
+};
+
+export type PatchIntegrationBody = {
+  name?: string;
+  connection_mode?: string;
+  config?: Record<string, string | number>;
+  refresh_interval_hours?: number;
+  auto_analyze?: boolean;
+  dashboard_plan_locked?: boolean;
+};
+
+export type IntegrationSyncResult = {
+  integration: IntegrationRecord;
+  dataset_id?: string;
+  row_count?: number;
+  column_count?: number;
+  analysis_id?: string | null;
+  dashboard_plan_locked?: boolean;
 };

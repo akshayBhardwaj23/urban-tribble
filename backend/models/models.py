@@ -80,16 +80,49 @@ class Upload(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class IntegrationStatus(str, enum.Enum):
+    pending = "pending"
+    active = "active"
+    syncing = "syncing"
+    error = "error"
+    disconnected = "disconnected"
+
+
+class DataSourceIntegration(Base):
+    """User-connected external data source with scheduled refresh."""
+
+    __tablename__ = "data_source_integrations"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False, index=True)
+    provider = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    connection_mode = Column(String, nullable=False, default="export_url")
+    config_json = Column(Text, nullable=True)
+    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)
+    refresh_interval_hours = Column(Integer, nullable=False, default=24)
+    auto_analyze = Column(Integer, nullable=False, default=1)
+    dashboard_plan_locked = Column(Integer, nullable=False, default=1)
+    status = Column(Enum(IntegrationStatus), default=IntegrationStatus.pending, nullable=False)
+    last_sync_at = Column(DateTime, nullable=True)
+    next_sync_at = Column(DateTime, nullable=True)
+    last_sync_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class Dataset(Base):
     __tablename__ = "datasets"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     upload_id = Column(String, ForeignKey("uploads.id"), nullable=False)
+    integration_id = Column(String, ForeignKey("data_source_integrations.id"), nullable=True)
     name = Column(String, nullable=False)
     schema_json = Column(Text, nullable=True)
     data_summary = Column(Text, nullable=True)
     cleaned_report_json = Column(Text, nullable=True)
     dashboard_plan_json = Column(Text, nullable=True)
+    dashboard_plan_locked = Column(Integer, nullable=False, default=0)
     business_classification = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
