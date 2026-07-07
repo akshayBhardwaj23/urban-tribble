@@ -527,14 +527,17 @@ function HeroPricingGlance() {
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:text-[11px]">
               {plan.name}
             </p>
-            <p className="mt-1 text-base font-bold tabular-nums text-slate-900 dark:text-white sm:text-lg">
-              {plan.priceDisplay}
-              {plan.period ? (
-                <span className="block text-[9px] font-medium text-slate-500 dark:text-slate-400 sm:text-[10px]">
-                  /mo
-                </span>
+            <div className="mt-1">
+              <p className="text-base font-bold tabular-nums text-slate-900 dark:text-white sm:text-lg">
+                {plan.priceDisplay}
+              </p>
+              {plan.usdPriceDisplay ? (
+                <p className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400 sm:text-[11px]">
+                  {plan.usdPriceDisplay}
+                  {plan.period ? " /mo" : ""}
+                </p>
               ) : null}
-            </p>
+            </div>
           </Link>
         ))}
       </div>

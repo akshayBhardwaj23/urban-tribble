@@ -4,6 +4,7 @@ export type PricingPlan = {
   id: "free" | "starter" | "pro";
   name: string;
   priceDisplay: string;
+  usdPriceDisplay?: string;
   period: string;
   subtitle: string;
   features: string[];
@@ -19,6 +20,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: "free",
     name: "Free",
     priceDisplay: "₹0",
+    usdPriceDisplay: "$0",
     period: "",
     subtitle: "Try one business review",
     features: [
@@ -40,6 +42,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: "starter",
     name: "Starter",
     priceDisplay: "₹999",
+    usdPriceDisplay: "$12",
     period: "/ month",
     subtitle: "Run a monthly business review",
     features: [
@@ -60,6 +63,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: "pro",
     name: "Pro",
     priceDisplay: "₹1999",
+    usdPriceDisplay: "$24",
     period: "/ month",
     subtitle: "Continuously monitor and improve your business",
     badge: "Most popular",

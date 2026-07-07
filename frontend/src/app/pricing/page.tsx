@@ -182,29 +182,37 @@ export default function PricingPage() {
                   >
                     {plan.name}
                   </p>
-                  <div
-                    className={cn(
-                      "mt-4 flex flex-wrap items-end gap-x-1.5 gap-y-1",
-                      featured && "mt-5",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "font-semibold tracking-tight text-slate-900 dark:text-white",
-                        featured ? "text-4xl sm:text-5xl" : "text-4xl",
-                      )}
-                    >
-                      {plan.priceDisplay}
-                    </span>
-                    {plan.period ? (
+                  <div className={cn("mt-4", featured && "mt-5")}>
+                    <div className="flex flex-wrap items-end gap-x-1.5 gap-y-1">
                       <span
                         className={cn(
-                          "text-slate-500 dark:text-slate-400",
-                          featured ? "pb-1.5 text-sm sm:text-base" : "pb-1 text-sm",
+                          "font-semibold tracking-tight text-slate-900 dark:text-white",
+                          featured ? "text-4xl sm:text-5xl" : "text-4xl",
                         )}
                       >
-                        {plan.period}
+                        {plan.priceDisplay}
                       </span>
+                      {plan.period ? (
+                        <span
+                          className={cn(
+                            "text-slate-500 dark:text-slate-400",
+                            featured ? "pb-1.5 text-sm sm:text-base" : "pb-1 text-sm",
+                          )}
+                        >
+                          {plan.period}
+                        </span>
+                      ) : null}
+                    </div>
+                    {plan.usdPriceDisplay ? (
+                      <p
+                        className={cn(
+                          "mt-1 text-slate-500 dark:text-slate-400",
+                          featured ? "text-sm sm:text-base" : "text-xs sm:text-sm",
+                        )}
+                      >
+                        {plan.usdPriceDisplay}
+                        {plan.period ? " / month" : ""}
+                      </p>
                     ) : null}
                   </div>
                   <p
