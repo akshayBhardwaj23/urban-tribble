@@ -768,6 +768,46 @@ export default function LandingPage() {
               <LandingHeaderAuth />
             </div>
           </header>
+          <div className="mt-4 -mx-1 md:hidden">
+            <div className="flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Link
+                href="#solutions"
+                className="shrink-0 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
+              >
+                Solutions
+              </Link>
+              <Link
+                href="#features"
+                className="shrink-0 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
+              >
+                Features
+              </Link>
+              <Link
+                href="/#pricing"
+                className="shrink-0 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
+              >
+                Pricing
+              </Link>
+              <Link
+                href="/about"
+                className="shrink-0 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
+              >
+                About us
+              </Link>
+              <Link
+                href="/help"
+                className="shrink-0 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
+              >
+                Help
+              </Link>
+              <Link
+                href="#contact"
+                className="shrink-0 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
+              >
+                Contact
+              </Link>
+            </div>
+          </div>
 
           <section className="relative z-20 pt-14 md:pt-16">
             <div className="relative z-20 mx-auto max-w-5xl text-center lg:max-w-4xl">
