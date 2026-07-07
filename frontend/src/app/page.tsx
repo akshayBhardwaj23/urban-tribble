@@ -600,50 +600,47 @@ function WhoItsForSection() {
     <section id="who-its-for" className="scroll-mt-24 border-y border-slate-200/80 bg-[#f7f5f2] py-20 dark:border-white/10 dark:bg-secondary/20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
         <div className="relative overflow-hidden rounded-[36px] border border-slate-200/80 bg-white/60 px-6 py-10 shadow-sm dark:border-white/10 dark:bg-white/[0.03] md:px-10 md:py-12">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 w-[42%] bg-gradient-to-l from-slate-100/85 via-slate-50/45 to-transparent dark:from-white/[0.03] dark:via-white/[0.02]"
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute right-0 top-1/2 hidden -translate-y-1/2 md:block"
-          >
-            <div className="relative h-[220px] w-[250px] lg:h-[280px] lg:w-[320px]">
-              <Image
-                src="/illustration-operator-laptop.png"
-                alt=""
-                fill
-                aria-hidden
-                className="object-contain object-right opacity-90 saturate-[0.92] dark:opacity-45 dark:brightness-90"
-                sizes="(max-width: 1024px) 250px, 320px"
-              />
+          <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_280px] md:items-center lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="relative z-10 mx-auto max-w-2xl text-center fade-up md:mx-0 md:max-w-none md:text-left">
+              <Tag>Who it&apos;s for</Tag>
+              <h2
+                className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
+              >
+                Built for the people actually using it
+              </h2>
+              <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+                Whether you&apos;re a founder, operator, finance lead, or analyst, {PRODUCT_NAME}
+                fits the spreadsheet workflows you already have and turns them into faster, clearer
+                decisions.
+              </p>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 md:justify-start">
+                <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+                  Non-technical owner
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+                  Ops or finance lead
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+                  Analyst with existing BI tools
+                </span>
+              </div>
+            </div>
+
+            <div className="relative hidden md:flex md:justify-end">
+              <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.14),transparent_68%)] dark:bg-[radial-gradient(circle_at_center,rgba(124,58,237,0.18),transparent_68%)]" />
+              <div className="relative h-[220px] w-[250px] lg:h-[280px] lg:w-[320px]">
+                <Image
+                  src="/illustration-operator-laptop.png"
+                  alt=""
+                  fill
+                  aria-hidden
+                  className="object-contain object-right opacity-95 saturate-[0.96] dark:opacity-70 dark:brightness-90"
+                  sizes="(max-width: 1024px) 250px, 320px"
+                />
+              </div>
             </div>
           </div>
-          <div className="relative z-10 mx-auto max-w-2xl text-center fade-up md:mx-0 md:max-w-[56%] md:text-left">
-            <Tag>Who it&apos;s for</Tag>
-            <h2
-              className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
-            >
-              Built for the people actually using it
-            </h2>
-            <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-              Whether you&apos;re a founder, operator, finance lead, or analyst, {PRODUCT_NAME}
-              fits the spreadsheet workflows you already have and turns them into faster, clearer
-              decisions.
-            </p>
-          </div>
-
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 md:justify-start">
-          <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
-            Non-technical owner
-          </span>
-          <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
-            Ops or finance lead
-          </span>
-          <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
-            Analyst with existing BI tools
-          </span>
-        </div>
 
         <div className="relative z-10 mt-12 grid gap-6 md:grid-cols-3">
           {personas.map((persona, i) => (
