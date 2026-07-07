@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
 import { Button } from "@/components/ui/button";
@@ -605,73 +606,20 @@ function WhoItsForSection() {
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute right-[-1.5rem] top-3 hidden md:block opacity-90 dark:opacity-45"
+            className="pointer-events-none absolute right-0 top-1/2 hidden -translate-y-1/2 md:block"
           >
-            <svg
-              width="460"
-              height="360"
-              viewBox="0 0 460 360"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-[240px] w-[300px] md:h-[280px] md:w-[360px] lg:h-[320px] lg:w-[420px] text-slate-400 dark:text-slate-500"
-            >
-              <path
-                d="M320 92C320 123.48 294.48 149 263 149C231.52 149 206 123.48 206 92C206 60.5198 231.52 35 263 35C294.48 35 320 60.5198 320 92Z"
-                stroke="currentColor"
-                strokeWidth="2.8"
+            <div className="relative h-[220px] w-[250px] lg:h-[280px] lg:w-[320px]">
+              <Image
+                src="/illustration-operator-laptop.png"
+                alt=""
+                fill
+                aria-hidden
+                className="object-contain object-right opacity-90 saturate-[0.92] dark:opacity-45 dark:brightness-90"
+                sizes="(max-width: 1024px) 250px, 320px"
               />
-              <path
-                d="M170 322C176 259 202 206 242 180C258 169 276 164 295 164C325 164 351 179 372 205C393 231 404 268 409 322"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M128 182H306C317.046 182 326 190.954 326 202V300H148C136.954 300 128 291.046 128 280V182Z"
-                stroke="currentColor"
-                strokeWidth="2.8"
-              />
-              <path
-                d="M108 300H348"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M201 220C223 230 238 233 255 233C275 233 289 227 303 217"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M174 147C196 164 215 173 241 179"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M319 151C338 164 352 179 363 200"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M72 71C118 44 153 36 202 37"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeDasharray="6 8"
-              />
-              <path
-                d="M372 52C397 62 418 76 435 99"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeDasharray="6 8"
-              />
-            </svg>
+            </div>
           </div>
-          <div className="relative z-10 mx-auto max-w-2xl text-center fade-up">
+          <div className="relative z-10 mx-auto max-w-2xl text-center fade-up md:mx-0 md:max-w-[56%] md:text-left">
             <Tag>Who it&apos;s for</Tag>
             <h2
               className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
@@ -685,7 +633,7 @@ function WhoItsForSection() {
             </p>
           </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 md:justify-start">
           <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 dark:border-white/10 dark:bg-white/[0.04]">
             Non-technical owner
           </span>
