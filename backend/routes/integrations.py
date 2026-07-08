@@ -4,7 +4,8 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,12 @@ from services.integration_sync import (
     integration_to_dict,
     sync_integration,
     find_due_integrations,
+)
+from services.integration_oauth import (
+    build_microsoft_authorize_url,
+    build_signed_state,
+    microsoft_oauth_configured,
+    parse_signed_state,
 )
 from services.integration_scheduler import run_due_syncs_once
 
@@ -49,6 +56,14 @@ class PatchIntegrationBody(BaseModel):
     dashboard_plan_locked: Optional[bool] = None
 
 
+class StartOauthBody(BaseModel):
+    provider: str
+    name: str = Field(min_length=1, max_length=120)
+    refresh_interval_hours: int = Field(default=24, ge=1, le=168)
+    auto_analyze: bool = True
+    dashboard_plan_locked: bool = True
+
+
 def _validate_connection_mode(provider_id: str, mode: str) -> None:
     provider = get_provider(provider_id)
     if not provider:
@@ -63,6 +78,74 @@ def _validate_connection_mode(provider_id: str, mode: str) -> None:
 @router.get("/catalog")
 def get_catalog():
     return {"providers": list_catalog()}
+
+
+@router.post("/oauth/start")
+def start_integration_oauth(
+    body: StartOauthBody,
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    user, workspace_id = ws
+    if body.provider != "excel_onedrive":
+        raise HTTPException(400, "OAuth start is only wired for Excel / OneDrive right now")
+    if not microsoft_oauth_configured():
+        raise HTTPException(
+            503,
+            "Microsoft 365 OAuth is not configured on this deployment yet. "
+            "Set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_REDIRECT_URI.",
+        )
+    state = build_signed_state(
+        {
+            "provider": body.provider,
+            "workspace_id": workspace_id,
+            "user_email": user.email,
+            "name": body.name,
+            "refresh_interval_hours": body.refresh_interval_hours,
+            "auto_analyze": body.auto_analyze,
+            "dashboard_plan_locked": body.dashboard_plan_locked,
+            "started_at": datetime.utcnow().isoformat(),
+        }
+    )
+    return {
+        "authorize_url": build_microsoft_authorize_url(state),
+        "provider": body.provider,
+    }
+
+
+@router.get("/oauth/callback/microsoft", response_class=HTMLResponse)
+def microsoft_oauth_callback(
+    code: Optional[str] = Query(default=None),
+    state: Optional[str] = Query(default=None),
+    error: Optional[str] = Query(default=None),
+):
+    if error:
+        return HTMLResponse(
+            f"<html><body><h2>Microsoft sign-in failed</h2><p>{error}</p></body></html>",
+            status_code=400,
+        )
+    if not code or not state:
+        return HTMLResponse(
+            "<html><body><h2>Missing Microsoft OAuth data</h2>"
+            "<p>No code/state was returned.</p></body></html>",
+            status_code=400,
+        )
+    try:
+        payload = parse_signed_state(state)
+    except ValueError as e:
+        return HTMLResponse(
+            f"<html><body><h2>Invalid OAuth state</h2><p>{e}</p></body></html>",
+            status_code=400,
+        )
+    provider = payload.get("provider", "excel_onedrive")
+    return HTMLResponse(
+        "<html><body style='font-family:Arial,sans-serif;padding:24px'>"
+        "<h2>Microsoft account connected</h2>"
+        "<p>Snaptix received the Microsoft authorization response for "
+        f"<strong>{provider}</strong>.</p>"
+        "<p>The next step is workbook selection and Graph sync finalization. "
+        "Return to Snaptix and continue the integration setup there.</p>"
+        "</body></html>"
+    )
 
 
 @router.get("/")

@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     INTEGRATION_SCHEDULER_INTERVAL_SECONDS: int = 60
     # Optional secret for external cron hitting POST /api/integrations/run-scheduled
     INTEGRATION_CRON_SECRET: str = ""
+    # Microsoft 365 OAuth for Excel / OneDrive
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    MICROSOFT_TENANT_ID: str = "common"
+    MICROSOFT_REDIRECT_URI: str = "http://localhost:8000/api/integrations/oauth/callback/microsoft"
+    INTEGRATION_OAUTH_STATE_SECRET: str = "dev-integration-oauth-state-change-in-production"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

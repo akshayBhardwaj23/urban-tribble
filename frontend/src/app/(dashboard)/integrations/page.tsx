@@ -164,6 +164,23 @@ export default function IntegrationsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const oauthStartMutation = useMutation({
+    mutationFn: () => {
+      if (!connectProvider) throw new Error("No provider selected");
+      return api.startIntegrationOauth({
+        provider: connectProvider.id,
+        name: integrationName.trim(),
+        refresh_interval_hours: Number(refreshHours) || 24,
+        auto_analyze: autoAnalyze,
+        dashboard_plan_locked: lockDashboard,
+      });
+    },
+    onSuccess: (result) => {
+      window.location.href = result.authorize_url;
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const refreshMutation = useMutation({
     mutationFn: (id: string) => api.refreshIntegration(id),
     onSuccess: (result) => {
@@ -329,11 +346,7 @@ export default function IntegrationsPage() {
                       <p className="flex-1 text-sm text-muted-foreground">
                         {provider.description}
                       </p>
-                      <Button
-                        size="sm"
-                        disabled={!hasLiveMode}
-                        onClick={() => openConnect(provider)}
-                      >
+                      <Button size="sm" disabled={!hasLiveMode} onClick={() => openConnect(provider)}>
                         {hasLiveMode ? "Connect" : "Coming soon"}
                       </Button>
                     </CardContent>
@@ -382,6 +395,13 @@ export default function IntegrationsPage() {
                 ) : null}
               </div>
 
+              {connectProvider.id === "excel_onedrive" ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Excel / OneDrive now uses Microsoft 365 sign-in instead of pasted share links,
+                  because anonymous OneDrive links are unreliable for server-side sync.
+                </div>
+              ) : null}
+
               <ConnectFields
                 fields={activeMode?.fields ?? []}
                 values={config}
@@ -424,14 +444,25 @@ export default function IntegrationsPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => createMutation.mutate()}
+                  onClick={() =>
+                    activeMode?.id === "oauth"
+                      ? oauthStartMutation.mutate()
+                      : createMutation.mutate()
+                  }
                   disabled={
                     createMutation.isPending ||
+                    oauthStartMutation.isPending ||
                     !integrationName.trim() ||
                     activeMode?.available === false
                   }
                 >
-                  {createMutation.isPending ? "Connecting…" : "Connect & sync"}
+                  {activeMode?.id === "oauth"
+                    ? oauthStartMutation.isPending
+                      ? "Redirecting…"
+                      : "Continue with Microsoft"
+                    : createMutation.isPending
+                      ? "Connecting…"
+                      : "Connect & sync"}
                 </Button>
               </div>
             </div>

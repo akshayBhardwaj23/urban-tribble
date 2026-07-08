@@ -818,6 +818,16 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  startIntegrationOauth: (body: StartIntegrationOauthBody) =>
+    request<{
+      authorize_url: string;
+      provider: string;
+    }>("/api/integrations/oauth/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
   patchIntegration: (id: string, body: PatchIntegrationBody) =>
     request<IntegrationRecord>(`/api/integrations/${id}`, {
       method: "PATCH",
@@ -901,6 +911,14 @@ export type CreateIntegrationBody = {
   auto_analyze?: boolean;
   dashboard_plan_locked?: boolean;
   run_initial_sync?: boolean;
+};
+
+export type StartIntegrationOauthBody = {
+  provider: string;
+  name: string;
+  refresh_interval_hours?: number;
+  auto_analyze?: boolean;
+  dashboard_plan_locked?: boolean;
 };
 
 export type PatchIntegrationBody = {

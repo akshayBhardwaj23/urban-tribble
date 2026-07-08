@@ -319,18 +319,11 @@ PROVIDERS: list[ProviderDef] = [
                 "id": "oauth",
                 "label": "Microsoft 365",
                 "fields": [],
-                "available": False,
-                "recommended": True,
-                "help": "Sign in with Microsoft to pick a workbook (coming soon).",
-            },
-            {
-                "id": "export_url",
-                "label": "OneDrive share link",
-                "fields": _ONEDRIVE_FIELDS,
                 "available": True,
+                "recommended": True,
                 "help": (
-                    "Paste the Share link from OneDrive (not the Excel Online editor URL). "
-                    "The file must allow access to anyone with the link."
+                    "Recommended path: sign in with Microsoft 365 and let Snaptix read "
+                    "your workbook through Microsoft Graph."
                 ),
             },
         ],
