@@ -9,6 +9,20 @@ ProviderDef = dict[str, Any]
 
 # --- Shared field groups ---
 
+_ONEDRIVE_FIELDS: list[ConnectionField] = [
+    {
+        "key": "export_url",
+        "label": "OneDrive sharing link",
+        "type": "url",
+        "required": True,
+        "placeholder": "https://1drv.ms/x/s!... or https://onedrive.live.com/...",
+        "help": (
+            "Copy the Share link from OneDrive (right-click file → Share → Copy link). "
+            "Do not paste the excel.cloud.microsoft editor URL from your browser address bar."
+        ),
+    }
+]
+
 _EXPORT_URL_FIELDS: list[ConnectionField] = [
     {
         "key": "export_url",
@@ -311,10 +325,13 @@ PROVIDERS: list[ProviderDef] = [
             },
             {
                 "id": "export_url",
-                "label": "Download link",
-                "fields": _EXPORT_URL_FIELDS,
+                "label": "OneDrive share link",
+                "fields": _ONEDRIVE_FIELDS,
                 "available": True,
-                "help": "Temporary fallback: paste a direct .xlsx download link.",
+                "help": (
+                    "Paste the Share link from OneDrive (not the Excel Online editor URL). "
+                    "The file must allow access to anyone with the link."
+                ),
             },
         ],
     },

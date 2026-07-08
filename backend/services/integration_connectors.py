@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import re
@@ -46,20 +47,43 @@ def _guess_extension(url: str, content_type: str) -> str:
     return ".csv"
 
 
-async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
-    url = str(config.get("export_url") or "").strip()
-    if not url:
-        raise IntegrationNotConfiguredError("Export URL is required.")
-    async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        content = resp.content
-        ctype = resp.headers.get("content-type", "")
-    ext = _guess_extension(url, ctype)
-    tmp = io.BytesIO(content)
+def _encode_onedrive_share_token(url: str) -> str:
+    """Microsoft Graph sharing token for a OneDrive/SharePoint share URL."""
+    encoded = base64.b64encode(url.encode("utf-8")).decode("utf-8")
+    encoded = encoded.rstrip("=").replace("/", "_").replace("+", "-")
+    return f"u!{encoded}"
+
+
+def _is_excel_online_viewer_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower()
+    return host in {
+        "excel.cloud.microsoft",
+        "www.office.com",
+    } or "/open/onedrive" in urlparse(url).path.lower()
+
+
+def _is_onedrive_share_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower()
+    return any(
+        h in host
+        for h in (
+            "1drv.ms",
+            "onedrive.live.com",
+            "sharepoint.com",
+            "onedrive.com",
+        )
+    )
+
+
+def _dataframe_from_bytes(content: bytes, url: str, content_type: str) -> pd.DataFrame:
+    if content[:15].lstrip().startswith(b"<!DOCTYPE") or content[:6].lstrip().startswith(b"<html"):
+        raise IntegrationFetchError(
+            "The URL returned a web page, not an Excel file. "
+            "Use a OneDrive Share link (Copy link), not the Excel Online editor URL."
+        )
+    ext = _guess_extension(url, content_type)
     if ext == ".csv":
-        return pd.read_csv(tmp)
-    # Excel or unknown — use file processor on bytes via temp path pattern
+        return pd.read_csv(io.BytesIO(content))
     import tempfile
     from pathlib import Path
 
@@ -70,6 +94,79 @@ async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
         return _file_processor.read(path)
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+async def _fetch_onedrive_via_graph_share(url: str) -> pd.DataFrame:
+    token = _encode_onedrive_share_token(url)
+    graph_url = f"https://graph.microsoft.com/v1.0/shares/{token}/driveItem/content"
+    async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+        resp = await client.get(graph_url)
+        if resp.status_code == 401:
+            raise IntegrationFetchError(
+                "OneDrive file is not publicly accessible. "
+                "In Share settings, choose 'Anyone with the link can view', then copy that link."
+            )
+        if resp.status_code == 404:
+            raise IntegrationFetchError(
+                "OneDrive file not found. Check the sharing link is still valid."
+            )
+        if resp.status_code >= 400:
+            raise IntegrationFetchError(
+                f"OneDrive could not download this file (HTTP {resp.status_code}). "
+                "Use a Share link from OneDrive, not the excel.cloud.microsoft editor URL."
+            )
+        content = resp.content
+        ctype = resp.headers.get("content-type", "")
+    return _dataframe_from_bytes(content, url, ctype)
+
+
+async def fetch_excel_onedrive(config: dict[str, Any]) -> pd.DataFrame:
+    url = str(config.get("export_url") or "").strip()
+    if not url:
+        raise IntegrationNotConfiguredError("OneDrive sharing link is required.")
+
+    if _is_excel_online_viewer_url(url):
+        raise IntegrationFetchError(
+            "That is an Excel Online editor link, not a sharing link. "
+            "In OneDrive: right-click the file → Share → Copy link, then paste that URL here. "
+            "The link should look like https://1drv.ms/x/s!... or https://onedrive.live.com/..."
+        )
+
+    if _is_onedrive_share_url(url) or "docId=" in url:
+        try:
+            return await _fetch_onedrive_via_graph_share(url)
+        except IntegrationFetchError:
+            raise
+        except Exception as e:
+            raise IntegrationFetchError(
+                f"Could not download from OneDrive: {e}. "
+                "Use Share → Copy link from OneDrive and ensure 'Anyone with the link' access."
+            ) from e
+
+    return await fetch_from_export_url(config)
+
+
+async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
+    url = str(config.get("export_url") or "").strip()
+    if not url:
+        raise IntegrationNotConfiguredError("Export URL is required.")
+    if _is_excel_online_viewer_url(url):
+        raise IntegrationFetchError(
+            "That is an Excel Online editor link, not a downloadable file. "
+            "Use a OneDrive Share link or a direct .xlsx download URL."
+        )
+    async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+        try:
+            resp = await client.get(url)
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            raise IntegrationFetchError(
+                f"Could not download file from URL: {e}. "
+                "Check the link is public and points directly to a CSV or Excel file."
+            ) from e
+        content = resp.content
+        ctype = resp.headers.get("content-type", "")
+    return _dataframe_from_bytes(content, url, ctype)
 
 
 async def fetch_google_sheets(config: dict[str, Any]) -> pd.DataFrame:
@@ -442,7 +539,6 @@ async def fetch_bigquery(config: dict[str, Any]) -> pd.DataFrame:
 
 
 _EXPORT_URL_PROVIDERS = {
-    "excel_onedrive",
     "google_drive",
     "power_bi",
 }
@@ -469,6 +565,9 @@ async def fetch_provider_data(
 
     if provider == "postgres":
         return await fetch_postgres(config)
+
+    if provider == "excel_onedrive" and connection_mode == "export_url":
+        return await fetch_excel_onedrive(config)
 
     if provider == "ga4" and connection_mode == "service_account":
         return await fetch_ga4(config)
