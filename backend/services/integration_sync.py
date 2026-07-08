@@ -95,6 +95,7 @@ async def sync_integration(
             integration.connection_mode,
             config,
         )
+        integration.config_json = json.dumps(config)
     except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
         integration.status = IntegrationStatus.error
         integration.last_sync_error = str(e)

@@ -828,6 +828,16 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  getIntegrationOauthSession: (sessionId: string) =>
+    request<IntegrationOauthSession>(`/api/integrations/oauth/session/${sessionId}`),
+
+  completeMicrosoftOauth: (body: CompleteMicrosoftOauthBody) =>
+    request<IntegrationSyncResult>("/api/integrations/oauth/complete/microsoft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
   patchIntegration: (id: string, body: PatchIntegrationBody) =>
     request<IntegrationRecord>(`/api/integrations/${id}`, {
       method: "PATCH",
@@ -921,6 +931,11 @@ export type StartIntegrationOauthBody = {
   dashboard_plan_locked?: boolean;
 };
 
+export type CompleteMicrosoftOauthBody = {
+  session_id: string;
+  item_id: string;
+};
+
 export type PatchIntegrationBody = {
   name?: string;
   connection_mode?: string;
@@ -937,4 +952,21 @@ export type IntegrationSyncResult = {
   column_count?: number;
   analysis_id?: string | null;
   dashboard_plan_locked?: boolean;
+};
+
+export type IntegrationOauthSession = {
+  session_id: string;
+  provider: string;
+  name: string;
+  refresh_interval_hours: number;
+  auto_analyze: boolean;
+  dashboard_plan_locked: boolean;
+  files: {
+    id: string;
+    name: string;
+    web_url?: string | null;
+    size?: number | null;
+    last_modified?: string | null;
+    drive_id?: string | null;
+  }[];
 };

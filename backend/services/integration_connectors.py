@@ -146,6 +146,18 @@ async def fetch_excel_onedrive(config: dict[str, Any]) -> pd.DataFrame:
     return await fetch_from_export_url(config)
 
 
+async def fetch_excel_onedrive_oauth(config: dict[str, Any]) -> pd.DataFrame:
+    from services.integration_microsoft import (
+        IntegrationFetchError as MicrosoftIntegrationFetchError,
+        microsoft_download_item_as_dataframe,
+    )
+
+    try:
+        return await microsoft_download_item_as_dataframe(config)
+    except MicrosoftIntegrationFetchError as e:
+        raise IntegrationFetchError(str(e)) from e
+
+
 async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
     url = str(config.get("export_url") or "").strip()
     if not url:
@@ -549,6 +561,9 @@ async def fetch_provider_data(
     connection_mode: str,
     config: dict[str, Any],
 ) -> pd.DataFrame:
+    if provider == "excel_onedrive" and connection_mode == "oauth":
+        return await fetch_excel_onedrive_oauth(config)
+
     if connection_mode == "oauth":
         raise IntegrationNotConfiguredError(
             f"OAuth for {provider} is not enabled yet. Use API credentials where available."

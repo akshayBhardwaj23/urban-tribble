@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     MICROSOFT_TENANT_ID: str = "common"
     MICROSOFT_REDIRECT_URI: str = "http://localhost:8000/api/integrations/oauth/callback/microsoft"
     INTEGRATION_OAUTH_STATE_SECRET: str = "dev-integration-oauth-state-change-in-production"
+    FRONTEND_APP_URL: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

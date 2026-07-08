@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Any, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -25,10 +26,18 @@ from services.integration_sync import (
     sync_integration,
     find_due_integrations,
 )
+from services.integration_microsoft import (
+    _apply_token_payload,
+    microsoft_exchange_code_for_tokens,
+    microsoft_list_excel_files,
+)
 from services.integration_oauth import (
     build_microsoft_authorize_url,
     build_signed_state,
+    create_oauth_session,
+    get_oauth_session,
     microsoft_oauth_configured,
+    pop_oauth_session,
     parse_signed_state,
 )
 from services.integration_scheduler import run_due_syncs_once
@@ -62,6 +71,11 @@ class StartOauthBody(BaseModel):
     refresh_interval_hours: int = Field(default=24, ge=1, le=168)
     auto_analyze: bool = True
     dashboard_plan_locked: bool = True
+
+
+class CompleteMicrosoftOauthBody(BaseModel):
+    session_id: str
+    item_id: str
 
 
 def _validate_connection_mode(provider_id: str, mode: str) -> None:
@@ -113,7 +127,7 @@ def start_integration_oauth(
 
 
 @router.get("/oauth/callback/microsoft", response_class=HTMLResponse)
-def microsoft_oauth_callback(
+async def microsoft_oauth_callback(
     code: Optional[str] = Query(default=None),
     state: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
@@ -136,16 +150,100 @@ def microsoft_oauth_callback(
             f"<html><body><h2>Invalid OAuth state</h2><p>{e}</p></body></html>",
             status_code=400,
         )
-    provider = payload.get("provider", "excel_onedrive")
-    return HTMLResponse(
-        "<html><body style='font-family:Arial,sans-serif;padding:24px'>"
-        "<h2>Microsoft account connected</h2>"
-        "<p>Snaptix received the Microsoft authorization response for "
-        f"<strong>{provider}</strong>.</p>"
-        "<p>The next step is workbook selection and Graph sync finalization. "
-        "Return to Snaptix and continue the integration setup there.</p>"
-        "</body></html>"
+    try:
+        token_payload = await microsoft_exchange_code_for_tokens(code)
+        config: dict[str, Any] = {}
+        _apply_token_payload(config, token_payload)
+        files = await microsoft_list_excel_files(config)
+    except IntegrationFetchError as e:
+        return HTMLResponse(
+            f"<html><body><h2>Microsoft connect failed</h2><p>{e}</p></body></html>",
+            status_code=400,
+        )
+
+    session_id = create_oauth_session(
+        {
+            "provider": payload.get("provider", "excel_onedrive"),
+            "workspace_id": payload["workspace_id"],
+            "user_email": payload["user_email"],
+            "name": payload["name"],
+            "refresh_interval_hours": payload["refresh_interval_hours"],
+            "auto_analyze": payload["auto_analyze"],
+            "dashboard_plan_locked": payload["dashboard_plan_locked"],
+            "config": config,
+            "files": files,
+        }
     )
+    redirect_to = f"{settings.FRONTEND_APP_URL.rstrip('/')}/integrations?oauth_session={quote(session_id)}"
+    return RedirectResponse(url=redirect_to, status_code=303)
+
+
+@router.get("/oauth/session/{session_id}")
+def get_integration_oauth_session(
+    session_id: str,
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    user, workspace_id = ws
+    session = get_oauth_session(session_id)
+    if not session:
+        raise HTTPException(404, "OAuth session not found or expired")
+    if session.get("workspace_id") != workspace_id or session.get("user_email") != user.email:
+        raise HTTPException(403, "OAuth session does not belong to this workspace")
+    return {
+        "session_id": session_id,
+        "provider": session["provider"],
+        "name": session["name"],
+        "refresh_interval_hours": session["refresh_interval_hours"],
+        "auto_analyze": session["auto_analyze"],
+        "dashboard_plan_locked": session["dashboard_plan_locked"],
+        "files": session.get("files", []),
+    }
+
+
+@router.post("/oauth/complete/microsoft")
+async def complete_microsoft_oauth(
+    body: CompleteMicrosoftOauthBody,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    user, workspace_id = ws
+    session = pop_oauth_session(body.session_id)
+    if not session:
+        raise HTTPException(404, "OAuth session not found or expired")
+    if session.get("workspace_id") != workspace_id or session.get("user_email") != user.email:
+        raise HTTPException(403, "OAuth session does not belong to this workspace")
+    selected = next((f for f in session.get("files", []) if f.get("id") == body.item_id), None)
+    if not selected:
+        raise HTTPException(404, "Selected workbook not found in OAuth session")
+
+    config = dict(session.get("config") or {})
+    config.update(
+        {
+            "item_id": selected["id"],
+            "item_name": selected.get("name"),
+            "web_url": selected.get("web_url"),
+        }
+    )
+    integration = DataSourceIntegration(
+        workspace_id=workspace_id,
+        provider="excel_onedrive",
+        name=str(session["name"]).strip() or selected.get("name") or "Excel / OneDrive data",
+        connection_mode="oauth",
+        config_json=json.dumps(config),
+        refresh_interval_hours=int(session["refresh_interval_hours"]) or settings.INTEGRATION_DEFAULT_REFRESH_HOURS,
+        auto_analyze=1 if session["auto_analyze"] else 0,
+        dashboard_plan_locked=1 if session["dashboard_plan_locked"] else 0,
+        status=IntegrationStatus.pending,
+        next_sync_at=datetime.utcnow(),
+    )
+    db.add(integration)
+    db.commit()
+    db.refresh(integration)
+
+    try:
+        return await sync_integration(db, integration, trigger="manual")
+    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+        raise HTTPException(422, str(e)) from e
 
 
 @router.get("/")

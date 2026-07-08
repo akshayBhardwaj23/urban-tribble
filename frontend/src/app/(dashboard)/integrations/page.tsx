@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +89,8 @@ function ConnectFields({
 }
 
 export default function IntegrationsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [connectProvider, setConnectProvider] = useState<IntegrationProvider | null>(null);
   const [connectionMode, setConnectionMode] = useState("");
@@ -96,6 +99,8 @@ export default function IntegrationsPage() {
   const [refreshHours, setRefreshHours] = useState("24");
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [lockDashboard, setLockDashboard] = useState(true);
+  const [selectedOauthFileId, setSelectedOauthFileId] = useState("");
+  const oauthSessionId = searchParams.get("oauth_session");
 
   const catalogQuery = useQuery({
     queryKey: ["integration-catalog"],
@@ -105,6 +110,12 @@ export default function IntegrationsPage() {
   const listQuery = useQuery({
     queryKey: ["integrations"],
     queryFn: () => api.listIntegrations(),
+  });
+
+  const oauthSessionQuery = useQuery({
+    queryKey: ["integration-oauth-session", oauthSessionId],
+    queryFn: () => api.getIntegrationOauthSession(oauthSessionId!),
+    enabled: Boolean(oauthSessionId),
   });
 
   const providersByTier = useMemo(() => {
@@ -181,6 +192,28 @@ export default function IntegrationsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const oauthCompleteMutation = useMutation({
+    mutationFn: () => {
+      if (!oauthSessionId || !selectedOauthFileId) {
+        throw new Error("Select a workbook first");
+      }
+      return api.completeMicrosoftOauth({
+        session_id: oauthSessionId,
+        item_id: selectedOauthFileId,
+      });
+    },
+    onSuccess: (result) => {
+      toast.success("Microsoft workbook connected and synced");
+      queryClient.invalidateQueries({ queryKey: ["integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      router.replace("/integrations");
+      if (result.dataset_id) {
+        queryClient.invalidateQueries({ queryKey: ["dataset", result.dataset_id] });
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const refreshMutation = useMutation({
     mutationFn: (id: string) => api.refreshIntegration(id),
     onSuccess: (result) => {
@@ -239,6 +272,81 @@ export default function IntegrationsPage() {
           Manual import
         </Link>
       </div>
+
+      {oauthSessionId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Finish Microsoft 365 connection</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {oauthSessionQuery.isLoading ? (
+              <Skeleton className="h-24" />
+            ) : oauthSessionQuery.isError ? (
+              <p className="text-sm text-destructive">
+                {(oauthSessionQuery.error as Error).message}
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Choose the Excel workbook Snaptix should sync from your Microsoft account.
+                </p>
+                <div className="grid gap-2">
+                  {(oauthSessionQuery.data?.files ?? []).map((file) => (
+                    <label
+                      key={file.id}
+                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="oauth-file"
+                        value={file.id}
+                        checked={selectedOauthFileId === file.id}
+                        onChange={() => setSelectedOauthFileId(file.id)}
+                      />
+                      <div className="min-w-0">
+                        <p className="font-medium">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {file.last_modified
+                            ? `Modified ${new Date(file.last_modified).toLocaleString()}`
+                            : "Excel file"}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {(oauthSessionQuery.data?.files?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No Excel files were found in the connected Microsoft account.
+                  </p>
+                ) : null}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => oauthCompleteMutation.mutate()}
+                    disabled={
+                      oauthCompleteMutation.isPending ||
+                      !selectedOauthFileId ||
+                      (oauthSessionQuery.data?.files?.length ?? 0) === 0
+                    }
+                  >
+                    {oauthCompleteMutation.isPending
+                      ? "Connecting workbook…"
+                      : "Connect selected workbook"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedOauthFileId("");
+                      router.replace("/integrations");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Connected</h2>

@@ -6,9 +6,13 @@ import base64
 import hashlib
 import hmac
 import json
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 from urllib.parse import urlencode
 
 from config import settings
+
+_oauth_sessions: dict[str, dict] = {}
 
 
 def _b64url(data: bytes) -> str:
@@ -70,3 +74,30 @@ def build_microsoft_authorize_url(state: str) -> str:
         f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?"
         f"{urlencode(params)}"
     )
+
+
+def create_oauth_session(payload: dict) -> str:
+    session_id = str(uuid4())
+    _oauth_sessions[session_id] = {
+        **payload,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return session_id
+
+
+def get_oauth_session(session_id: str) -> dict | None:
+    session = _oauth_sessions.get(session_id)
+    if not session:
+        return None
+    created_at = datetime.fromisoformat(session["created_at"].replace("Z", "+00:00"))
+    if created_at < datetime.now(timezone.utc) - timedelta(hours=1):
+        _oauth_sessions.pop(session_id, None)
+        return None
+    return session
+
+
+def pop_oauth_session(session_id: str) -> dict | None:
+    session = get_oauth_session(session_id)
+    if session:
+        _oauth_sessions.pop(session_id, None)
+    return session
