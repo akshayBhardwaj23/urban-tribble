@@ -42,12 +42,6 @@ const FOUNDERS = [
     image: "/founders/akshay-bhardwaj.png",
     bio: "Architecting the intelligence layer behind Snaptix — from data ingestion and AI pipelines to the systems that deliver grounded, executive-grade insight at scale.",
   },
-  {
-    name: "Mayank Tyagi",
-    role: "Co-Founder",
-    image: "/founders/mayank-tyagi.png",
-    bio: "Shaping customer experience and growth at Snaptix — ensuring every upload becomes clarity, every briefing becomes action, and every team moves faster with confidence.",
-  },
 ] as const;
 
 const PILLARS = [
@@ -84,7 +78,7 @@ function FounderCard({
             alt={`${founder.name}, ${founder.role} at ${PRODUCT_NAME}`}
             fill
             className="object-cover object-top transition duration-700 group-hover:scale-[1.03]"
-            sizes="(max-width: 768px) 100vw, 33vw"
+            sizes="(max-width: 768px) 100vw, 50vw"
             priority={index === 0}
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/10 to-transparent" />
@@ -189,13 +183,13 @@ export default function AboutPage() {
               Meet the founders of {PRODUCT_NAME}
             </h2>
             <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-              Three builders behind {PRODUCT_NAME} — united by one conviction: the future
+              Two builders behind {PRODUCT_NAME} — united by one conviction: the future
               of business intelligence is AI-native, spreadsheet-native, and built for the
               people who actually run the numbers.
             </p>
           </div>
 
-          <div className="mt-14 grid gap-8 md:grid-cols-3 md:gap-6 lg:gap-8">
+          <div className="mx-auto mt-14 grid max-w-4xl gap-8 md:grid-cols-2 md:gap-6 lg:gap-8">
             {FOUNDERS.map((founder, index) => (
               <FounderCard key={founder.name} founder={founder} index={index} />
             ))}
