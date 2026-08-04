@@ -4,17 +4,17 @@ import json
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
+from deps import require_user
 from models.models import User, Workspace
 from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.account_deletion import delete_workspace_cascade
 from services.subscription_usage import assert_workspace_create_allowed
 from services.workspace_query import get_dataset_upload_in_workspace
-from utils.email_norm import user_by_email_ci
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
@@ -42,16 +42,9 @@ def _workspace_outlook_fields(w: Workspace) -> dict:
 @router.post("/")
 def create_workspace(
     req: CreateWorkspaceRequest,
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
-    if not x_user_email:
-        raise HTTPException(401, "Authentication required")
-
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
-
     assert_workspace_create_allowed(db, user)
 
     workspace = Workspace(name=req.name, owner_id=user.id)
@@ -73,16 +66,9 @@ def create_workspace(
 
 @router.get("/")
 def list_workspaces(
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
-    if not x_user_email:
-        raise HTTPException(401, "Authentication required")
-
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
-
     workspaces = (
         db.query(Workspace).filter(Workspace.owner_id == user.id).all()
     )
@@ -102,16 +88,9 @@ def list_workspaces(
 @router.post("/{workspace_id}/activate")
 def activate_workspace(
     workspace_id: str,
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
-    if not x_user_email:
-        raise HTTPException(401, "Authentication required")
-
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
-
     workspace = (
         db.query(Workspace)
         .filter(Workspace.id == workspace_id, Workspace.owner_id == user.id)
@@ -129,17 +108,10 @@ def activate_workspace(
 @router.delete("/{workspace_id}")
 def delete_workspace(
     workspace_id: str,
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Permanently delete a workspace and all its data (sources, briefings, files)."""
-    if not x_user_email:
-        raise HTTPException(401, "Authentication required")
-
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
-
     workspace = (
         db.query(Workspace)
         .filter(Workspace.id == workspace_id, Workspace.owner_id == user.id)
@@ -172,17 +144,10 @@ def delete_workspace(
 def patch_outlook_forecast(
     workspace_id: str,
     body: PatchOutlookForecastRequest,
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Save which dataset and columns power the workspace Outlook chart (or clear for auto)."""
-    if not x_user_email:
-        raise HTTPException(401, "Authentication required")
-
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
-
     workspace = (
         db.query(Workspace)
         .filter(Workspace.id == workspace_id, Workspace.owner_id == user.id)

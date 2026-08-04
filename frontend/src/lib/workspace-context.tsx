@@ -10,7 +10,12 @@ import {
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { api, planLimitErrorFromJson, setApiUserEmail } from "@/lib/api";
+import {
+  api,
+  getApiAccessToken,
+  planLimitErrorFromJson,
+  setApiAccessToken,
+} from "@/lib/api";
 import { clearWorkspaceScopedQueries } from "@/lib/workspace-queries";
 
 interface Workspace {
@@ -65,6 +70,15 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...(extra || {}) };
+  const token = getApiAccessToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const queryClient = useQueryClient();
@@ -75,19 +89,29 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     string | null
   >(null);
 
+  useEffect(() => {
+    if (status === "authenticated" && session?.accessToken) {
+      setApiAccessToken(session.accessToken);
+    }
+    if (status === "unauthenticated") {
+      setApiAccessToken(null);
+      setProfile(null);
+    }
+  }, [status, session?.accessToken]);
+
   const syncUser = useCallback(async () => {
-    if (!session?.user?.email) return null;
+    if (!session?.accessToken) return null;
+    setApiAccessToken(session.accessToken);
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
     try {
       const res = await fetch(`${API_BASE}/api/auth/sync`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
-          email: session.user.email,
-          name: session.user.name,
-          image: session.user.image,
+          name: session.user?.name ?? null,
+          image: session.user?.image ?? null,
         }),
         signal: controller.signal,
       });
@@ -102,12 +126,17 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     } finally {
       window.clearTimeout(timeoutId);
     }
-  }, [session?.user?.email, session?.user?.name, session?.user?.image]);
+  }, [
+    session?.accessToken,
+    session?.user?.name,
+    session?.user?.image,
+  ]);
 
   const switchWorkspace = useCallback(
     async (workspaceId: string) => {
-      if (!session?.user?.email) return;
+      if (!session?.accessToken) return;
       if (profile?.active_workspace_id === workspaceId) return;
+      setApiAccessToken(session.accessToken);
 
       const target = profile?.workspaces.find((w) => w.id === workspaceId);
       setSwitching(true);
@@ -123,7 +152,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           `${API_BASE}/api/workspaces/${workspaceId}/activate`,
           {
             method: "POST",
-            headers: { "X-User-Email": session.user.email },
+            headers: authHeaders(),
           }
         );
         if (!res.ok) {
@@ -139,7 +168,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [
-      session?.user?.email,
+      session?.accessToken,
       profile?.active_workspace_id,
       profile?.workspaces,
       queryClient,
@@ -149,14 +178,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const createWorkspace = useCallback(
     async (name: string): Promise<Workspace> => {
-      if (!session?.user?.email) throw new Error("Not authenticated");
+      if (!session?.accessToken) throw new Error("Not authenticated");
+      setApiAccessToken(session.accessToken);
 
       const res = await fetch(`${API_BASE}/api/workspaces`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Email": session.user.email,
-        },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ name }),
       });
 
@@ -172,28 +199,28 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       await syncUser();
       return workspace;
     },
-    [session?.user?.email, syncUser]
+    [session?.accessToken, syncUser]
   );
 
   const deleteWorkspace = useCallback(
     async (workspaceId: string) => {
-      if (!session?.user?.email) throw new Error("Not authenticated");
-      setApiUserEmail(session.user.email);
+      if (!session?.accessToken) throw new Error("Not authenticated");
+      setApiAccessToken(session.accessToken);
       await api.deleteWorkspace(workspaceId);
       await syncUser();
     },
-    [session?.user?.email, syncUser]
+    [session?.accessToken, syncUser]
   );
 
   useEffect(() => {
     if (status === "loading") return;
 
-    if (status === "authenticated" && session?.user?.email) {
+    if (status === "authenticated" && session?.accessToken) {
       void syncUser().finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
-  }, [status, session?.user?.email, syncUser]);
+  }, [status, session?.accessToken, syncUser]);
 
   const activeWorkspace =
     profile?.workspaces.find(

@@ -60,7 +60,7 @@ flowchart LR
     GPT[Chat API]
   end
 
-  Next -->|HTTPS + X-User-Email| RAuth
+  Next -->|HTTPS + Bearer token| RAuth
   Next --> RU & RD & RA & RDb & RC & RW
   RU --> FP & DC & CD & DP & IC
   RD --> FS
@@ -80,18 +80,21 @@ flowchart LR
 
 ### 4.1 Frontend
 
-1. User signs in with **Google** via NextAuth (`frontend/src/lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts`).
-2. After session exists, `WorkspaceProvider` (`frontend/src/lib/workspace-context.tsx`) calls **`POST /api/auth/sync`** with `{ email, name, image }`.
-3. Sync response includes `workspaces`, `active_workspace_id`, and `needs_onboarding` (true when user has zero workspaces).
-4. `setApiUserEmail` (`frontend/src/lib/api.ts`) stores the email so **every subsequent API call** sends header **`X-User-Email: <email>`**.
+1. User signs in with **Google** (or email OTP) via NextAuth (`frontend/src/lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts`).
+2. On sign-in, NextAuth obtains a signed **FastAPI access token**:
+   - OTP / test-login: returned from `/api/auth/otp/verify` or `/api/auth/test-login`.
+   - Google / dev-bypass: NextAuth jwt callback calls **`POST /api/auth/bootstrap`** server-side with `X-Internal-Auth-Secret` (never from the browser).
+3. The token is stored on the NextAuth JWT/session as `accessToken`.
+4. `setApiAccessToken` (`frontend/src/lib/api.ts`) attaches **`Authorization: Bearer <token>`** on every API call.
+5. `WorkspaceProvider` calls **`POST /api/auth/sync`** (Bearer-authenticated) to load workspaces / onboarding state.
 
 ### 4.2 Backend
 
-- `deps.get_current_user` reads **`X-User-Email`**, loads `User` from DB (no JWT validation on API—**trust boundary is the frontend + network**).
-- `deps.require_user` → 401 if missing user.
+- `deps.get_current_user` verifies the **Bearer JWT** (`API_JWT_SECRET`), then loads `User` by `sub` (user id). Spoofable `X-User-Email` is ignored.
+- `deps.require_user` → 401 if missing/invalid token.
 - `deps.require_active_workspace` → 400 if user has no `active_workspace_id` or workspace is not owned by user.
 
-**Implication:** The API is **not** a public internet API without an additional gateway; it assumes the same user controls the browser that sets the header.
+**Implication:** Knowing a user’s email is no longer enough to call the API. Tokens expire (`API_JWT_EXPIRE_HOURS`, default 14 days).
 
 ### 4.3 Workspace rules
 
@@ -234,7 +237,7 @@ Prompt tone for briefing is controlled in **`backend/services/ai_analyzer.py`** 
 
 ## 9. API catalog (concrete paths)
 
-Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active workspace (see §4).
+Prefix **`/api`** unless noted. Almost all require **`Authorization: Bearer <access_token>`** + active workspace (see §4).
 
 ### Auth & workspace
 
@@ -290,8 +293,8 @@ Prefix **`/api`** unless noted. Almost all require **`X-User-Email`** + active w
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/api/billing/razorpay/checkout` | Body `{ "tier": "starter" \| "pro" }`; requires `X-User-Email`. Returns `{ key_id, subscription_id, short_url }` (`key_id` + `subscription_id` drive Razorpay Standard Checkout on `/pricing`; Razorpay POSTs to `/api/billing/razorpay/callback` → redirect `/pricing/success` → dashboard). `short_url` only if `NEXT_PUBLIC_RAZORPAY_HOSTED_CHECKOUT=true`. Otherwise **503**. |
-| POST | `/api/billing/razorpay/verify-checkout` | After successful Checkout: body `{ razorpay_payment_id, razorpay_subscription_id, razorpay_signature }`; requires `X-User-Email`. Confirms HMAC, then sets `user.subscription_plan` from Razorpay subscription notes/plan id. Returns `{ verified: true, subscription_plan }` or **400**. Webhooks remain a backup. |
+| POST | `/api/billing/razorpay/checkout` | Body `{ "tier": "starter" \| "pro" }`; requires Bearer token. Returns `{ key_id, subscription_id, short_url }` (`key_id` + `subscription_id` drive Razorpay Standard Checkout on `/pricing`; Razorpay POSTs to `/api/billing/razorpay/callback` → redirect `/pricing/success` → dashboard). `short_url` only if `NEXT_PUBLIC_RAZORPAY_HOSTED_CHECKOUT=true`. Otherwise **503**. |
+| POST | `/api/billing/razorpay/verify-checkout` | After successful Checkout: body `{ razorpay_payment_id, razorpay_subscription_id, razorpay_signature }`; requires Bearer token. Confirms HMAC, then sets `user.subscription_plan` from Razorpay subscription notes/plan id. Returns `{ verified: true, subscription_plan }` or **400**. Webhooks remain a backup. |
 | POST | `/api/billing/razorpay/webhook` | **No auth.** Raw POST body + `X-Razorpay-Signature` (HMAC-SHA256 with `RAZORPAY_WEBHOOK_SECRET`). Use `X-Razorpay-Event-Id` (or payload `id`) for idempotency in `billing_webhook_events`. Subscription **activated** / **charged** / **resumed** (status `active`) sets `subscription_plan` from notes or plan id; **cancelled** / **completed** / **halted** / **expired** downgrades to `free`. |
 
 ### Other
@@ -352,9 +355,12 @@ State: **TanStack Query** caches server data; **WorkspaceContext** holds profile
 | `UPLOAD_RATE_MAX_PER_HOUR` | Max uploads per user per rolling hour (default **30**); **429** when exceeded |
 | `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
 | `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
+| `API_JWT_SECRET` | Signs FastAPI Bearer access tokens (override in production) |
+| `API_JWT_EXPIRE_HOURS` | Token lifetime (default **336** = 14 days) |
+| `INTERNAL_AUTH_SECRET` | Shared with frontend (server-only) for Google/bootstrap minting |
 | `SUBSCRIPTION_PLAN` | `free` (default), `starter`, or `pro`—drives **`usage`** meters on the workspace overview (soft UI only until billing enforces) |
 
-Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`).
+Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`), and server-only **`INTERNAL_AUTH_SECRET`** (must match backend).
 
 ---
 
@@ -362,7 +368,7 @@ Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH
 
 - **Multi-tenant isolation** beyond workspace id + owner check (no row-level security in DB).
 - **PDF or Google Sheets** ingest (not in `ALLOWED_EXTENSIONS`).
-- **Production hardening beyond current upload limits** (API tokens vs header email, virus scan, Redis-backed rate limits for multi-worker, reverse-proxy `limit_req`)—evaluate before a wide public launch.
+- **Production hardening beyond current upload limits** (virus scan, Redis-backed rate limits for multi-worker, reverse-proxy `limit_req`)—evaluate before a wide public launch.
 
 ---
 

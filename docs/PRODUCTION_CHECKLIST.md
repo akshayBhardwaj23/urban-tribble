@@ -12,7 +12,9 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 
 ## Auth and secrets
 
-- Set strong **`NEXTAUTH_SECRET`** and production **`NEXTAUTH_URL`** / `NEXTAUTH_URL` equivalent.
+- Set strong **`NEXTAUTH_SECRET`** and production **`NEXTAUTH_URL`**.
+- Set strong unique **`API_JWT_SECRET`** (signs FastAPI Bearer tokens) and matching **`INTERNAL_AUTH_SECRET`** on backend + frontend (server-only; used by NextAuth to bootstrap Google sessions). Never expose `INTERNAL_AUTH_SECRET` as `NEXT_PUBLIC_*`.
+- Override default **`OTP_PEPPER`** in production.
 - Restrict **`AUTH_TEST_LOGIN_*`** to dev only; disable or remove for production.
 
 ## Razorpay

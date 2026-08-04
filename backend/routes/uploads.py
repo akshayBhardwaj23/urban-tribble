@@ -137,8 +137,17 @@ async def create_upload(
 
 
 @router.get("/{upload_id}")
-def get_upload(upload_id: str, db: Session = Depends(get_db)):
-    upload = db.query(Upload).filter(Upload.id == upload_id).first()
+def get_upload(
+    upload_id: str,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    upload = (
+        db.query(Upload)
+        .filter(Upload.id == upload_id, Upload.workspace_id == workspace_id)
+        .first()
+    )
     if not upload:
         raise HTTPException(404, "Upload not found")
 

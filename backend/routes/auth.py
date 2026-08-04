@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
+from deps import require_user
 from models.models import User, Workspace
 from services.account_deletion import delete_user_account
+from services.api_tokens import issue_access_token
 from services.otp_email import send_otp_email, verify_otp_and_get_user
 from services.subscription_usage import get_effective_plan
 from utils.email_norm import normalize_email, user_by_email_ci
@@ -45,8 +47,78 @@ def _workspace_json(w: Workspace) -> dict:
     }
 
 
+def _token_payload(db: Session, user: User) -> dict:
+    return {
+        "access_token": issue_access_token(user_id=user.id, email=user.email),
+        "token_type": "bearer",
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "image": user.image,
+        **_profile_billing_fields(db, user),
+    }
+
+
+def _ensure_active_workspace(db: Session, user: User, workspaces: list[Workspace]) -> User:
+    if not user.active_workspace_id and workspaces:
+        user.active_workspace_id = workspaces[0].id
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def _workspaces_for_user(db: Session, user: User) -> list[Workspace]:
+    return (
+        db.query(Workspace)
+        .filter(Workspace.owner_id == user.id)
+        .order_by(Workspace.created_at.asc())
+        .all()
+    )
+
+
+def _upsert_user(
+    db: Session,
+    *,
+    email: str,
+    name: Optional[str],
+    image: Optional[str],
+) -> User:
+    email_norm = normalize_email(email)
+    user = user_by_email_ci(db, email_norm)
+    if not user:
+        user = User(email=email_norm, name=name, image=image)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    changed = False
+    if name and name != user.name:
+        user.name = name
+        changed = True
+    if image is not None and image != user.image:
+        user.image = image
+        changed = True
+    if changed:
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def _require_internal_auth_secret(x_internal_auth_secret: Optional[str]) -> None:
+    expected = (settings.INTERNAL_AUTH_SECRET or "").strip()
+    provided = (x_internal_auth_secret or "").strip()
+    if not expected or not provided or not _const_time_str_eq(provided, expected):
+        raise HTTPException(401, "Unauthorized")
+
+
 class SyncUserRequest(BaseModel):
-    email: str
+    name: Optional[str] = None
+    image: Optional[str] = None
+
+
+class BootstrapUserRequest(BaseModel):
+    email: EmailStr
     name: Optional[str] = None
     image: Optional[str] = None
 
@@ -94,17 +166,11 @@ def otp_send(req: OtpSendRequest, db: Session = Depends(get_db)):
 
 @router.post("/otp/verify")
 def otp_verify(req: OtpVerifyRequest, db: Session = Depends(get_db)):
-    """Validate code; returns user profile for NextAuth Credentials (server-side)."""
+    """Validate code; returns signed access token + user profile for NextAuth."""
     user = verify_otp_and_get_user(db, str(req.email), req.code.strip())
     if not user:
         raise HTTPException(401, "Invalid or expired code.")
-    return {
-        "id": user.id,
-        "email": user.email,
-        "name": user.name,
-        "image": user.image,
-        **_profile_billing_fields(db, user),
-    }
+    return _token_payload(db, user)
 
 
 @router.post("/test-login")
@@ -141,46 +207,56 @@ def auth_test_login(req: TestLoginRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
+    return _token_payload(db, user)
+
+
+@router.post("/bootstrap")
+def bootstrap_user(
+    req: BootstrapUserRequest,
+    db: Session = Depends(get_db),
+    x_internal_auth_secret: Optional[str] = Header(None),
+):
+    """Server-to-server user upsert after Google / NextAuth sign-in.
+
+    Requires ``X-Internal-Auth-Secret``. Never call this from the browser.
+    """
+    _require_internal_auth_secret(x_internal_auth_secret)
+    user = _upsert_user(
+        db,
+        email=str(req.email),
+        name=req.name,
+        image=req.image,
+    )
+    workspaces = _workspaces_for_user(db, user)
+    user = _ensure_active_workspace(db, user, workspaces)
     return {
-        "id": user.id,
-        "email": user.email,
-        "name": user.name,
-        "image": user.image,
-        **_profile_billing_fields(db, user),
+        **_token_payload(db, user),
+        "active_workspace_id": user.active_workspace_id,
+        "needs_onboarding": len(workspaces) == 0,
+        "workspaces": [_workspace_json(w) for w in workspaces],
     }
 
 
 @router.post("/sync")
-def sync_user(req: SyncUserRequest, db: Session = Depends(get_db)):
-    """Called by frontend after NextAuth login. Creates user if new."""
-    email_norm = normalize_email(req.email)
-    user = user_by_email_ci(db, email_norm)
-
-    if not user:
-        user = User(email=email_norm, name=req.name, image=req.image)
-        db.add(user)
+def sync_user(
+    req: SyncUserRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """Refresh profile + workspaces for the Bearer-authenticated user."""
+    changed = False
+    if req.name and req.name != user.name:
+        user.name = req.name
+        changed = True
+    if req.image is not None and req.image != user.image:
+        user.image = req.image
+        changed = True
+    if changed:
         db.commit()
         db.refresh(user)
 
-    else:
-        if req.name and req.name != user.name:
-            user.name = req.name
-        if req.image is not None and req.image != user.image:
-            user.image = req.image
-        db.commit()
-        db.refresh(user)
-
-    workspaces = (
-        db.query(Workspace)
-        .filter(Workspace.owner_id == user.id)
-        .order_by(Workspace.created_at.asc())
-        .all()
-    )
-
-    if not user.active_workspace_id and workspaces:
-        user.active_workspace_id = workspaces[0].id
-        db.commit()
-        db.refresh(user)
+    workspaces = _workspaces_for_user(db, user)
+    user = _ensure_active_workspace(db, user, workspaces)
 
     return {
         "id": user.id,
@@ -196,27 +272,18 @@ def sync_user(req: SyncUserRequest, db: Session = Depends(get_db)):
 
 @router.get("/me")
 def get_me(
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Get current user profile + workspaces."""
-    if not x_user_email:
-        raise HTTPException(401, "Not authenticated")
-
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
-
-    workspaces = (
-        db.query(Workspace).filter(Workspace.owner_id == user.id).all()
-    )
-
+    workspaces = _workspaces_for_user(db, user)
     return {
         "id": user.id,
         "email": user.email,
         "name": user.name,
         "image": user.image,
         "active_workspace_id": user.active_workspace_id,
+        "needs_onboarding": len(workspaces) == 0,
         **_profile_billing_fields(db, user),
         "workspaces": [_workspace_json(w) for w in workspaces],
     }
@@ -224,14 +291,9 @@ def get_me(
 
 @router.delete("/me")
 def delete_me(
-    x_user_email: Optional[str] = Header(None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Permanently delete the signed-in user, all owned workspaces, uploads, and related data."""
-    if not x_user_email:
-        raise HTTPException(401, "Not authenticated")
-    user = user_by_email_ci(db, x_user_email)
-    if not user:
-        raise HTTPException(404, "User not found")
     delete_user_account(db, user)
     return {"ok": True, "deleted": True}

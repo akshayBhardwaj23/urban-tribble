@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { api, setApiUserEmail } from "@/lib/api";
+import { api, setApiAccessToken } from "@/lib/api";
 import { PRODUCT_NAME } from "@/lib/brand";
 import {
   checkoutCallbackUrl,
@@ -58,13 +58,13 @@ export function PricingTierCTA({
 
   const runCheckout = async () => {
     setErr(null);
-    if (status !== "authenticated" || !session?.user?.email) {
+    if (status !== "authenticated" || !session?.accessToken) {
       void signIn(undefined, { callbackUrl: "/pricing" });
       return;
     }
     setBusy(true);
     try {
-      setApiUserEmail(session.user.email);
+      setApiAccessToken(session.accessToken);
       const { short_url, subscription_id, key_id } = await api.razorpayCheckout(planId);
 
       if (useRazorpayHostedCheckout) {

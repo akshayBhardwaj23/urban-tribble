@@ -7,22 +7,35 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Workspace
-from utils.email_norm import user_by_email_ci
+from services.api_tokens import TokenError, bearer_from_authorization, verify_access_token
 
 
 def get_current_user(
-    x_user_email: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
-    """Extract current user from X-User-Email header.
+    """Resolve the current user from a signed Bearer access token.
 
-    Returns None if no header is present (allows unauthenticated access
-    to endpoints that handle it themselves).
+    Returns None when no Authorization header is present so endpoints can
+    opt into optional auth. Spoofable ``X-User-Email`` is intentionally ignored.
     """
-    if not x_user_email:
+    token = bearer_from_authorization(authorization)
+    if not token:
         return None
 
-    return user_by_email_ci(db, x_user_email)
+    try:
+        payload = verify_access_token(token)
+    except TokenError:
+        raise HTTPException(401, "Invalid or expired access token")
+
+    user_id = payload.get("sub")
+    if not user_id or not isinstance(user_id, str):
+        raise HTTPException(401, "Invalid or expired access token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(401, "Invalid or expired access token")
+    return user
 
 
 def require_user(

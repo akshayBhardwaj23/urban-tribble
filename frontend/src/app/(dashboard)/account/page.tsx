@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, setApiUserEmail } from "@/lib/api";
+import { api, setApiAccessToken } from "@/lib/api";
 import { CONTACT_EMAIL, contactMailto } from "@/lib/brand";
 import { useWorkspace } from "@/lib/workspace-context";
 import { maxWorkspacesForPlan } from "@/lib/workspace-plan-limits";
@@ -31,13 +31,13 @@ export default function AccountPage() {
   );
 
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ["auth-me", session?.user?.email ?? "none"],
+    queryKey: ["auth-me", session?.accessToken ? "authed" : "none"],
     queryFn: async () => {
-      if (!session?.user?.email) throw new Error("Not signed in");
-      setApiUserEmail(session.user.email);
+      if (!session?.accessToken) throw new Error("Not signed in");
+      setApiAccessToken(session.accessToken);
       return api.getAuthMe();
     },
-    enabled: status === "authenticated" && Boolean(session?.user?.email),
+    enabled: status === "authenticated" && Boolean(session?.accessToken),
   });
 
   const deleteWorkspaceMutation = useMutation({

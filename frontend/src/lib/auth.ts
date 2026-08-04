@@ -5,12 +5,50 @@ import GoogleProvider from "next-auth/providers/google";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const INTERNAL_AUTH_SECRET =
+  process.env.INTERNAL_AUTH_SECRET ||
+  "dev-internal-auth-secret-change-in-production";
+
 type SignInUser = {
   id: string;
   email: string;
   name?: string | null;
   image?: string | null;
+  accessToken?: string;
 };
+
+type BootstrapResponse = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  access_token: string;
+};
+
+async function bootstrapAccessToken(user: {
+  email: string;
+  name?: string | null;
+  image?: string | null;
+}): Promise<BootstrapResponse | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/bootstrap`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Secret": INTERNAL_AUTH_SECRET,
+      },
+      body: JSON.stringify({
+        email: user.email,
+        name: user.name ?? null,
+        image: user.image ?? null,
+      }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as BootstrapResponse;
+  } catch {
+    return null;
+  }
+}
 
 export const authOptions = {
   providers: [
@@ -42,12 +80,14 @@ export const authOptions = {
             email: string;
             name: string | null;
             image: string | null;
+            access_token: string;
           };
           return {
             id: u.id,
             email: u.email,
             name: u.name ?? undefined,
             image: u.image ?? undefined,
+            accessToken: u.access_token,
           };
         } catch {
           return null;
@@ -78,12 +118,14 @@ export const authOptions = {
             email: string;
             name: string | null;
             image: string | null;
+            access_token: string;
           };
           return {
             id: u.id,
             email: u.email,
             name: u.name ?? undefined,
             image: u.image ?? undefined,
+            accessToken: u.access_token,
           };
         } catch {
           return null;
@@ -117,10 +159,28 @@ export const authOptions = {
   callbacks: {
     async jwt({ token, user }: { token: JWT; user?: SignInUser }) {
       if (user) {
-        token.sub = user.id;
         token.email = user.email;
         token.name = user.name;
         token.picture = user.image;
+
+        if (user.accessToken) {
+          token.sub = user.id;
+          token.accessToken = user.accessToken;
+        } else if (user.email) {
+          // Google OAuth / dev-bypass: mint a FastAPI token server-side.
+          const boot = await bootstrapAccessToken({
+            email: user.email,
+            name: user.name,
+            image: user.image,
+          });
+          if (boot?.access_token) {
+            token.sub = boot.id;
+            token.accessToken = boot.access_token;
+            token.email = boot.email;
+            token.name = boot.name;
+            token.picture = boot.image;
+          }
+        }
       }
       return token;
     },
@@ -128,7 +188,14 @@ export const authOptions = {
       session,
       token,
     }: {
-      session: { user?: { email?: string | null; name?: string | null; image?: string | null } };
+      session: {
+        user?: {
+          email?: string | null;
+          name?: string | null;
+          image?: string | null;
+        };
+        accessToken?: string;
+      };
       token: JWT;
     }) {
       if (session.user) {
@@ -136,6 +203,7 @@ export const authOptions = {
         session.user.name = token.name as string | null | undefined;
         session.user.image = token.picture as string | null | undefined;
       }
+      session.accessToken = token.accessToken;
       return session;
     },
   },

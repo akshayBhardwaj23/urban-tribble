@@ -45,6 +45,7 @@ Frontend runs at http://localhost:3000.
 5. For production at **https://snaptix.ai**, also add `https://snaptix.ai` and `https://snaptix.ai/api/auth/callback/google`, and set `NEXTAUTH_URL=https://snaptix.ai` in `frontend/.env.local`
 6. Copy Client ID and Client Secret to `frontend/.env.local`
 7. Generate a NEXTAUTH_SECRET: `openssl rand -base64 32`
+8. Set the same **`INTERNAL_AUTH_SECRET`** in `frontend/.env.local` and `backend/.env` (server-only). Also set a strong **`API_JWT_SECRET`** in `backend/.env`.
 
 ## Project Structure
 

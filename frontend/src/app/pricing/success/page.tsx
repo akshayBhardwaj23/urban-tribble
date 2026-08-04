@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { api, setApiUserEmail } from "@/lib/api";
+import { api, setApiAccessToken } from "@/lib/api";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { useWorkspace } from "@/lib/workspace-context";
 import type { RazorpayCheckoutSuccess } from "@/lib/razorpay-checkout";
@@ -44,13 +44,13 @@ function PricingSuccessContent() {
       return;
     }
 
-    const email = session?.user?.email;
-    if (!email) return;
+    const token = session?.accessToken;
+    if (!token) return;
 
     let cancelled = false;
 
     const run = async () => {
-      setApiUserEmail(email);
+      setApiAccessToken(token);
       const params = readCheckoutParams(searchParams);
 
       if (params) {
@@ -88,7 +88,7 @@ function PricingSuccessContent() {
     return () => {
       cancelled = true;
     };
-  }, [status, session?.user?.email, searchParams, router, syncUser]);
+  }, [status, session?.accessToken, searchParams, router, syncUser]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4 text-center">

@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
-import { setApiUserEmail } from "@/lib/api";
+import { setApiAccessToken } from "@/lib/api";
 import {
   API_UNAVAILABLE_DESCRIPTION,
   API_UNAVAILABLE_TITLE,
@@ -34,10 +34,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [loading, profile, router]);
 
   useEffect(() => {
-    if (session?.user?.email) {
-      setApiUserEmail(session.user.email);
+    if (session?.accessToken) {
+      setApiAccessToken(session.accessToken);
     }
-  }, [session?.user?.email]);
+  }, [session?.accessToken]);
 
   if (status === "loading" || loading) {
     return (
@@ -51,7 +51,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  if (!loading && session?.user?.email && !profile) {
+  if (!loading && session?.accessToken && !profile) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="max-w-md space-y-2">

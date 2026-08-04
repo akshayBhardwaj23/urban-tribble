@@ -85,8 +85,19 @@ def run_analysis(
 
 
 @router.get("/{analysis_id}")
-def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
-    analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+def get_analysis(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    _, workspace_id = ws
+    analysis = (
+        db.query(Analysis)
+        .join(Dataset, Analysis.dataset_id == Dataset.id)
+        .join(Upload, Dataset.upload_id == Upload.id)
+        .filter(Analysis.id == analysis_id, Upload.workspace_id == workspace_id)
+        .first()
+    )
     if not analysis:
         raise HTTPException(404, "Analysis not found")
 

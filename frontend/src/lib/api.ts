@@ -212,10 +212,19 @@ export type RecurringSummaryRecord = {
   updated_at: string | null;
 };
 
-let _userEmail: string | null = null;
+let _accessToken: string | null = null;
 
-export function setApiUserEmail(email: string | null) {
-  _userEmail = email;
+/** @deprecated Prefer setApiAccessToken — email is no longer used for API auth. */
+export function setApiUserEmail(_email: string | null) {
+  // Kept as a no-op so older call sites compile during the migration.
+}
+
+export function setApiAccessToken(token: string | null) {
+  _accessToken = token;
+}
+
+export function getApiAccessToken(): string | null {
+  return _accessToken;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -223,8 +232,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...(options?.headers as Record<string, string>),
   };
 
-  if (_userEmail) {
-    headers["X-User-Email"] = _userEmail;
+  if (_accessToken) {
+    headers["Authorization"] = `Bearer ${_accessToken}`;
   }
 
   let res: Response;

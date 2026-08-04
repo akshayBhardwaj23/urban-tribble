@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     MAX_FILE_SIZE_MB: int = 20
-    # Per authenticated user (X-User-Email). In-memory; use proxy limits for multi-worker.
+    # Per authenticated user (Bearer token → user id). In-memory; use proxy limits for multi-worker.
     UPLOAD_RATE_BURST_PER_MINUTE: int = 5
     UPLOAD_RATE_MAX_PER_HOUR: int = 30
     ALLOWED_EXTENSIONS: List[str] = [".xlsx", ".xls", ".csv", ".tsv"]
@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     OTP_PEPPER: str = "dev-otp-pepper-change-in-production"
     OTP_EXPIRE_MINUTES: int = 10
     OTP_RESEND_SECONDS: int = 60
+    # Signed API access tokens (Authorization: Bearer). Override in production.
+    API_JWT_SECRET: str = "dev-api-jwt-secret-change-in-production"
+    API_JWT_EXPIRE_HOURS: int = 336  # 14 days
+    # Server-only secret for NextAuth → FastAPI bootstrap after Google / bypass sign-in.
+    # Must match frontend INTERNAL_AUTH_SECRET (never NEXT_PUBLIC_).
+    INTERNAL_AUTH_SECRET: str = "dev-internal-auth-secret-change-in-production"
     # Razorpay Subscriptions (https://razorpay.com/docs/subscriptions/) - leave key empty to disable checkout/webhooks.
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""
