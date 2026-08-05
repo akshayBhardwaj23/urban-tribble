@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -30,6 +30,7 @@ from services.period_change_summary import (
     build_workspace_what_changed,
     resolve_period_comparison_for_dataframe,
 )
+from services import overview_cache
 from services.workspace_alerts import build_workspace_alerts
 from services.workspace_query import latest_workspace_overview_analysis
 from services.workspace_recommended_actions import build_recommended_actions
@@ -255,9 +256,22 @@ def get_overview(
 ):
     """Workspace-level overview aggregating data from all datasets."""
     user, workspace_id = ws
-    all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
-    usage_payload = build_workspace_usage_payload(db, user, workspace_id)
     plan = get_effective_plan(db, user)
+
+    # Usage counters change on every action and are cheap, so they stay outside
+    # the cache; the expensive parquet aggregation does not.
+    usage_payload = build_workspace_usage_payload(db, user, workspace_id)
+    payload = overview_cache.get_or_build(
+        db,
+        workspace_id,
+        lambda: _build_overview(db, workspace_id, plan),
+        extra_key=plan,
+    )
+    return {**payload, "usage": usage_payload}
+
+
+def _build_overview(db: Session, workspace_id: str, plan: str) -> dict:
+    all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     feats = plan_features(plan)
 
     if not all_datasets:
@@ -279,34 +293,78 @@ def get_overview(
             "habit_hints": build_workspace_habit_hints(
                 db, workspace_id, has_datasets=False
             ),
-            "usage": usage_payload,
             "plan_features": feats,
         }
 
     total_rows = sum(up.row_count or 0 for _, up in all_datasets)
     kpis = []
     all_charts = []
+    # Only load parquet when a dataset lacks a precomputed overview series, or
+    # when what_changed / alerts need the frame. Prefer the summary path.
+    loaded_frames: dict[str, Any] = {}
 
     for ds, up in all_datasets:
         metadata = json.loads(ds.schema_json) if ds.schema_json else {}
         summary = json.loads(ds.data_summary) if ds.data_summary else {}
 
-        for rev_col in metadata.get("revenue_columns", []):
+        primary_amount = metadata.get("primary_amount")
+        revenue_cols_meta = list(metadata.get("revenue_columns", []) or [])
+        # Prefer the primary amount only — listing every revenue column invited
+        # users to add tiles that measure overlapping things.
+        preferred = []
+        if primary_amount and primary_amount in revenue_cols_meta:
+            preferred = [primary_amount]
+        elif revenue_cols_meta:
+            preferred = [revenue_cols_meta[0]]
+        for rev_col in preferred:
             total_key = f"{rev_col}_total"
             if total_key in summary:
                 kpis.append({
                     "label": f"{rev_col.replace('_', ' ').title()}",
                     "value": summary[total_key],
                     "dataset_name": ds.name,
+                    "dataset_id": ds.id,
+                    "column": rev_col,
+                    "is_primary_for_dataset": True,
+                    "additive_across_sources": False,
                 })
+
+        series = summary.get("overview_series") or []
+        period_comparison = None
+        if series and isinstance(series, list) and len(series) >= 2:
+            rev_label = (
+                series[0].get("value_column")
+                or (preferred[0] if preferred else "value")
+            )
+            all_charts.append({
+                "id": f"{ds.id}_{rev_label}_over_time",
+                "title": f"{str(rev_label).replace('_', ' ').title()} Over Time",
+                "type": "line",
+                "x_label": series[0].get("date_column") or "date",
+                "y_label": rev_label,
+                "data": [{"x": r["x"], "y": float(r["y"])} for r in series if "x" in r and "y" in r],
+                "dataset_name": ds.name,
+                "period_comparison": period_comparison,
+                "from_summary": True,
+            })
+            continue
 
         try:
             df = _load_cleaned_df(up)
+            loaded_frames[ds.id] = df
         except Exception:
             continue
 
         date_cols = metadata.get("date_columns", [])
         revenue_cols = metadata.get("revenue_columns", [])
+        primary_t = metadata.get("primary_timeline")
+        primary_a = metadata.get("primary_amount")
+        if primary_t and primary_t in (date_cols or []):
+            date_cols = [primary_t] + [c for c in date_cols if c != primary_t]
+        if primary_a and primary_a in (revenue_cols or []):
+            revenue_cols = [primary_a] + [c for c in revenue_cols if c != primary_a]
+        elif primary_a and primary_a in df.columns:
+            revenue_cols = [primary_a] + list(revenue_cols or [])
         category_cols = metadata.get("category_columns", [])
 
         period_comparison = resolve_period_comparison_for_dataframe(df, metadata)
@@ -367,6 +425,46 @@ def get_overview(
                         "dataset_name": ds.name,
                     })
 
+    def _loader(upload):
+        # Prefer a frame already loaded for charts; otherwise open parquet once.
+        for ds, up in all_datasets:
+            if up.id == upload.id and ds.id in loaded_frames:
+                return loaded_frames[ds.id]
+        return _load_cleaned_df(upload)
+
+    what_changed = (
+        build_workspace_what_changed(all_datasets, _loader)
+        if feats["what_changed"]
+        else empty_what_changed()
+    )
+    analysis = latest_workspace_overview_analysis(db, workspace_id)
+    analysis_obj = None
+    if analysis and analysis.result_json:
+        try:
+            analysis_obj = json.loads(analysis.result_json)
+        except json.JSONDecodeError:
+            analysis_obj = None
+    alerts = (
+        build_workspace_alerts(
+            what_changed,
+            all_datasets,
+            _loader,
+            analysis_obj,
+        )
+        if feats["alerts"]
+        else []
+    )
+    recommended_actions = build_recommended_actions(
+        analysis_obj,
+        alerts,
+        what_changed,
+    )
+    if plan == "free":
+        recommended_actions = recommended_actions[:2]
+    habit_hints = build_workspace_habit_hints(
+        db, workspace_id, has_datasets=True
+    )
+
     datasets_list = []
     for ds, up in all_datasets:
         metadata = json.loads(ds.schema_json) if ds.schema_json else {}
@@ -387,49 +485,24 @@ def get_overview(
             "value_columns": value_opts,
         })
 
-    what_changed = (
-        build_workspace_what_changed(all_datasets, _load_cleaned_df)
-        if feats["what_changed"]
-        else empty_what_changed()
-    )
-    analysis = latest_workspace_overview_analysis(db, workspace_id)
-    analysis_obj = None
-    if analysis and analysis.result_json:
-        try:
-            analysis_obj = json.loads(analysis.result_json)
-        except json.JSONDecodeError:
-            analysis_obj = None
-    alerts = (
-        build_workspace_alerts(
-            what_changed,
-            all_datasets,
-            _load_cleaned_df,
-            analysis_obj,
-        )
-        if feats["alerts"]
-        else []
-    )
-    recommended_actions = build_recommended_actions(
-        analysis_obj,
-        alerts,
-        what_changed,
-    )
-    if plan == "free":
-        recommended_actions = recommended_actions[:2]
-    habit_hints = build_workspace_habit_hints(
-        db, workspace_id, has_datasets=True
-    )
+    shown_kpis = kpis[:8]
+    sources_with_revenue = len({k["dataset_id"] for k in shown_kpis})
 
     return {
         "total_datasets": len(all_datasets),
         "total_rows": total_rows,
-        "kpis": kpis[:8],
+        "kpis": shown_kpis,
+        "kpi_note": (
+            f"Each figure is one column from one source ({sources_with_revenue} sources). "
+            "Sources measure overlapping things, so these do not add up to company revenue."
+            if sources_with_revenue > 1
+            else None
+        ),
         "charts": all_charts[:6],
         "datasets": datasets_list,
         "what_changed": what_changed,
         "alerts": alerts,
         "recommended_actions": recommended_actions,
         "habit_hints": habit_hints,
-        "usage": usage_payload,
         "plan_features": feats,
     }

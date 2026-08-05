@@ -1,7 +1,14 @@
 import type { IngestionProfile } from "@/lib/ingestion";
-import { formatUserFacingApiError, sanitizeApiErrorMessage } from "@/lib/api-errors";
+import {
+  ApiTimeoutError,
+  formatUserFacingApiError,
+  sanitizeApiErrorMessage,
+} from "@/lib/api-errors";
+import { resolveApiBase } from "@/lib/api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export { resolveApiBase };
+
+const API_BASE = resolveApiBase();
 
 /** Stored executive digest (weekly / monthly); HTML snapshot reserved for future email. */
 export type RecurringSummaryContent = {
@@ -227,23 +234,54 @@ export function getApiAccessToken(): string | null {
   return _accessToken;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+/** Client-side deadlines. Without these a hung backend leaves a spinner forever. */
+const DEFAULT_TIMEOUT_MS = 30_000;
+export const TIMEOUTS = {
+  /** Parsing and profiling a workbook server-side. */
+  upload: 180_000,
+  /** LLM briefing generation. */
+  analysis: 180_000,
+  /** LLM question answering. */
+  chat: 120_000,
+} as const;
+
+type RequestOptions = RequestInit & {
+  /** Overrides DEFAULT_TIMEOUT_MS. Pass 0 to opt out entirely. */
+  timeoutMs?: number;
+  /** Verb phrase used in timeout copy, e.g. "read your file". */
+  action?: string;
+};
+
+async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+  const { timeoutMs, action, ...init } = options ?? {};
   const headers: Record<string, string> = {
-    ...(options?.headers as Record<string, string>),
+    ...(init.headers as Record<string, string>),
   };
 
   if (_accessToken) {
     headers["Authorization"] = `Bearer ${_accessToken}`;
   }
 
+  const deadline = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = deadline > 0 && !init.signal ? new AbortController() : null;
+  const timer = controller
+    ? setTimeout(() => controller.abort(), deadline)
+    : null;
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      ...options,
+      ...init,
       headers,
+      signal: controller?.signal ?? init.signal,
     });
   } catch (e) {
-    throw new Error(formatUserFacingApiError(e));
+    if (controller?.signal.aborted) {
+      throw new ApiTimeoutError(action ?? "complete that request", deadline);
+    }
+    throw new Error(formatUserFacingApiError(e, action));
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   if (!res.ok) {
@@ -292,9 +330,11 @@ export const api = {
       workspaces: { id: string; name: string; created_at: string }[];
     }>("/api/auth/me"),
 
-  deleteAuthAccount: () =>
+  deleteAuthAccount: (confirmation: string = "DELETE") =>
     request<{ ok: boolean; deleted: boolean }>("/api/auth/me", {
       method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation }),
     }),
 
   deleteWorkspace: (workspaceId: string) =>
@@ -304,15 +344,20 @@ export const api = {
       active_workspace_id: string | null;
     }>(`/api/workspaces/${workspaceId}`, { method: "DELETE" }),
 
-  uploadFile: (file: File, description: string) => {
+  uploadFile: async (
+    file: File,
+    description: string,
+    opts?: { onStage?: (stage: string | null | undefined) => void }
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("description", description);
-    return request<{
+    type UploadResult = {
       id: string;
       filename: string;
       file_type: string;
       status: string;
+      processing_stage?: string | null;
       dataset_id: string;
       row_count: number;
       column_count: number;
@@ -323,7 +368,55 @@ export const api = {
       };
       ingestion: IngestionProfile;
       all_columns: string[];
-    }>("/api/uploads", { method: "POST", body: formData });
+      mapping_spec?: unknown;
+      sheets?: unknown[];
+      poll_url?: string;
+      error?: string | null;
+    };
+
+    const initial = await request<UploadResult & { dataset_id: string | null }>(
+      "/api/uploads",
+      {
+        method: "POST",
+        body: formData,
+        timeoutMs: TIMEOUTS.upload,
+        action: "read your file",
+      }
+    );
+    opts?.onStage?.(initial.processing_stage ?? "queued");
+
+    // Sync path already finished.
+    if (initial.status === "completed" && initial.dataset_id) {
+      return initial as UploadResult;
+    }
+    if (initial.status === "failed") {
+      throw new Error(
+        sanitizeApiErrorMessage(initial.error || "Failed to process file")
+      );
+    }
+
+    // Async path: poll until the worker finishes.
+    const uploadId = initial.id;
+    const deadline = Date.now() + TIMEOUTS.upload;
+    let delay = 600;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay + 200, 2000);
+      const status = await request<UploadResult & { dataset_id: string | null }>(
+        `/api/uploads/${uploadId}`,
+        { timeoutMs: 30_000, action: "check upload progress" }
+      );
+      opts?.onStage?.(status.processing_stage);
+      if (status.status === "completed" && status.dataset_id) {
+        return status as UploadResult;
+      }
+      if (status.status === "failed") {
+        throw new Error(
+          sanitizeApiErrorMessage(status.error || "Failed to process file")
+        );
+      }
+    }
+    throw new ApiTimeoutError("finish processing your file", TIMEOUTS.upload);
   },
 
   patchDataset: (
@@ -333,6 +426,11 @@ export const api = {
       primary_date_column?: string | null;
       primary_amount_column?: string | null;
       segment_columns?: string[];
+      dayfirst?: boolean | null;
+      drop_duplicates?: boolean;
+      sheet?: string | null;
+      header_row?: number | null;
+      column_roles?: Record<string, string>;
     }
   ) =>
     request<{
@@ -351,8 +449,14 @@ export const api = {
       id: string;
       filename: string;
       status: string;
+      processing_stage?: string | null;
+      dataset_id?: string | null;
       user_description: string | null;
       created_at: string;
+      error?: string | null;
+      ingestion?: IngestionProfile | null;
+      row_count?: number | null;
+      column_count?: number | null;
     }>(`/api/uploads/${id}`),
 
   listDatasets: () =>
@@ -389,12 +493,48 @@ export const api = {
       schema_json: {
         date_columns: string[];
         revenue_columns: string[];
+        expense_columns?: string[];
         category_columns: string[];
         numeric_columns: string[];
         text_columns: string[];
+        primary_timeline?: string | null;
+        primary_amount?: string | null;
+        all_columns?: string[];
       } | null;
       data_summary: Record<string, unknown> | null;
-      cleaned_report: { steps: string[]; original_shape: number[]; cleaned_shape: number[] } | null;
+      cleaned_report: {
+        steps: string[];
+        original_shape: number[];
+        cleaned_shape: number[];
+        flags?: { kind: string; code: string; message: string }[];
+        structured_steps?: {
+          code?: string;
+          kind?: string;
+          message: string;
+        }[];
+      } | null;
+      mapping_spec: {
+        version?: number;
+        source?: string;
+        primary_timeline?: string | null;
+        primary_amount?: string | null;
+        dayfirst?: boolean | null;
+        drop_duplicates?: boolean;
+        sheet?: string | null;
+        header_row?: number;
+        columns?: {
+          name: string;
+          role: string;
+          date_format?: string | null;
+          original_name?: string | null;
+          meaning?: string | null;
+        }[];
+        ingestion_profile?: {
+          flags?: { kind: string; code: string; message: string }[];
+          interpretations?: string[];
+        } | null;
+      } | null;
+      sheets?: { name: string; score: number; rows?: number; cols?: number }[];
       business_classification: string | null;
       created_at: string;
       integration_id: string | null;
@@ -432,6 +572,8 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dataset_id: datasetId }),
+      timeoutMs: TIMEOUTS.analysis,
+      action: "build your briefing",
     }),
 
   getAnalysisByDataset: (datasetId: string) =>
@@ -539,6 +681,8 @@ export const api = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dataset_id: datasetId, question }),
+        timeoutMs: TIMEOUTS.chat,
+        action: "answer that question",
       }
     ),
 
@@ -556,6 +700,8 @@ export const api = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
+        timeoutMs: TIMEOUTS.chat,
+        action: "answer that question",
       }
     ),
 
@@ -575,6 +721,8 @@ export const api = {
     }>(`/api/datasets/${datasetId}/append`, {
       method: "POST",
       body: formData,
+      timeoutMs: TIMEOUTS.upload,
+      action: "add this file to the source",
     });
   },
 

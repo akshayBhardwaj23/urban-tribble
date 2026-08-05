@@ -10,6 +10,24 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Below this a "forecast" is a straight line through noise. Eight was still
+# too thin for anything a user should plan against; fourteen is the floor.
+MIN_POINTS_FOR_FORECAST = 14
+# Between the hard minimum and this, results are returned but marked low confidence.
+LOW_CONFIDENCE_BELOW = 24
+
+
+class NotEnoughHistoryError(ValueError):
+    """Fewer observations than a forecast can be honestly built from."""
+
+    def __init__(self, available: int, required: int = MIN_POINTS_FOR_FORECAST):
+        self.available = available
+        self.required = required
+        super().__init__(
+            f"A forecast needs at least {required} periods of history; this series has "
+            f"{available}. Import more history, or pick a coarser date column."
+        )
+
 
 class Forecaster:
     def forecast(
@@ -21,20 +39,44 @@ class Forecaster:
     ) -> Dict[str, Any]:
         """Forecast with Prophet when enough history, else linear regression."""
         ts, freq, period_label = self._prepare_series(df, date_col, value_col)
-        if len(ts) < 3:
-            raise ValueError("Need at least 3 data points for forecasting")
 
         engine = (getattr(settings, "FORECAST_ENGINE", "prophet") or "prophet").strip().lower()
-        min_p = max(3, int(getattr(settings, "FORECAST_PROPHET_MIN_POINTS", 24)))
+        min_p = max(MIN_POINTS_FOR_FORECAST, int(getattr(settings, "FORECAST_PROPHET_MIN_POINTS", 24)))
 
         if engine == "linear" or len(ts) < min_p:
-            return self._forecast_linear(ts, date_col, value_col, periods, freq, period_label)
+            result = self._forecast_linear(ts, date_col, value_col, periods, freq, period_label)
+        else:
+            try:
+                result = self._forecast_prophet(
+                    ts, date_col, value_col, periods, freq, period_label
+                )
+            except Exception as e:
+                logger.warning("Prophet forecast failed, using linear fallback: %s", e)
+                result = self._forecast_linear(
+                    ts, date_col, value_col, periods, freq, period_label
+                )
 
-        try:
-            return self._forecast_prophet(ts, date_col, value_col, periods, freq, period_label)
-        except Exception as e:
-            logger.warning("Prophet forecast failed, using linear fallback: %s", e)
-            return self._forecast_linear(ts, date_col, value_col, periods, freq, period_label)
+        result["history_points"] = len(ts)
+        # A forecast projecting further than the history it was fitted on is
+        # extrapolation, not prediction; say so rather than implying precision.
+        overreach = periods > len(ts)
+        if len(ts) < LOW_CONFIDENCE_BELOW or overreach:
+            reasons = []
+            if len(ts) < LOW_CONFIDENCE_BELOW:
+                reasons.append(f"only {len(ts)} periods of history")
+            if overreach:
+                reasons.append(
+                    f"projecting {periods} periods beyond {len(ts)} observed"
+                )
+            result["confidence_level"] = "low"
+            result["confidence_note"] = (
+                "Treat this as a rough direction, not a number to plan against: "
+                + " and ".join(reasons)
+                + "."
+            )
+        else:
+            result["confidence_level"] = "normal"
+        return result
 
     def _prepare_series(
         self, df: pd.DataFrame, date_col: str, value_col: str
@@ -42,13 +84,19 @@ class Forecaster:
         if date_col not in df.columns or value_col not in df.columns:
             raise ValueError(f"Columns {date_col} or {value_col} not found")
 
+        from services.query_plan import looks_like_rate_column
+
         ts = df[[date_col, value_col]].copy()
         ts[date_col] = pd.to_datetime(ts[date_col])
-        ts = ts.groupby(date_col, as_index=False)[value_col].sum()
+        # Rates/ratios must not be summed across rows in a period.
+        if looks_like_rate_column(value_col):
+            ts = ts.groupby(date_col, as_index=False)[value_col].mean()
+        else:
+            ts = ts.groupby(date_col, as_index=False)[value_col].sum()
         ts = ts.sort_values(date_col).reset_index(drop=True)
         ts = ts.replace([np.inf, -np.inf], np.nan).dropna(subset=[value_col])
-        if len(ts) < 3:
-            raise ValueError("Need at least 3 data points for forecasting")
+        if len(ts) < MIN_POINTS_FOR_FORECAST:
+            raise NotEnoughHistoryError(len(ts))
 
         freq = self._infer_frequency(ts[date_col])
         period_label = self._freq_label(freq)

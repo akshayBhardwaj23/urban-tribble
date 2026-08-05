@@ -32,10 +32,16 @@ def _b64url_decode(data: str) -> bytes:
 
 def _signing_key() -> bytes:
     secret = (settings.API_JWT_SECRET or "").strip()
-    if not secret or secret == "dev-api-jwt-secret-change-in-production":
-        # Still functional in local/dev; production must override.
-        secret = settings.API_JWT_SECRET or "dev-api-jwt-secret-change-in-production"
-    return secret.encode("utf-8")
+    default = "dev-api-jwt-secret-change-in-production"
+    if settings.is_production:
+        if not secret or secret == default or len(secret) < 24:
+            raise TokenError(
+                "API_JWT_SECRET is missing, default, or too short. "
+                "Refusing to sign or verify tokens."
+            )
+        return secret.encode("utf-8")
+    # Local/dev may still use the committed default.
+    return (secret or default).encode("utf-8")
 
 
 def issue_access_token(*, user_id: str, email: str) -> str:

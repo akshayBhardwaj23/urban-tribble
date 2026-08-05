@@ -14,6 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { formatUserFacingApiError } from "@/lib/api-errors";
+import { useWorkspace } from "@/lib/workspace-context";
 
 type DatasetListItem = Awaited<ReturnType<typeof api.listDatasets>>[number];
 
@@ -23,9 +25,20 @@ export default function DatasetsPage() {
     null
   );
 
-  const { data: datasets, isLoading } = useQuery({
-    queryKey: ["datasets"],
+  const { activeWorkspace, loading: workspaceLoading, switching } = useWorkspace();
+  const workspaceId = activeWorkspace?.id ?? "none";
+
+  const {
+    data: datasets,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ["datasets", workspaceId],
     queryFn: () => api.listDatasets() as Promise<DatasetListItem[]>,
+    enabled: !workspaceLoading && !switching && Boolean(activeWorkspace?.id),
   });
 
   const deleteMutation = useMutation({
@@ -61,12 +74,36 @@ export default function DatasetsPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading || workspaceLoading || switching ? (
         <div className="grid gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-20" />
           ))}
         </div>
+      ) : isError ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <div>
+              <p className="text-sm font-medium">
+                We couldn&apos;t load your sources
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatUserFacingApiError(error, "load your sources")}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Nothing has been deleted — this is a loading problem, not a data
+                problem.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              {isFetching ? "Retrying…" : "Retry"}
+            </Button>
+          </CardContent>
+        </Card>
       ) : !datasets || datasets.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -151,7 +188,7 @@ export default function DatasetsPage() {
           </p>
           {deleteMutation.isError && (
             <p className="text-sm text-destructive">
-              {deleteMutation.error.message}
+              {formatUserFacingApiError(deleteMutation.error, "remove this source")}
             </p>
           )}
           <div className="flex justify-end gap-2 mt-2">

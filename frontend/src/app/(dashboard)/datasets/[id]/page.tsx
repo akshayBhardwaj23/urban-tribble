@@ -38,6 +38,7 @@ import {
 } from "@/components/dashboard/timeframe-toolbar";
 import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { api, isApiPlanLimitError } from "@/lib/api";
+import { formatUserFacingApiError } from "@/lib/api-errors";
 import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
@@ -52,6 +53,7 @@ import {
   parseKpiDrillDown,
 } from "@/lib/kpi-drill-down";
 import { DATASET_ANALYSIS_EMPTY_INVITE } from "@/lib/analysis-fallback-copy";
+import { HowWeReadPanel } from "@/components/datasets/how-we-read-panel";
 
 type DashboardRequest =
   | { kind: "all" }
@@ -69,7 +71,11 @@ function dashboardRequestToApi(
 export default function DatasetPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { activeWorkspace, loading: workspaceLoading } = useWorkspace();
+  const {
+    activeWorkspace,
+    loading: workspaceLoading,
+    switching: workspaceSwitching,
+  } = useWorkspace();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,11 +83,15 @@ export default function DatasetPage() {
   const [appendDialogOpen, setAppendDialogOpen] = useState(false);
   const [timeframe, setTimeframe] = useState<TimeframeValue>({ preset: "all" });
 
-  const overviewEnabled =
-    !workspaceLoading && Boolean(activeWorkspace?.id);
+  const workspaceId = activeWorkspace?.id ?? "none";
+  // Keying on the workspace and pausing mid-switch stops the previous
+  // workspace's dataset from flashing before the 404 lands.
+  const workspaceReady =
+    !workspaceLoading && !workspaceSwitching && Boolean(activeWorkspace?.id);
+  const overviewEnabled = workspaceReady;
 
   const overviewQuery = useQuery({
-    queryKey: ["overview", activeWorkspace?.id ?? "none"],
+    queryKey: ["overview", workspaceId],
     queryFn: () => api.getOverview(),
     enabled: overviewEnabled,
   });
@@ -93,13 +103,15 @@ export default function DatasetPage() {
   const analysesAtLimit = Boolean(analysesLimitDetail);
 
   const dataset = useQuery({
-    queryKey: ["dataset", params.id],
+    queryKey: ["dataset", workspaceId, params.id],
     queryFn: () => api.getDataset(params.id),
+    enabled: workspaceReady && !!params.id,
   });
 
   const preview = useQuery({
-    queryKey: ["dataset-preview", params.id],
+    queryKey: ["dataset-preview", workspaceId, params.id],
     queryFn: () => api.getDatasetPreview(params.id),
+    enabled: workspaceReady && !!params.id,
   });
 
   const hasDateColumn = (dataset.data?.schema_json?.date_columns?.length ?? 0) > 0;
@@ -116,6 +128,7 @@ export default function DatasetPage() {
   const dashboardData = useQuery({
     queryKey: [
       "dashboard-data",
+      workspaceId,
       params.id,
       dashboardRequest.kind === "all"
         ? "all"
@@ -125,18 +138,19 @@ export default function DatasetPage() {
     ],
     queryFn: () =>
       api.getDashboardData(params.id, dashboardRequestToApi(dashboardRequest)),
-    enabled: !!params.id,
+    enabled: workspaceReady && !!params.id,
   });
 
   const analysis = useQuery({
-    queryKey: ["analysis", params.id],
+    queryKey: ["analysis", workspaceId, params.id],
     queryFn: () => api.getAnalysisByDataset(params.id),
+    enabled: workspaceReady && !!params.id,
   });
 
   const runAnalysis = useMutation({
     mutationFn: () => api.runAnalysis(params.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["analysis", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["analysis", workspaceId, params.id] });
       queryClient.invalidateQueries({ queryKey: ["overview"] });
       toast.success("Briefing finished", {
         description: "Open the Briefing tab to read the full results.",
@@ -155,8 +169,7 @@ export default function DatasetPage() {
         });
       } else {
         toast.error("Briefing could not run", {
-          description:
-            err instanceof Error ? err.message : "Something went wrong. Try again.",
+          description: formatUserFacingApiError(err, "build your briefing"),
         });
       }
     },
@@ -182,9 +195,13 @@ export default function DatasetPage() {
     mutationFn: (file: File) => api.appendToDataset(params.id, file),
     onSuccess: () => {
       setAppendDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["dataset", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["dataset-preview", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-data", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["dataset", workspaceId, params.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["dataset-preview", workspaceId, params.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-data", workspaceId, params.id],
+      });
       queryClient.invalidateQueries({ queryKey: ["workspace-timeline"] });
     },
   });
@@ -193,13 +210,18 @@ export default function DatasetPage() {
     mutationFn: (integrationId: string) => api.refreshIntegration(integrationId),
     onSuccess: () => {
       toast.success("Data refreshed from integration");
-      queryClient.invalidateQueries({ queryKey: ["dataset", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["dataset-preview", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-data", params.id] });
-      queryClient.invalidateQueries({ queryKey: ["analysis", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["dataset", workspaceId, params.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["dataset-preview", workspaceId, params.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-data", workspaceId, params.id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["analysis", workspaceId, params.id] });
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) =>
+      toast.error(formatUserFacingApiError(e, "refresh this integration")),
   });
 
   const handleAppendFile = useCallback(
@@ -724,7 +746,24 @@ export default function DatasetPage() {
         </TabsContent>
 
         <TabsContent value="details" className="space-y-4 mt-4">
-          {schema && (
+          <HowWeReadPanel
+            datasetId={data.id}
+            mappingSpec={data.mapping_spec}
+            allColumns={
+              data.schema_json?.all_columns ||
+              [
+                ...(data.schema_json?.date_columns || []),
+                ...(data.schema_json?.revenue_columns || []),
+                ...(data.schema_json?.expense_columns || []),
+                ...(data.schema_json?.category_columns || []),
+                ...(data.schema_json?.numeric_columns || []),
+                ...(data.schema_json?.text_columns || []),
+              ]
+            }
+            sheets={data.sheets}
+          />
+
+          {schema && !data.mapping_spec && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Column roles</CardTitle>
@@ -750,6 +789,18 @@ export default function DatasetPage() {
                       {c}{" "}
                       <span className="ml-1 text-muted-foreground">
                         revenue
+                      </span>
+                    </Badge>
+                  ))}
+                  {(schema.expense_columns || []).map((c: string) => (
+                    <Badge
+                      key={c}
+                      variant="outline"
+                      className="font-mono text-xs"
+                    >
+                      {c}{" "}
+                      <span className="ml-1 text-muted-foreground">
+                        expense
                       </span>
                     </Badge>
                   ))}
@@ -786,18 +837,48 @@ export default function DatasetPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">File preparation</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Observations from import — not all steps change your numbers.
+                </p>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-1">
-                  {data.cleaned_report.steps.map((step, i) => (
-                    <li
-                      key={i}
-                      className="text-sm text-muted-foreground flex items-start gap-2"
-                    >
-                      <span className="text-green-600 mt-0.5">&#10003;</span>
-                      {step}
-                    </li>
-                  ))}
+                <ul className="space-y-2">
+                  {(data.cleaned_report.structured_steps ||
+                    data.cleaned_report.steps.map((message) => ({
+                      message,
+                      kind:
+                        /missing|sparse|ambiguous/i.test(message)
+                          ? "warning"
+                          : "info",
+                    }))
+                  ).map((step, i) => {
+                    const kind =
+                      typeof step === "string"
+                        ? /missing|sparse|ambiguous/i.test(step)
+                          ? "warning"
+                          : "info"
+                        : step.kind || "info";
+                    const message =
+                      typeof step === "string" ? step : step.message;
+                    return (
+                      <li
+                        key={i}
+                        className="text-sm text-muted-foreground flex items-start gap-2"
+                      >
+                        <span
+                          className={
+                            kind === "warning"
+                              ? "text-amber-600 mt-0.5"
+                              : "text-muted-foreground mt-0.5"
+                          }
+                          aria-hidden
+                        >
+                          {kind === "warning" ? "!" : "·"}
+                        </span>
+                        {message}
+                      </li>
+                    );
+                  })}
                 </ul>
                 <p className="text-xs text-muted-foreground mt-3">
                   Shape: {data.cleaned_report.original_shape.join(" x ")} →{" "}

@@ -13,6 +13,11 @@ export const WORKSPACE_SCOPED_QUERY_PREFIXES = new Set([
   "analysis",
   "dashboard-data",
   "dataset-preview",
+  // Chat and integrations are per-workspace too: leaving them cached meant the
+  // previous workspace's conversation stayed on screen after a switch.
+  "chat-history",
+  "integrations",
+  "integration-oauth-session",
 ]);
 
 export function clearWorkspaceScopedQueries(queryClient: QueryClient): void {

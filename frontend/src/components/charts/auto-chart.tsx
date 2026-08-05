@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   formatChartAxisDate,
   formatChartTooltipDate,
+  parseISODateLocal,
 } from "@/lib/chart-dates";
 import {
   type PeriodComparison,
@@ -122,12 +123,20 @@ function downsampleOrdered<T>(points: T[], max: number): T[] {
   return out;
 }
 
+/**
+ * Bucket key for one calendar day, in the reader's own timezone.
+ *
+ * Axis labels are rendered with parseISODateLocal, so bucketing via
+ * toISOString (UTC) shifted points a day for anyone west of UTC.
+ */
 function dayKeyForX(x: string): string {
-  const t = Date.parse(x);
-  if (Number.isFinite(t)) {
-    return new Date(t).toISOString().slice(0, 10);
-  }
-  return x;
+  const local = parseISODateLocal(x);
+  const d = local ?? (Number.isFinite(Date.parse(x)) ? new Date(Date.parse(x)) : null);
+  if (!d) return x;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /** One point per calendar day - sums y when timestamps fall on the same day. */

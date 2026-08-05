@@ -14,6 +14,7 @@ def column_signature(metadata: dict[str, Any]) -> frozenset[str]:
         for key in (
             "date_columns",
             "revenue_columns",
+            "expense_columns",
             "category_columns",
             "numeric_columns",
             "text_columns",

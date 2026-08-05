@@ -13,6 +13,7 @@ from urllib.parse import urlparse, urlunparse
 
 import razorpay
 from razorpay.errors import SignatureVerificationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -50,6 +51,18 @@ def webhook_configured() -> bool:
 
 def _client() -> razorpay.Client:
     return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+
+def cancel_subscription(subscription_id: str, *, at_cycle_end: bool = False) -> None:
+    """Cancel a Razorpay subscription. Raises if the provider rejects the call."""
+    if not subscription_id:
+        return
+    if not razorpay_configured():
+        raise RuntimeError("Razorpay is not configured")
+    _client().subscription.cancel(
+        subscription_id, {"cancel_at_cycle_end": 1 if at_cycle_end else 0}
+    )
+    logger.info("Cancelled Razorpay subscription %s", subscription_id)
 
 
 def _plan_id_for_tier(tier: str) -> str:
@@ -280,79 +293,82 @@ def _resolve_tier(entity: dict[str, Any]) -> Optional[str]:
     return _tier_from_razorpay_plan_id(entity.get("plan_id"))
 
 
+def _claim_event(db: Session, event_id: str) -> bool:
+    """Reserve an event id. Returns False when another delivery already has it.
+
+    Insert-then-catch rather than check-then-insert: two concurrent deliveries of
+    the same event both pass a read check, and Razorpay retries aggressively.
+    The primary key on event_id makes exactly one of them win.
+
+    The claim is flushed but not committed yet so a later failure in the same
+    transaction rolls the claim back and Razorpay can retry.
+    """
+    try:
+        db.add(ProcessedBillingWebhookEvent(event_id=event_id))
+        db.flush()
+        return True
+    except IntegrityError:
+        db.rollback()
+        logger.info("Razorpay webhook %s already processed; ignoring duplicate", event_id)
+        return False
+
+
 def apply_subscription_webhook(db: Session, data: dict[str, Any], event_id: str) -> None:
-    if (
-        db.query(ProcessedBillingWebhookEvent)
-        .filter(ProcessedBillingWebhookEvent.event_id == event_id)
-        .first()
-    ):
+    if not _claim_event(db, event_id):
         return
 
-    event_type = data.get("event")
-    entity = _subscription_entity(data)
-    if not entity:
-        db.add(ProcessedBillingWebhookEvent(event_id=event_id))
-        db.commit()
-        return
+    try:
+        event_type = data.get("event")
+        entity = _subscription_entity(data)
+        if not entity:
+            db.commit()
+            return
 
-    user = _resolve_user(db, entity)
-    if not user:
-        logger.warning("Razorpay webhook: no user for subscription event %s", event_type)
-        db.add(ProcessedBillingWebhookEvent(event_id=event_id))
-        db.commit()
-        return
+        user = _resolve_user(db, entity)
+        if not user:
+            logger.warning("Razorpay webhook: no user for subscription event %s", event_type)
+            db.commit()
+            return
 
-    status = (entity.get("status") or "").lower()
-    sub_id = entity.get("id")
-    if sub_id:
-        user.billing_subscription_id = str(sub_id)
-    user.billing_provider = "razorpay"
-    _apply_period_end(user, entity)
+        status = (entity.get("status") or "").lower()
+        sub_id = entity.get("id")
+        if sub_id:
+            user.billing_subscription_id = str(sub_id)
+        user.billing_provider = "razorpay"
+        _apply_period_end(user, entity)
 
-    upgrade_events = frozenset(
-        {
-            "subscription.activated",
-            "subscription.charged",
-            "subscription.resumed",
-        }
-    )
-    downgrade_events = frozenset(
-        {
-            "subscription.cancelled",
-            "subscription.completed",
-            "subscription.halted",
-            "subscription.expired",
-        }
-    )
+        upgrade_events = frozenset(
+            {
+                "subscription.activated",
+                "subscription.charged",
+                "subscription.resumed",
+            }
+        )
+        downgrade_events = frozenset(
+            {
+                "subscription.cancelled",
+                "subscription.completed",
+                "subscription.halted",
+                "subscription.expired",
+            }
+        )
 
-    if event_type in upgrade_events:
-        if status == "active":
-            tier = _resolve_tier(entity)
-            if tier:
-                user.subscription_plan = tier
+        if event_type in upgrade_events:
+            if status == "active":
+                tier = _resolve_tier(entity)
+                if tier:
+                    user.subscription_plan = tier
+        elif event_type in downgrade_events:
+            user.subscription_plan = "free"
+            user.billing_subscription_id = None
+            user.subscription_current_period_end = None
+
         db.add(user)
-        db.add(ProcessedBillingWebhookEvent(event_id=event_id))
         db.commit()
-        return
-
-    if event_type in downgrade_events:
-        user.subscription_plan = "free"
-        user.billing_subscription_id = None
-        user.subscription_current_period_end = None
-        db.add(user)
-        db.add(ProcessedBillingWebhookEvent(event_id=event_id))
-        db.commit()
-        return
-
-    if event_type == "subscription.paused":
-        db.add(user)
-        db.add(ProcessedBillingWebhookEvent(event_id=event_id))
-        db.commit()
-        return
-
-    db.add(user)
-    db.add(ProcessedBillingWebhookEvent(event_id=event_id))
-    db.commit()
+    except Exception:
+        # Roll back the claim so Razorpay's retry can re-apply the event.
+        db.rollback()
+        raise
 
 
 def process_webhook_request(db: Session, raw_body: bytes, signature: str, event_id_header: Optional[str]) -> None:

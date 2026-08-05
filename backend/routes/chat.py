@@ -18,6 +18,7 @@ from services.workspace_query import (
 from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.query_engine import QueryEngine
 from services.subscription_usage import assert_chat_allowed
+from services.workspace_settings import currency_for_workspace
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -148,6 +149,7 @@ def chat(
         schema=schema,
         user_description=upload.user_description,
         history=history,
+        currency=currency_for_workspace(db, workspace_id),
     )
 
     answer = result.get("answer", "I couldn't process that question.")
@@ -215,6 +217,7 @@ def workspace_chat(
         question=req.question,
         dataframes=dataframes,
         history=history,
+        currency=currency_for_workspace(db, workspace_id),
     )
 
     answer = result.get("answer", "I couldn't process that question.")

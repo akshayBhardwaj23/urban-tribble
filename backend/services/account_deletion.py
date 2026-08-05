@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -22,14 +22,15 @@ from models.models import (
 from services.workspace_query import dataset_upload_pairs_for_workspace
 from utils.email_norm import normalize_email
 
+logger = logging.getLogger(__name__)
+
 
 def _unlink_upload_files(upload: Upload) -> None:
-    original = Path(upload.file_url)
-    if original.exists():
-        original.unlink()
-    parquet = original.parent / f"{upload.id}_cleaned.parquet"
-    if parquet.exists():
-        parquet.unlink()
+    from services.cleaned_parquet import invalidate_cleaned_parquet
+    from services.source_files import delete_all_sources
+
+    delete_all_sources(upload)
+    invalidate_cleaned_parquet(upload)
 
 
 def _delete_dataset_pair(db: Session, workspace_id: str, dataset: Dataset, upload: Upload) -> None:
@@ -84,7 +85,14 @@ def delete_workspace_cascade(db: Session, workspace: Workspace) -> None:
 
 
 def delete_user_account(db: Session, user: User) -> None:
-    """Remove all owned workspaces (including files on disk) and the user."""
+    """Remove all owned workspaces (including stored files) and the user.
+
+    The billing subscription is cancelled first: deleting the row locally would
+    otherwise leave an active mandate charging a customer who no longer has an
+    account, and no webhook would ever find a user to apply.
+    """
+    _cancel_subscription_quietly(user)
+
     user.active_workspace_id = None
     db.flush()
 
@@ -110,3 +118,21 @@ def delete_user_account(db: Session, user: User) -> None:
 
     db.delete(user)
     db.commit()
+
+
+def _cancel_subscription_quietly(user: User) -> None:
+    subscription_id = (getattr(user, "billing_subscription_id", None) or "").strip()
+    if not subscription_id:
+        return
+    try:
+        from services.razorpay_service import cancel_subscription
+
+        cancel_subscription(subscription_id)
+    except Exception as exc:  # noqa: BLE001 — never block deletion on the provider
+        logger.error(
+            "Could not cancel subscription %s while deleting user %s: %s. "
+            "Cancel it manually in the Razorpay dashboard.",
+            subscription_id,
+            user.id,
+            exc,
+        )

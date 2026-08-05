@@ -15,6 +15,7 @@ from services.subscription_usage import (
     trim_free_analysis_result,
 )
 from services.workspace_query import get_dataset_upload_in_workspace
+from services.workspace_settings import currency_for_workspace
 
 _ai_analyzer = AIAnalyzer()
 
@@ -48,7 +49,12 @@ def run_post_sync_analysis(
     column_metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
     user_description = upload.user_description if upload else None
 
-    result = _ai_analyzer.analyze(data_summary, column_metadata, user_description)
+    result = _ai_analyzer.analyze(
+        data_summary,
+        column_metadata,
+        user_description,
+        currency=currency_for_workspace(db, getattr(upload, "workspace_id", None)),
+    )
     if get_effective_plan(db, user) == "free":
         result = trim_free_analysis_result(result)
 

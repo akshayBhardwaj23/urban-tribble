@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+import html
 import json
 from datetime import datetime
 from typing import Any, Optional
@@ -133,8 +135,9 @@ async def microsoft_oauth_callback(
     error: Optional[str] = Query(default=None),
 ):
     if error:
+        safe = html.escape(str(error)[:300])
         return HTMLResponse(
-            f"<html><body><h2>Microsoft sign-in failed</h2><p>{error}</p></body></html>",
+            f"<html><body><h2>Microsoft sign-in failed</h2><p>{safe}</p></body></html>",
             status_code=400,
         )
     if not code or not state:
@@ -146,8 +149,9 @@ async def microsoft_oauth_callback(
     try:
         payload = parse_signed_state(state)
     except ValueError as e:
+        safe = html.escape(str(e)[:300])
         return HTMLResponse(
-            f"<html><body><h2>Invalid OAuth state</h2><p>{e}</p></body></html>",
+            f"<html><body><h2>Invalid OAuth state</h2><p>{safe}</p></body></html>",
             status_code=400,
         )
     try:
@@ -156,8 +160,9 @@ async def microsoft_oauth_callback(
         _apply_token_payload(config, token_payload)
         files = await microsoft_list_excel_files(config)
     except IntegrationFetchError as e:
+        safe = html.escape(str(e)[:300])
         return HTMLResponse(
-            f"<html><body><h2>Microsoft connect failed</h2><p>{e}</p></body></html>",
+            f"<html><body><h2>Microsoft connect failed</h2><p>{safe}</p></body></html>",
             status_code=400,
         )
 
@@ -456,8 +461,14 @@ async def run_scheduled_syncs(
     x_integration_cron_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    secret = settings.INTEGRATION_CRON_SECRET
-    if secret and x_integration_cron_secret != secret:
+    secret = (settings.INTEGRATION_CRON_SECRET or "").strip()
+    if not secret:
+        raise HTTPException(
+            503,
+            "Integration cron is disabled until INTEGRATION_CRON_SECRET is configured.",
+        )
+    provided = (x_integration_cron_secret or "").strip()
+    if not provided or not hmac.compare_digest(provided, secret):
         raise HTTPException(403, "Invalid cron secret")
     count = await run_due_syncs_once()
     due_remaining = len(find_due_integrations(db, limit=100))

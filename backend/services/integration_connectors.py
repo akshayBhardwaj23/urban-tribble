@@ -158,6 +158,64 @@ async def fetch_excel_onedrive_oauth(config: dict[str, Any]) -> pd.DataFrame:
         raise IntegrationFetchError(str(e)) from e
 
 
+def _host_is_blocked(hostname: str) -> bool:
+    """Block localhost, private, link-local and metadata endpoints (SSRF)."""
+    import ipaddress
+    import socket
+
+    host = (hostname or "").strip().lower().rstrip(".")
+    if not host:
+        return True
+    if host in {"localhost", "metadata.google.internal"} or host.endswith(".local"):
+        return True
+    if host.endswith(".internal") or host.endswith(".localhost"):
+        return True
+
+    candidates: list[str] = [host]
+    try:
+        infos = socket.getaddrinfo(host, None)
+        for info in infos:
+            candidates.append(info[4][0])
+    except OSError:
+        pass
+
+    for cand in candidates:
+        try:
+            ip = ipaddress.ip_address(cand)
+        except ValueError:
+            continue
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            return True
+        # AWS/GCP/Azure metadata
+        if str(ip) in {"169.254.169.254", "169.254.170.2", "fd00:ec2::254"}:
+            return True
+    return False
+
+
+def _assert_safe_export_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        raise IntegrationFetchError("Export URL must use http or https.")
+    if parsed.scheme == "http" and not parsed.hostname:
+        raise IntegrationFetchError("Export URL is missing a host.")
+    # Prefer HTTPS; allow http only for explicitly non-blocked public hosts
+    # (some spreadsheet exports still serve http).
+    host = parsed.hostname or ""
+    if _host_is_blocked(host):
+        raise IntegrationFetchError(
+            "That export URL points at a private or local network address, which is not allowed."
+        )
+    if parsed.username or parsed.password:
+        raise IntegrationFetchError("Export URLs with embedded credentials are not allowed.")
+
+
 async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
     url = str(config.get("export_url") or "").strip()
     if not url:
@@ -167,15 +225,34 @@ async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
             "That is an Excel Online editor link, not a downloadable file. "
             "Use a OneDrive Share link or a direct .xlsx download URL."
         )
-    async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+    _assert_safe_export_url(url)
+
+    # Follow redirects manually so every hop is re-checked against the SSRF blocklist.
+    async with httpx.AsyncClient(timeout=90.0, follow_redirects=False) as client:
+        current = url
+        resp: httpx.Response | None = None
         try:
-            resp = await client.get(url)
-            resp.raise_for_status()
+            for _ in range(5):
+                _assert_safe_export_url(current)
+                resp = await client.get(current)
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    location = resp.headers.get("location")
+                    if not location:
+                        raise IntegrationFetchError("Redirect missing Location header.")
+                    current = str(resp.url.join(location))
+                    continue
+                resp.raise_for_status()
+                break
+            else:
+                raise IntegrationFetchError("Too many redirects while fetching export URL.")
+        except IntegrationFetchError:
+            raise
         except httpx.HTTPError as e:
             raise IntegrationFetchError(
                 f"Could not download file from URL: {e}. "
                 "Check the link is public and points directly to a CSV or Excel file."
             ) from e
+        assert resp is not None
         content = resp.content
         ctype = resp.headers.get("content-type", "")
     return _dataframe_from_bytes(content, url, ctype)

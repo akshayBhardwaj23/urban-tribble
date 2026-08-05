@@ -66,6 +66,13 @@ def _pick_expense_column(
     metadata: dict[str, Any],
     exclude: set[str],
 ) -> Optional[str]:
+    # Prefer mapped expense / amount_outflow roles over name heuristics.
+    for col in metadata.get("expense_columns") or []:
+        if col in exclude or col not in df.columns:
+            continue
+        coerced = pd.to_numeric(df[col], errors="coerce")
+        if coerced.notna().sum() > len(df) * 0.3:
+            return col
     for col in df.columns:
         if col in exclude or col not in df.columns:
             continue
@@ -140,13 +147,34 @@ def _resolve_comparison_windows(
 
     prev_end = (cur_start - pd.Timedelta(days=1)).normalize()
     prev_start = (prev_end - pd.Timedelta(days=n - 1)).normalize()
+
+    # History may not reach back a full period. Shrink the current window to
+    # match instead of clamping only the previous one: comparing 30 days against
+    # 11 days of history reports a "63% drop" that is purely an artifact.
     if prev_start < dmin:
+        available = int((prev_end - dmin).days) + 1
+        if available < 1:
+            raise ValueError("Not enough history for a period comparison")
         prev_start = dmin
+        if available < n:
+            n = available
+            cur_start = (cur_end - pd.Timedelta(days=n - 1)).normalize()
+            prev_end = (cur_start - pd.Timedelta(days=1)).normalize()
+            prev_start = (prev_end - pd.Timedelta(days=n - 1)).normalize()
+            if prev_start < dmin:
+                prev_start = dmin
+
+    cur_len = int((cur_end - cur_start).days) + 1
+    prev_len = int((prev_end - prev_start).days) + 1
 
     desc = (
         f"{cur_start.strftime('%Y-%m-%d')}–{cur_end.strftime('%Y-%m-%d')} "
         f"vs {prev_start.strftime('%Y-%m-%d')}–{prev_end.strftime('%Y-%m-%d')}"
     )
+    if cur_len != prev_len:
+        desc += f" (uneven: {cur_len}d vs {prev_len}d)"
+    else:
+        desc += f" ({cur_len}d each)"
     return cur_start, cur_end, prev_start, prev_end, desc
 
 
@@ -381,10 +409,14 @@ def build_what_changed_for_dataframe(
     # Other significant numeric shifts (not duplicate labels)
     used_lower = {str(it["label"]).lower() for it in items}
     candidates: list[tuple[str, float, float, float]] = []
+    from services.query_plan import looks_like_rate_column
+
     for col in df.columns:
         if col == date_col or col in exclude:
             continue
         if not pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        if looks_like_rate_column(str(col)):
             continue
         base = str(col).replace("_", " ").title()
         key = base.lower()
@@ -417,6 +449,7 @@ def build_what_changed_for_dataframe(
             expl = (
                 f"{base} shifted from {_fmt_money(p_sum)} to {_fmt_money(c_sum)} vs the prior window."
             )
+        favorable = direction != "down"
         items.append({
             "label": base,
             "direction": direction,
@@ -426,7 +459,7 @@ def build_what_changed_for_dataframe(
             "current_value": c_sum,
             "explanation": expl,
             "higher_is_better": True,
-            "is_favorable": True,
+            "is_favorable": favorable,
             **({"source_dataset": source_dataset} if source_dataset else {}),
         })
 

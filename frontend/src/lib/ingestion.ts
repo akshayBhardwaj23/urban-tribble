@@ -32,6 +32,7 @@ export interface IngestionFlag {
 export interface IngestionColumnHighlights {
   date_columns: string[];
   revenue_columns: string[];
+  expense_columns?: string[];
   category_columns: string[];
   numeric_columns: string[];
   text_columns: string[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { formatUserFacingApiError } from "@/lib/api-errors";
+import { useWorkspace } from "@/lib/workspace-context";
 
 interface Message {
   id?: string;
@@ -23,66 +25,79 @@ interface DatasetListItem {
 }
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
+  const [requestedDataset, setRequestedDataset] = useState<string | null>(null);
+  // Messages sent in this session, kept per conversation so switching source
+  // (or workspace) never shows another conversation's turns.
+  const [sentByConversation, setSentByConversation] = useState<
+    Record<string, Message[]>
+  >({});
+
+  const { activeWorkspace, switching } = useWorkspace();
+  const workspaceId = activeWorkspace?.id ?? "none";
 
   const { data: datasets, isLoading: loadingDatasets } = useQuery({
-    queryKey: ["datasets-list"],
+    queryKey: ["datasets-list", workspaceId],
     queryFn: () => api.listDatasets() as Promise<DatasetListItem[]>,
+    enabled: !switching,
   });
 
-  useEffect(() => {
-    if (!datasets?.length || !selectedDataset) return;
-    if (!datasets.some((d) => d.id === selectedDataset)) {
-      setSelectedDataset(null);
-      setMessages([]);
-    }
-  }, [datasets, selectedDataset]);
+  // A source removed in another tab should not leave a dangling selection.
+  const selectedDataset =
+    requestedDataset && datasets?.some((d) => d.id === requestedDataset)
+      ? requestedDataset
+      : datasets
+        ? null
+        : requestedDataset;
+
+  const conversationKey = `${workspaceId}:${selectedDataset ?? "none"}`;
 
   const { data: historyData } = useQuery({
-    queryKey: ["chat-history", selectedDataset, "dataset"],
+    queryKey: ["chat-history", workspaceId, selectedDataset, "dataset"],
     queryFn: () => api.getChatHistory(selectedDataset!),
-    enabled: !!selectedDataset,
+    enabled: !!selectedDataset && !switching,
   });
 
-  useEffect(() => {
-    if (!selectedDataset) {
-      setMessages([]);
-      return;
-    }
-    if (historyData === undefined) {
-      setMessages([]);
-      return;
-    }
-    setMessages(
-      historyData.map((m) => ({
-        id: m.id,
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }))
-    );
-  }, [selectedDataset, historyData]);
+  const messages = useMemo<Message[]>(() => {
+    if (!selectedDataset) return [];
+    const stored = (historyData ?? []).map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+    return [...stored, ...(sentByConversation[conversationKey] ?? [])];
+  }, [selectedDataset, historyData, sentByConversation, conversationKey]);
+
+  const appendMessage = useCallback(
+    (key: string, message: Message) => {
+      setSentByConversation((prev) => ({
+        ...prev,
+        [key]: [...(prev[key] ?? []), message],
+      }));
+    },
+    []
+  );
 
   const chatMutation = useMutation({
     mutationFn: (question: string) => api.chat(selectedDataset!, question),
-    onSuccess: (data) => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.answer },
-      ]);
+    onSuccess: (data, _question, context) => {
+      appendMessage(context as string, {
+        role: "assistant",
+        content: data.answer,
+      });
     },
-    onError: (err: Error) => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${err.message}` },
-      ]);
+    onError: (err: Error, _question, context) => {
+      appendMessage(context as string, {
+        role: "assistant",
+        content: formatUserFacingApiError(err, "answer that question"),
+      });
     },
+    onMutate: () => conversationKey,
   });
 
   const handleSend = () => {
     if (!input.trim() || !selectedDataset) return;
-    setMessages((prev) => [...prev, { role: "user", content: input }]);
+    appendMessage(conversationKey, { role: "user", content: input });
     chatMutation.mutate(input);
     setInput("");
   };
@@ -121,7 +136,7 @@ export default function ChatPage() {
                 {datasets.map((ds) => (
                   <button
                     key={ds.id}
-                    onClick={() => setSelectedDataset(ds.id)}
+                    onClick={() => setRequestedDataset(ds.id)}
                     className="w-full rounded-2xl border border-white/70 bg-white/84 p-3 text-left text-sm transition-colors hover:bg-white dark:border-white/10 dark:bg-slate-900/70 dark:hover:bg-slate-900"
                   >
                     <p className="font-medium">{ds.name}</p>
@@ -147,10 +162,7 @@ export default function ChatPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setSelectedDataset(null);
-                setMessages([]);
-              }}
+              onClick={() => setRequestedDataset(null)}
             >
               Change
             </Button>

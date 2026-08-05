@@ -8,6 +8,7 @@ import pandas as pd
 from services.daily_metrics import (
     daily_metrics_to_records,
     metric_key_for_chart,
+    orders_basis,
 )
 
 
@@ -79,17 +80,45 @@ def _sum_by_day_chart_rows(chart_data: list[dict[str, Any]]) -> list[dict[str, A
     return [{"x": k, "y": v} for k, v in sorted(acc.items())]
 
 
+# Attached to any chart whose series has been smoothed, so the UI can say so
+# rather than presenting a derived line as the raw numbers.
+SMOOTHING_NOTE = {
+    "applied": True,
+    "method": "rolling_median_3",
+    "label": "Smoothed (3-point rolling median)",
+    "description": (
+        "Plotted points are a 3-point rolling median, which softens one-day spikes. "
+        "Exact daily values are in y_raw and in your source file."
+    ),
+}
+
+
 def _finalize_xy_chart_data(
     chart_data: list[dict[str, Any]],
     *,
     orders_metric: bool = False,
+    smooth: bool = False,
 ) -> list[dict[str, Any]]:
+    """Merge to one point per day. Smoothing is off by default so plotted y is exact."""
     merged = _sum_by_day_chart_rows(chart_data)
     if len(merged) < 2:
         return merged
-    ys = [float(r["y"]) for r in merged]
-    ys = _smooth_y_list(ys, as_int=orders_metric)
-    return [{"x": merged[i]["x"], "y": ys[i]} for i in range(len(merged))]
+    raw = [float(r["y"]) for r in merged]
+    if not smooth:
+        return [{"x": merged[i]["x"], "y": raw[i]} for i in range(len(merged))]
+    ys = _smooth_y_list(raw, as_int=orders_metric)
+    return [
+        {"x": merged[i]["x"], "y": ys[i], "y_raw": raw[i]} for i in range(len(merged))
+    ]
+
+
+def _mark_smoothed(chart: dict[str, Any]) -> dict[str, Any]:
+    rows = chart.get("data") or []
+    if any(isinstance(r, dict) and "y_raw" in r and r["y_raw"] != r.get("y") for r in rows):
+        chart["smoothing"] = SMOOTHING_NOTE
+    elif rows:
+        chart["smoothing"] = {"applied": False}
+    return chart
 
 
 def build_kpi_context_dict(
@@ -189,6 +218,11 @@ def compute_kpi_value(df: pd.DataFrame, column: str, agg: str) -> Optional[float
         return float(s.notna().sum())
     if not pd.api.types.is_numeric_dtype(s):
         return float(s.notna().sum()) if agg == "count" else None
+    # Summing a rate/percentage across rows is almost always wrong.
+    from services.query_plan import looks_like_rate_column
+
+    if agg == "sum" and looks_like_rate_column(column):
+        agg = "mean"
     if agg == "sum":
         return float(s.sum())
     if agg == "mean":
@@ -392,6 +426,10 @@ def _chart_pie(
             if not data:
                 return None
             return {"id": cid, "title": title, "type": "pie", "data": data}
+        from services.query_plan import looks_like_rate_column
+
+        if agg == "sum" and looks_like_rate_column(y_col):
+            agg = "mean"
         g = df.groupby(x_col, dropna=False)[y_col]
         if agg == "mean":
             summed = g.mean()
@@ -421,6 +459,10 @@ def _chart_bar_agg(
     y_col: str,
     agg: str,
 ) -> Optional[dict[str, Any]]:
+    from services.query_plan import looks_like_rate_column
+
+    if agg == "sum" and looks_like_rate_column(y_col):
+        agg = "mean"
     g = df.groupby(x_col, dropna=False)[y_col]
     if agg == "mean":
         series = g.mean()
@@ -458,14 +500,14 @@ def _chart_from_daily(
     )
     if len(chart_data) < 2:
         return None
-    return {
+    return _mark_smoothed({
         "id": cid,
         "title": title,
         "type": "area",
         "x_label": "date",
         "y_label": metric_key,
         "data": chart_data,
-    }
+    })
 
 
 def _chart_xy_series(
@@ -492,6 +534,10 @@ def _chart_xy_series(
         if mk and mk in daily_metrics.columns:
             return _chart_from_daily(daily_metrics, cid, title, ctype, mk)
 
+    from services.query_plan import looks_like_rate_column
+
+    if agg == "sum" and looks_like_rate_column(y_col):
+        agg = "mean"
     g = df.groupby(x_col, dropna=False)[y_col]
     if agg == "mean":
         series = g.mean()
@@ -514,35 +560,43 @@ def _chart_xy_series(
     chart_data = _finalize_xy_chart_data(chart_data, orders_metric=False)
     if len(chart_data) < 2:
         return None
-    return {
+    return _mark_smoothed({
         "id": cid,
         "title": title,
         "type": "area",
         "x_label": x_col,
         "y_label": y_col,
         "data": chart_data,
-    }
+    })
 
 
 def daily_time_series_charts(
     daily: pd.DataFrame,
     revenue_col_name: str,
 ) -> list[dict[str, Any]]:
-    """Three charts from daily aggregates: revenue, orders, AOV."""
+    """Charts from daily aggregates: revenue always; orders/AOV only with an order id."""
     records = daily_metrics_to_records(daily)
     slug = revenue_col_name.replace(" ", "_")
     out: list[dict[str, Any]] = []
-    specs = [
+    basis = orders_basis(daily)
+    specs: list[tuple[str, str]] = [
         ("revenue", f"{revenue_col_name.replace('_', ' ').title()} per Day"),
-        ("orders", "Orders per Day"),
-        ("aov", "Average Order Value per Day"),
     ]
+    if basis.get("kind") == "order_id":
+        specs.extend(
+            [
+                ("orders", "Orders per Day"),
+                ("aov", "Average Order Value per Day"),
+            ]
+        )
     for key, ttl in specs:
-        data = [{"x": r["date"], "y": float(r[key])} for r in records]
+        if not records or key not in records[0]:
+            continue
+        data = [{"x": r["date"], "y": float(r[key])} for r in records if key in r]
         data = _finalize_xy_chart_data(data, orders_metric=(key == "orders"))
         if len(data) < 2:
             continue
-        out.append({
+        chart = _mark_smoothed({
             "id": f"daily_{key}_{slug}",
             "title": ttl,
             "type": "area",
@@ -550,6 +604,11 @@ def daily_time_series_charts(
             "y_label": key,
             "data": data,
         })
+        out.append(chart)
+    if basis.get("kind") == "unavailable" and basis.get("caveat"):
+        # Surface once on the revenue chart so the UI can explain the omission.
+        if out:
+            out[0]["caveat"] = basis["caveat"]
     return out
 
 
@@ -594,21 +653,22 @@ def legacy_charts(
                     continue
                 sub["_day"] = sub["_dt"].dt.normalize()
                 g = sub.groupby("_day", as_index=False)[rev_col].sum().sort_values("_day")
-                ys = _smooth_y_list([float(y) for y in g[rev_col]], as_int=False)
+                raw = [float(y) for y in g[rev_col]]
+                ys = _smooth_y_list(raw, as_int=False)
                 chart_data = [
-                    {"x": d.strftime("%Y-%m-%d"), "y": ys[i]}
+                    {"x": d.strftime("%Y-%m-%d"), "y": ys[i], "y_raw": raw[i]}
                     for i, d in enumerate(g["_day"])
                 ]
                 if len(chart_data) < 2:
                     continue
-                charts.append({
+                charts.append(_mark_smoothed({
                     "id": f"{rev_col}_over_{date_col}",
                     "title": f"{rev_col.replace('_', ' ').title()} Over Time",
                     "type": "area",
                     "x_label": date_col,
                     "y_label": rev_col,
                     "data": chart_data,
-                })
+                }))
 
     for cat_col in category_cols:
         for rev_col in revenue_cols:
@@ -659,20 +719,21 @@ def legacy_charts(
                     continue
                 sub["_day"] = sub["_dt"].dt.normalize()
                 g = sub.groupby("_day", as_index=False)[num_col].sum().sort_values("_day")
-                ys = _smooth_y_list([float(y) for y in g[num_col]], as_int=False)
+                raw = [float(y) for y in g[num_col]]
+                ys = _smooth_y_list(raw, as_int=False)
                 chart_data = [
-                    {"x": d.strftime("%Y-%m-%d"), "y": ys[i]}
+                    {"x": d.strftime("%Y-%m-%d"), "y": ys[i], "y_raw": raw[i]}
                     for i, d in enumerate(g["_day"])
                 ]
                 if len(chart_data) < 2:
                     continue
-                charts.append({
+                charts.append(_mark_smoothed({
                     "id": f"{num_col}_over_{date_col}",
                     "title": f"{num_col.replace('_', ' ').title()} Over Time",
                     "type": "area",
                     "x_label": date_col,
                     "y_label": num_col,
                     "data": chart_data,
-                })
+                }))
 
     return charts

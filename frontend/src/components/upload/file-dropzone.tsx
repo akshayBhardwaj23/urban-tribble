@@ -7,6 +7,7 @@ import { ArrowRight, FileSpreadsheet, Sparkles, Upload } from "lucide-react";
 import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { isApiPlanLimitError, type PlanLimitDetail } from "@/lib/api";
+import { formatUserFacingApiError } from "@/lib/api-errors";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { IngestionPipeline } from "@/components/upload/ingestion-pipeline";
@@ -47,10 +48,15 @@ interface FileEntry {
   /** When upload failed with HTTP 403 plan_limit */
   planLimitDetail?: PlanLimitDetail;
   result?: UploadFileResult;
+  processingStage?: string | null;
 }
 
 interface FileDropzoneProps {
-  onUpload: (file: File, description: string) => Promise<UploadFileResult>;
+  onUpload: (
+    file: File,
+    description: string,
+    opts?: { onStage?: (stage: string | null | undefined) => void }
+  ) => Promise<UploadFileResult>;
   onContinue: (datasetIds: string[]) => void;
   /** Selected outcome on the upload page; shapes hints and optional context placeholders. */
   analysisTemplate?: AnalysisTemplate;
@@ -92,37 +98,79 @@ function extensionFromFilename(name: string): string {
   return i >= 0 ? name.slice(i) : "";
 }
 
+/**
+ * Uploads that finished but were not yet reviewed, kept across navigation.
+ *
+ * The File objects themselves cannot be serialized, but a finished upload is
+ * already on the server — all the review step needs is the result. Persisting
+ * these means leaving the page mid-batch no longer silently skips review.
+ */
+const PENDING_REVIEW_KEY = "snaptix.upload.pending-review";
+
+function loadPendingReview(): UploadFileResult[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_REVIEW_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (r): r is UploadFileResult =>
+        Boolean(r) && typeof (r as UploadFileResult).dataset_id === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function savePendingReview(results: UploadFileResult[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (results.length === 0) {
+      window.sessionStorage.removeItem(PENDING_REVIEW_KEY);
+    } else {
+      window.sessionStorage.setItem(PENDING_REVIEW_KEY, JSON.stringify(results));
+    }
+  } catch {
+    /* storage disabled or full; review just won't survive navigation */
+  }
+}
+
 export function FileDropzone({
   onUpload,
   onContinue,
   analysisTemplate = CUSTOM_ANALYSIS_TEMPLATE,
   uploadLimitCalloutDetail = null,
 }: FileDropzoneProps) {
-  const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [entries, setEntries] = useState<FileEntry[]>(() =>
+    loadPendingReview().map((result) => ({
+      // The original File is gone after a remount; the review step only reads
+      // the name, and the bytes already live on the server.
+      file: new File([], result.filename),
+      description: "",
+      status: "done" as const,
+      result,
+    }))
+  );
   const [phase, setPhase] = useState<"configure" | "processing" | "review">(
-    "configure"
+    () => (loadPendingReview().length > 0 ? "review" : "configure")
   );
   const [processingIndex, setProcessingIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(() => new Set());
-  const prevPhaseRef = useRef(phase);
   const entriesRef = useRef(entries);
   useEffect(() => {
     entriesRef.current = entries;
   }, [entries]);
 
-  useEffect(() => {
-    if (phase === "review" && prevPhaseRef.current !== "review") {
-      setConfirmedIds(new Set());
-    }
-    prevPhaseRef.current = phase;
-  }, [phase]);
-
   const markFileConfirmed = useCallback((datasetId: string) => {
     setConfirmedIds((prev) => new Set(prev).add(datasetId));
   }, []);
 
+  const [rejectMessage, setRejectMessage] = useState<string | null>(null);
+
   const onDrop = useCallback((accepted: File[]) => {
+    setRejectMessage(null);
     const newEntries: FileEntry[] = accepted.map((file) => ({
       file,
       description: "",
@@ -132,8 +180,28 @@ export function FileDropzone({
     setPhase("configure");
   }, []);
 
+  const onDropRejected = useCallback((fileRejections: import("react-dropzone").FileRejection[]) => {
+    if (!fileRejections.length) return;
+    const first = fileRejections[0];
+    const codes = new Set(first.errors.map((e) => e.code));
+    if (codes.has("file-too-large")) {
+      setRejectMessage(
+        `"${first.file.name}" is larger than ${MAX_UPLOAD_SIZE_MB} MB.`
+      );
+    } else if (codes.has("file-invalid-type")) {
+      setRejectMessage(
+        `"${first.file.name}" is not a supported type. Use .xlsx, .xls, .csv, or .tsv.`
+      );
+    } else {
+      setRejectMessage(
+        `Could not add "${first.file.name}": ${first.errors[0]?.message || "rejected"}`
+      );
+    }
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: ACCEPTED_TYPES,
     maxSize: MAX_UPLOAD_BYTES,
     disabled: busy || phase === "processing",
@@ -162,6 +230,20 @@ export function FileDropzone({
     [entries]
   );
 
+  useEffect(() => {
+    savePendingReview(completedResults.map((e) => e.result));
+  }, [completedResults]);
+
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
+
   const runPrepare = async () => {
     const list = entriesRef.current;
     const toRun = list
@@ -183,7 +265,9 @@ export function FileDropzone({
       updateEntry(i, { status: "uploading", error: undefined });
 
       try {
-        const raw = await onUpload(entry.file, entry.description);
+        const raw = await onUpload(entry.file, entry.description, {
+          onStage: (stage) => updateEntry(i, { processingStage: stage }),
+        });
         const result: UploadFileResult = {
           dataset_id: raw.dataset_id,
           ingestion: raw.ingestion,
@@ -193,7 +277,7 @@ export function FileDropzone({
           column_count: raw.column_count,
           all_columns: raw.all_columns,
         };
-        updateEntry(i, { status: "done", result });
+        updateEntry(i, { status: "done", result, processingStage: null });
         anySuccess = true;
       } catch (err) {
         if (isApiPlanLimitError(err)) {
@@ -205,7 +289,7 @@ export function FileDropzone({
         } else {
           updateEntry(i, {
             status: "error",
-            error: err instanceof Error ? err.message : "Upload failed",
+            error: formatUserFacingApiError(err, "read your file"),
             planLimitDetail: undefined,
           });
         }
@@ -214,6 +298,8 @@ export function FileDropzone({
 
     setProcessingIndex(null);
     setBusy(false);
+    // Every batch needs its own explicit confirmation before continuing.
+    setConfirmedIds(new Set());
     setPhase(anySuccess ? "review" : "configure");
   };
 
@@ -227,12 +313,14 @@ export function FileDropzone({
 
   const handleContinue = () => {
     if (successIds.length === 0 || !allFilesConfirmed) return;
+    savePendingReview([]);
     onContinue(successIds);
   };
 
   const resetReviewAddMore = () => {
     setPhase("configure");
     setEntries((prev) => prev.filter((e) => e.status !== "done"));
+    savePendingReview([]);
   };
 
   if (phase === "processing" && currentProcessingEntry) {
@@ -256,6 +344,7 @@ export function FileDropzone({
           isLoading={currentProcessingEntry.status === "uploading"}
           filename={currentProcessingEntry.file.name}
           fileType={ext}
+          processingStage={currentProcessingEntry.processingStage}
           ingestion={
             currentProcessingEntry.status === "done" && currentProcessingEntry.result
               ? currentProcessingEntry.result.ingestion
@@ -514,6 +603,11 @@ export function FileDropzone({
         </p>
       </div>
       </div>
+      {rejectMessage && (
+        <p className="text-sm text-destructive" role="alert">
+          {rejectMessage}
+        </p>
+      )}
     </div>
   );
 }

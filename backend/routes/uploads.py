@@ -1,3 +1,4 @@
+import contextlib
 import json
 from pathlib import Path
 
@@ -8,22 +9,18 @@ from config import settings
 from database import get_db
 from deps import require_active_workspace
 from models.models import Dataset, Upload, UploadStatus, User
-from services.column_detector import ColumnDetector
-from services.dashboard_planner import DashboardPlanner
-from services.data_cleaner import DataCleaner
+from services import storage
 from services.file_processor import FileProcessor
-from services.ingestion_classifier import build_ingestion_profile
+from services.file_validation import FileValidationError, validate_magic_bytes
+from services.source_files import init_source_file
+from services.subscription_usage import assert_upload_allowed
 from services.upload_io import save_upload_stream_limited
 from services.upload_rate_limit import check_upload_rate_limit
-from services.subscription_usage import assert_upload_allowed
-from services.workspace_timeline import record_upload_snapshot
+from services.upload_worker import enqueue, process_upload
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
 file_processor = FileProcessor()
-data_cleaner = DataCleaner()
-column_detector = ColumnDetector()
-dashboard_planner = DashboardPlanner()
 
 
 @router.post("/")
@@ -34,7 +31,7 @@ async def create_upload(
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     user, workspace_id = ws
-    check_upload_rate_limit(user.email)
+    check_upload_rate_limit(db, user.email)
     assert_upload_allowed(db, user, workspace_id)
 
     ext = Path(file.filename or "").suffix.lower()
@@ -46,20 +43,20 @@ async def create_upload(
         file_type=ext,
         file_url="",
         user_description=description or None,
-        status=UploadStatus.processing,
+        status=UploadStatus.pending,
+        processing_stage="queued",
         workspace_id=workspace_id,
     )
     db.add(upload)
     db.flush()
 
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = upload_dir / f"{upload.id}{ext}"
+    key = storage.upload_key(upload.id, ext)
+    staging = Path(settings.UPLOAD_DIR) / ".incoming" / f"{upload.id}{ext}"
+    staging.parent.mkdir(parents=True, exist_ok=True)
 
     max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
-    ok = await save_upload_stream_limited(file, file_path, max_bytes)
+    ok = await save_upload_stream_limited(file, staging, max_bytes)
     if not ok:
-        file_path.unlink(missing_ok=True)
         db.delete(upload)
         db.commit()
         raise HTTPException(
@@ -67,73 +64,97 @@ async def create_upload(
             detail=f"File exceeds maximum size of {settings.MAX_FILE_SIZE_MB} MB",
         )
 
-    upload.file_url = str(file_path)
-
     try:
-        df = file_processor.read(str(file_path))
-        df, clean_report = data_cleaner.clean(df)
-        metadata = column_detector.detect(df)
-        stats = column_detector.summary(df, metadata)
-        plan = dashboard_planner.build_plan(
-            df,
-            metadata,
-            stats,
-            user_description=description or None,
-        )
-        ingestion = build_ingestion_profile(
-            file.filename or "dataset",
-            description or None,
-            metadata,
-            clean_report,
-            list(df.columns),
-        )
-        cls_id = ingestion["classification"]["id"]
-
-        upload.row_count = len(df)
-        upload.column_count = len(df.columns)
-        upload.status = UploadStatus.completed
-
-        dataset = Dataset(
-            upload_id=upload.id,
-            name=file.filename or "dataset",
-            schema_json=json.dumps(metadata),
-            data_summary=json.dumps(stats),
-            cleaned_report_json=json.dumps(clean_report),
-            dashboard_plan_json=json.dumps(plan),
-            business_classification=cls_id,
-        )
-        db.add(dataset)
-
-        cleaned_path = upload_dir / f"{upload.id}_cleaned.parquet"
-        df.to_parquet(str(cleaned_path), index=False)
-
-    except Exception as e:
-        upload.status = UploadStatus.failed
+        validate_magic_bytes(staging, ext)
+    except FileValidationError as exc:
+        staging.unlink(missing_ok=True)
+        db.delete(upload)
         db.commit()
-        raise HTTPException(422, f"Failed to process file: {str(e)}")
-
-    db.commit()
-    db.refresh(upload)
-    db.refresh(dataset)
+        raise HTTPException(400, str(exc)) from exc
 
     try:
-        record_upload_snapshot(db, workspace_id, upload, dataset)
-    except Exception:
-        pass
+        storage.upload_file(staging, key)
+    except Exception as exc:  # noqa: BLE001 — storage outage should not orphan a row
+        staging.unlink(missing_ok=True)
+        db.delete(upload)
+        db.commit()
+        raise HTTPException(503, "Storage is unavailable right now. Try again shortly.") from exc
+
+    init_source_file(
+        upload,
+        key=key,
+        filename=file.filename or "unknown",
+        kind="original",
+    )
+    upload.status = UploadStatus.processing
+    db.commit()
+
+    if settings.UPLOAD_ASYNC_PROCESSING:
+        enqueue(upload.id, workspace_id)
+        db.refresh(upload)
+        return _pending_payload(upload)
+
+    process_upload(upload.id, workspace_id)
+    db.expire_all()
+    upload = db.query(Upload).filter(Upload.id == upload.id).first()
+    if upload is None or upload.status == UploadStatus.failed:
+        detail = (upload.processing_error if upload else None) or "Failed to process file"
+        raise HTTPException(422, detail)
+    return _completed_payload(db, upload)
+
+
+def _pending_payload(upload: Upload) -> dict:
+    return {
+        "id": upload.id,
+        "filename": upload.filename,
+        "file_type": upload.file_type,
+        "status": upload.status.value,
+        "processing_stage": upload.processing_stage,
+        "user_description": upload.user_description,
+        "dataset_id": None,
+        "row_count": None,
+        "column_count": None,
+        "poll_url": f"/api/uploads/{upload.id}",
+    }
+
+
+def _completed_payload(db: Session, upload: Upload) -> dict:
+    dataset = db.query(Dataset).filter(Dataset.upload_id == upload.id).first()
+    sheets = []
+    if upload.file_type in (".xlsx", ".xls") and upload.file_url:
+        with contextlib.suppress(Exception):
+            sheets = file_processor.list_sheets(str(storage.materialize(upload.file_url)))
 
     return {
         "id": upload.id,
         "filename": upload.filename,
         "file_type": upload.file_type,
         "status": upload.status.value,
+        "processing_stage": upload.processing_stage,
         "user_description": upload.user_description,
-        "dataset_id": dataset.id,
+        "dataset_id": dataset.id if dataset else None,
         "row_count": upload.row_count,
         "column_count": upload.column_count,
-        "cleaning_report": clean_report,
-        "ingestion": ingestion,
-        "all_columns": [str(c) for c in df.columns],
+        "cleaning_report": _loads(dataset.cleaned_report_json) if dataset else None,
+        "ingestion": _ingestion_from(dataset),
+        "mapping_spec": _loads(dataset.mapping_spec_json) if dataset else None,
+        "all_columns": (_loads(dataset.schema_json) or {}).get("all_columns", []) if dataset else [],
+        "sheets": sheets,
     }
+
+
+def _loads(raw):
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _ingestion_from(dataset):
+    spec = _loads(dataset.mapping_spec_json) if dataset else None
+    return (spec or {}).get("ingestion_profile")
 
 
 @router.get("/{upload_id}")
@@ -151,16 +172,11 @@ def get_upload(
     if not upload:
         raise HTTPException(404, "Upload not found")
 
-    dataset = db.query(Dataset).filter(Dataset.upload_id == upload_id).first()
+    if upload.status == UploadStatus.completed:
+        payload = _completed_payload(db, upload)
+    else:
+        payload = _pending_payload(upload)
+        payload["error"] = upload.processing_error
 
-    return {
-        "id": upload.id,
-        "filename": upload.filename,
-        "file_type": upload.file_type,
-        "status": upload.status.value,
-        "user_description": upload.user_description,
-        "row_count": upload.row_count,
-        "column_count": upload.column_count,
-        "created_at": upload.created_at.isoformat(),
-        "dataset_id": dataset.id if dataset else None,
-    }
+    payload["created_at"] = upload.created_at.isoformat()
+    return payload

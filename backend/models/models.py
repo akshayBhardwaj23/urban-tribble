@@ -4,7 +4,18 @@ import enum
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 
 from database import Base
 
@@ -19,6 +30,25 @@ class LoginOtpChallenge(Base):
     code_hash = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RateLimitCounter(Base):
+    """Fixed-window request counters shared by every worker process.
+
+    One row per (subject, window slot). Expired rows are pruned opportunistically,
+    so the table stays proportional to active users rather than total requests.
+    """
+
+    __tablename__ = "rate_limit_counters"
+    __table_args__ = (
+        UniqueConstraint("bucket_key", name="uq_rate_limit_counter_bucket"),
+        Index("ix_rate_limit_counters_expires_at", "expires_at"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    bucket_key = Column(String(255), nullable=False)
+    hits = Column(Integer, nullable=False, default=0)
+    expires_at = Column(DateTime, nullable=False)
 
 
 class ProcessedBillingWebhookEvent(Base):
@@ -51,7 +81,10 @@ class Workspace(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     name = Column(String, nullable=False)
-    owner_id = Column(String, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    currency = Column(String(3), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     outlook_forecast_dataset_id = Column(String, nullable=True)
     outlook_forecast_date_column = Column(String, nullable=True)
@@ -69,14 +102,20 @@ class Upload(Base):
     __tablename__ = "uploads"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True)
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     filename = Column(String, nullable=False)
     file_type = Column(String, nullable=False)
     file_url = Column(String, nullable=False)
+    source_files_json = Column(Text, nullable=True)
     user_description = Column(Text, nullable=True)
     status = Column(Enum(UploadStatus), default=UploadStatus.pending, nullable=False)
     row_count = Column(Integer, nullable=True)
     column_count = Column(Integer, nullable=True)
+    # Populated while a background worker processes the file.
+    processing_stage = Column(String(64), nullable=True)
+    processing_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -94,12 +133,16 @@ class DataSourceIntegration(Base):
     __tablename__ = "data_source_integrations"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False, index=True)
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     provider = Column(String, nullable=False)
     name = Column(String, nullable=False)
     connection_mode = Column(String, nullable=False, default="export_url")
     config_json = Column(Text, nullable=True)
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)
+    dataset_id = Column(
+        String, ForeignKey("datasets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     refresh_interval_hours = Column(Integer, nullable=False, default=24)
     auto_analyze = Column(Integer, nullable=False, default=1)
     dashboard_plan_locked = Column(Integer, nullable=False, default=1)
@@ -115,8 +158,15 @@ class Dataset(Base):
     __tablename__ = "datasets"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    upload_id = Column(String, ForeignKey("uploads.id"), nullable=False)
-    integration_id = Column(String, ForeignKey("data_source_integrations.id"), nullable=True)
+    upload_id = Column(
+        String, ForeignKey("uploads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    integration_id = Column(
+        String,
+        ForeignKey("data_source_integrations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     name = Column(String, nullable=False)
     schema_json = Column(Text, nullable=True)
     data_summary = Column(Text, nullable=True)
@@ -124,6 +174,7 @@ class Dataset(Base):
     dashboard_plan_json = Column(Text, nullable=True)
     dashboard_plan_locked = Column(Integer, nullable=False, default=0)
     business_classification = Column(String, nullable=True)
+    mapping_spec_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -131,7 +182,9 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
+    dataset_id = Column(
+        String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     type = Column(String, nullable=False)
     result_json = Column(Text, nullable=True)
     ai_summary = Column(Text, nullable=True)
@@ -142,7 +195,9 @@ class Dashboard(Base):
     __tablename__ = "dashboards"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True)
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     name = Column(String, nullable=False)
     layout_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -152,7 +207,9 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
+    dataset_id = Column(
+        String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -162,9 +219,15 @@ class DatasetRelation(Base):
     __tablename__ = "dataset_relations"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True)
-    source_dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
-    target_dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    source_dataset_id = Column(
+        String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_dataset_id = Column(
+        String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     source_column = Column(String, nullable=False)
     target_column = Column(String, nullable=False)
     relation_type = Column(String, nullable=False)
@@ -177,10 +240,14 @@ class WorkspaceTimelineSnapshot(Base):
     __tablename__ = "workspace_timeline_snapshots"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False, index=True)
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     event_type = Column(String(32), nullable=False)
     ref_id = Column(String, nullable=True, index=True)
-    dataset_id = Column(String, ForeignKey("datasets.id"), nullable=True)
+    dataset_id = Column(
+        String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     display_label = Column(String(512), nullable=False)
     metrics_json = Column(Text, nullable=False)
     themes_json = Column(Text, nullable=True)
@@ -201,7 +268,9 @@ class WorkspaceRecurringSummary(Base):
     )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False, index=True)
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     kind = Column(String(16), nullable=False)  # "weekly" | "monthly"
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)

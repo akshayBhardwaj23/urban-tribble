@@ -51,6 +51,10 @@ def _score_from_columns(col_blob: str, metadata: Dict[str, Any]) -> Dict[str, in
     if metadata.get("date_columns") and metadata.get("revenue_columns"):
         scores["sales_data"] += 3
 
+    if metadata.get("expense_columns"):
+        scores["expenses"] += 4
+        scores["sales_data"] -= 1
+
     rev_cols = " ".join(metadata.get("revenue_columns") or [])
     if re.search(r"expense|cost|spend|budget|payment|fee", rev_cols, re.I):
         scores["expenses"] += 4
@@ -98,53 +102,86 @@ def _flags(
     clean_report: Dict[str, Any],
     columns: List[str],
 ) -> List[Dict[str, str]]:
+    """Factual flags — observations, not reassurances."""
     flags: List[Dict[str, str]] = []
-    steps = clean_report.get("steps") or []
 
-    for step in steps:
-        s = str(step).lower()
-        if "duplicate" in s:
+    # Prefer structured flags from the cleaner
+    for f in clean_report.get("flags") or []:
+        if isinstance(f, dict) and f.get("code"):
+            flags.append(
+                {
+                    "kind": str(f.get("kind") or "info"),
+                    "code": str(f["code"]),
+                    "message": str(f.get("message") or f["code"]),
+                }
+            )
+
+    # Also scan structured_steps / legacy string steps for gaps the cleaner
+    # may not have flagged explicitly
+    structured = clean_report.get("structured_steps") or []
+    steps = clean_report.get("steps") or []
+    step_texts = []
+    for s in structured:
+        if isinstance(s, dict):
+            step_texts.append(str(s.get("message") or ""))
+        else:
+            step_texts.append(str(s))
+    for s in steps:
+        if isinstance(s, str):
+            step_texts.append(s)
+
+    codes = {f.get("code") for f in flags}
+
+    for text in step_texts:
+        low = text.lower()
+        if "duplicate" in low and "duplicates_detected" not in codes and "duplicates_removed" not in codes:
             flags.append(
                 {
                     "kind": "info",
-                    "code": "duplicates_removed",
-                    "message": "Duplicate rows were removed so totals stay reliable.",
+                    "code": "duplicates_detected",
+                    "message": text if text else "Duplicate rows were detected.",
                 }
             )
-        if "missing" in s:
+            codes.add("duplicates_detected")
+        if "missing" in low and "missing_values" not in codes:
             flags.append(
                 {
                     "kind": "warning",
                     "code": "missing_values",
-                    "message": "Some cells were empty-we filled or flagged gaps where it mattered.",
+                    "message": text
+                    if text
+                    else "Some cells are empty; values were left blank.",
                 }
             )
-        if "date format" in s or "converted" in s and "date" in s:
+            codes.add("missing_values")
+        if ("date" in low and "converted" in low) and "dates_normalized" not in codes:
             flags.append(
                 {
                     "kind": "info",
                     "code": "dates_normalized",
-                    "message": "Date columns were recognized and normalized for trends.",
+                    "message": text if text else "Date columns were normalized.",
                 }
             )
+            codes.add("dates_normalized")
 
     date_cols = metadata.get("date_columns") or []
     rev_cols = metadata.get("revenue_columns") or []
-    if not date_cols and (rev_cols or (metadata.get("numeric_columns") or [])):
+    exp_cols = metadata.get("expense_columns") or []
+    if not date_cols and (rev_cols or exp_cols or (metadata.get("numeric_columns") or [])):
         flags.append(
             {
                 "kind": "warning",
                 "code": "no_date_column",
-                "message": "No clear date column yet-trend charts may need you to point us to one later.",
+                "message": "No timeline column detected — trend charts need you to pick one.",
             }
         )
 
-    if not rev_cols and not (metadata.get("numeric_columns") or []):
+    if not rev_cols and not exp_cols and not (metadata.get("numeric_columns") or []):
         flags.append(
             {
                 "kind": "warning",
                 "code": "no_amount_column",
-                "message": "We did not find an obvious amount column-KPIs may need a quick mapping.",
+                "message": "No amount column detected — KPIs need a mapping.",
             }
         )
 
@@ -153,11 +190,10 @@ def _flags(
             {
                 "kind": "warning",
                 "code": "narrow_schema",
-                "message": "Very few columns-if this is a fragment, consider joining with another file.",
+                "message": "Very few columns — if this is a fragment, consider joining another file.",
             }
         )
 
-    # Deduplicate by code
     seen: set[str] = set()
     unique: List[Dict[str, str]] = []
     for f in flags:
@@ -173,15 +209,18 @@ def _interpretations(metadata: Dict[str, Any]) -> List[str]:
     lines: List[str] = []
     dc = metadata.get("date_columns") or []
     rc = metadata.get("revenue_columns") or []
+    ec = metadata.get("expense_columns") or []
     cc = metadata.get("category_columns") or []
     if dc:
         lines.append(f"Timeline fields: {', '.join(dc[:5])}{'…' if len(dc) > 5 else ''}")
     if rc:
-        lines.append(f"Amount-style fields: {', '.join(rc[:5])}{'…' if len(rc) > 5 else ''}")
+        lines.append(f"Amount (inflow) fields: {', '.join(rc[:5])}{'…' if len(rc) > 5 else ''}")
+    if ec:
+        lines.append(f"Amount (outflow) fields: {', '.join(ec[:5])}{'…' if len(ec) > 5 else ''}")
     if cc:
         lines.append(f"Breakdown fields: {', '.join(cc[:5])}{'…' if len(cc) > 5 else ''}")
     if not lines:
-        lines.append("Columns are mostly text or numeric-we will infer roles as you explore.")
+        lines.append("Columns are mostly text or numeric — we will infer roles as you explore.")
     return lines
 
 
@@ -219,6 +258,7 @@ def build_ingestion_profile(
         "column_highlights": {
             "date_columns": list(metadata.get("date_columns") or []),
             "revenue_columns": list(metadata.get("revenue_columns") or []),
+            "expense_columns": list(metadata.get("expense_columns") or []),
             "category_columns": list(metadata.get("category_columns") or []),
             "numeric_columns": list(metadata.get("numeric_columns") or []),
             "text_columns": list(metadata.get("text_columns") or []),

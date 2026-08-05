@@ -20,7 +20,19 @@ const NETWORK_ERROR_RE =
 const DEV_LEAK_RE =
   /localhost|127\.0\.0\.1|0\.0\.0\.0|next_public|\.env\.local|port \d{4}|start the api/i;
 
+/** Thrown when a request exceeds its client-side deadline. */
+export class ApiTimeoutError extends Error {
+  constructor(
+    public readonly action: string,
+    public readonly timeoutMs: number
+  ) {
+    super(`${action} took longer than ${Math.round(timeoutMs / 1000)}s`);
+    this.name = "ApiTimeoutError";
+  }
+}
+
 function isLikelyNetworkError(error: unknown): boolean {
+  if (error instanceof ApiTimeoutError) return false;
   if (error instanceof Error && error.name === "AbortError") return true;
   if (error instanceof TypeError) return true;
   const msg =
@@ -40,8 +52,21 @@ export function sanitizeApiErrorMessage(message: string): string {
   return message;
 }
 
-/** Format any thrown API/client error for display in the UI. */
-export function formatUserFacingApiError(error: unknown): string {
+/**
+ * Format any thrown API/client error for display in the UI.
+ *
+ * `action` names what the user was trying to do ("analyse this file"), so the
+ * message reads as a sentence rather than a bare exception string.
+ */
+export function formatUserFacingApiError(
+  error: unknown,
+  action?: string
+): string {
+  if (error instanceof ApiTimeoutError) {
+    return `This is taking longer than usual. ${
+      action ? `We're still trying to ${action}.` : ""
+    } Wait a moment and try again — your data is safe.`.trim();
+  }
   if (isLikelyNetworkError(error)) {
     return IS_DEV
       ? "Can't reach the API. Start the backend and confirm NEXT_PUBLIC_API_URL matches."
@@ -49,6 +74,9 @@ export function formatUserFacingApiError(error: unknown): string {
   }
   if (error instanceof Error) {
     return sanitizeApiErrorMessage(error.message);
+  }
+  if (action) {
+    return `We couldn't ${action}. Please try again.`;
   }
   return IS_DEV ? "Request failed" : "Something went wrong. Please try again.";
 }

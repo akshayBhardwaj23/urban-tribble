@@ -10,9 +10,9 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LOGIN_HEADLINE } from "@/lib/brand";
 import { ThemeMenuCompact } from "@/components/theme-menu";
 import { formatUserFacingApiError } from "@/lib/api-errors";
+import { resolveApiBase } from "@/lib/api-base";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = resolveApiBase();
 
 const DEFAULT_RESEND_SECONDS = 60;
 

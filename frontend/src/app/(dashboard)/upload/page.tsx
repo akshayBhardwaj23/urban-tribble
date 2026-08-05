@@ -72,8 +72,12 @@ export default function UploadPage() {
   }, [overviewData]);
 
   const handleUpload = useCallback(
-    async (file: File, description: string): Promise<UploadFileResult> => {
-      const result = await api.uploadFile(file, description);
+    async (
+      file: File,
+      description: string,
+      opts?: { onStage?: (stage: string | null | undefined) => void }
+    ): Promise<UploadFileResult> => {
+      const result = await api.uploadFile(file, description, opts);
       void queryClient.invalidateQueries({ queryKey: ["overview"] });
       return {
         dataset_id: result.dataset_id,

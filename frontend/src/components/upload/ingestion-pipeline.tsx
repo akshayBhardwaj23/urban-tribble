@@ -14,11 +14,23 @@ const STAGES: { key: string; title: string; subtitleLoading: string }[] = [
   { key: "ready", title: "Ready for charts and briefing", subtitleLoading: "Handing off to workspace" },
 ];
 
+/** Map server processing_stage values onto the UI stage index. */
+const SERVER_STAGE_INDEX: Record<string, number> = {
+  queued: 0,
+  reading: 1,
+  cleaning: 2,
+  profiling: 3,
+  planning: 4,
+  saving: 5,
+};
+
 interface IngestionPipelineProps {
   isLoading: boolean;
   filename: string;
   fileType: string;
   ingestion: IngestionProfile | null;
+  /** When present, drives progress from the worker instead of a timer. */
+  processingStage?: string | null;
   className?: string;
 }
 
@@ -27,23 +39,22 @@ export function IngestionPipeline({
   filename,
   fileType,
   ingestion,
+  processingStage,
   className,
 }: IngestionPipelineProps) {
-  const [warmup, setWarmup] = useState(0);
+  const runId = `${isLoading}:${filename}:${processingStage ?? ""}`;
+  const [progress, setProgress] = useState({ run: runId, value: 0 });
+  const warmup = progress.run === runId ? progress.value : 0;
 
   useEffect(() => {
-    if (!isLoading) {
-      setWarmup(0);
-      return;
-    }
-    setWarmup(0);
-    const a = window.setTimeout(() => setWarmup(1), 280);
-    const b = window.setTimeout(() => setWarmup(2), 620);
+    if (!isLoading || processingStage) return;
+    const a = window.setTimeout(() => setProgress({ run: runId, value: 1 }), 280);
+    const b = window.setTimeout(() => setProgress({ run: runId, value: 2 }), 620);
     return () => {
       window.clearTimeout(a);
       window.clearTimeout(b);
     };
-  }, [isLoading, filename]);
+  }, [isLoading, runId, processingStage]);
 
   const typeDescription = fileTypeLabel(fileType);
 
@@ -78,7 +89,11 @@ export function IngestionPipeline({
 
   let activeIndex = 0;
   if (isLoading) {
-    activeIndex = Math.min(warmup, 2);
+    if (processingStage && processingStage in SERVER_STAGE_INDEX) {
+      activeIndex = SERVER_STAGE_INDEX[processingStage];
+    } else {
+      activeIndex = Math.min(warmup, 2);
+    }
   } else if (ingestion) {
     activeIndex = STAGES.length;
   }
@@ -99,27 +114,32 @@ export function IngestionPipeline({
               {i < STAGES.length - 1 && (
                 <div
                   className={cn(
-                    "absolute left-[11px] top-7 bottom-0 w-px",
-                    done ? "bg-primary/35" : "bg-border"
+                    "absolute left-[9px] top-5 h-[calc(100%-8px)] w-px",
+                    done ? "bg-primary/40" : "bg-border"
                   )}
-                  aria-hidden
                 />
               )}
-              <div className="relative z-1 flex h-6 w-6 shrink-0 items-center justify-center">
-                {done ? (
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                    ✓
-                  </span>
-                ) : current ? (
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                ) : (
-                  <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/25" />
+              <div
+                className={cn(
+                  "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[10px]",
+                  done && "border-primary bg-primary text-primary-foreground",
+                  current && "border-primary text-primary",
+                  pending && "border-muted-foreground/30 text-muted-foreground/50"
                 )}
+              >
+                {done ? "✓" : i + 1}
               </div>
-              <div className={cn("min-w-0 pt-0.5", pending && "opacity-45")}>
-                <p className="text-sm font-medium leading-tight">{stage.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                  {subtitles[i] ?? stage.subtitleLoading}
+              <div className="min-w-0 pt-0.5">
+                <p
+                  className={cn(
+                    "text-sm font-medium leading-none",
+                    pending && "text-muted-foreground/60"
+                  )}
+                >
+                  {stage.title}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground leading-snug">
+                  {current || done ? subtitles[i] : stage.subtitleLoading}
                 </p>
               </div>
             </li>

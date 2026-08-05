@@ -11,20 +11,23 @@ import { PRODUCT_NAME } from "@/lib/brand";
 import { useWorkspace } from "@/lib/workspace-context";
 import type { RazorpayCheckoutSuccess } from "@/lib/razorpay-checkout";
 
-function readCheckoutParams(
-  searchParams: URLSearchParams
-): RazorpayCheckoutSuccess | null {
-  const razorpay_payment_id = searchParams.get("razorpay_payment_id");
-  const razorpay_subscription_id = searchParams.get("razorpay_subscription_id");
-  const razorpay_signature = searchParams.get("razorpay_signature");
-  if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+/**
+ * Collect the checkout result from the server-side handoff cookie.
+ *
+ * The ids are deliberately absent from the URL, so there is nothing sensitive
+ * in browser history or in a Referer header sent to a third party.
+ */
+async function readCheckoutParams(): Promise<RazorpayCheckoutSuccess | null> {
+  try {
+    const res = await fetch("/api/billing/razorpay/handoff", {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { params: RazorpayCheckoutSuccess | null };
+    return body.params ?? null;
+  } catch {
     return null;
   }
-  return {
-    razorpay_payment_id,
-    razorpay_subscription_id,
-    razorpay_signature,
-  };
 }
 
 function PricingSuccessContent() {
@@ -51,7 +54,8 @@ function PricingSuccessContent() {
 
     const run = async () => {
       setApiAccessToken(token);
-      const params = readCheckoutParams(searchParams);
+      const params =
+        searchParams.get("pending") === "1" ? await readCheckoutParams() : null;
 
       if (params) {
         try {

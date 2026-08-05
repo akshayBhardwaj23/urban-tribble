@@ -3,15 +3,55 @@ from typing import List
 from pydantic_settings import BaseSettings
 
 
+# Values that ship in source and must never reach production. validate_runtime_settings
+# refuses to start when APP_ENV=production and any of these is still in effect.
+INSECURE_DEFAULTS = {
+    "OTP_PEPPER": "dev-otp-pepper-change-in-production",
+    "API_JWT_SECRET": "dev-api-jwt-secret-change-in-production",
+    "INTERNAL_AUTH_SECRET": "dev-internal-auth-secret-change-in-production",
+    "INTEGRATION_OAUTH_STATE_SECRET": "dev-integration-oauth-state-change-in-production",
+}
+
+
 class Settings(BaseSettings):
+    # development | production. Production enables the startup guard below.
+    APP_ENV: str = "development"
     DATABASE_URL: str = "sqlite:///./data/app.db"
     UPLOAD_DIR: str = "./data/uploads"
+    # Object storage. When STORAGE_BACKEND=s3, uploads and parquet live in the
+    # bucket and UPLOAD_DIR is used only as a scratch directory.
+    STORAGE_BACKEND: str = "local"  # local | s3
+    S3_BUCKET: str = ""
+    S3_PREFIX: str = "snaptix"
+    S3_REGION: str = ""
+    S3_ENDPOINT_URL: str = ""  # set for Cloudflare R2 / MinIO
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    # Hard caps applied after a file parses, before it is profiled or stored.
+    MAX_ROWS_PER_FILE: int = 1_000_000
+    MAX_COLUMNS_PER_FILE: int = 512
+    # Upload processing: run in a background worker thread and poll for status.
+    UPLOAD_ASYNC_PROCESSING: bool = True
+    UPLOAD_WORKER_THREADS: int = 2
+    # Observability
+    SENTRY_DSN: str = ""
+    LOG_LEVEL: str = "INFO"
+    LOG_JSON: bool = False
+    # OpenAI resilience (applies to every call site)
+    OPENAI_TIMEOUT_SECONDS: float = 30.0
+    OPENAI_MAX_RETRIES: int = 2
+    OPENAI_CACHE_TTL_SECONDS: int = 900
+    # Display currency when a workspace has not set one.
+    DEFAULT_CURRENCY: str = "INR"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     MAX_FILE_SIZE_MB: int = 20
-    # Per authenticated user (Bearer token → user id). In-memory; use proxy limits for multi-worker.
+    # Per authenticated user (Bearer token → user id). DB-backed across workers.
     UPLOAD_RATE_BURST_PER_MINUTE: int = 5
     UPLOAD_RATE_MAX_PER_HOUR: int = 30
+    # OTP verify attempts (DB-backed). Eight failures in a 15-minute window locks the mailbox.
+    OTP_VERIFY_MAX_FAILURES: int = 8
+    OTP_VERIFY_WINDOW_SECONDS: int = 900
     ALLOWED_EXTENSIONS: List[str] = [".xlsx", ".xls", ".csv", ".tsv"]
     # Comma-separated. Browsers reject Access-Control-Allow-Origin: * when credentials are used.
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -22,7 +62,7 @@ class Settings(BaseSettings):
     # Optional: passwordless test sign-in for one mailbox (see /api/auth/test-login). Never commit real values.
     AUTH_TEST_LOGIN_ENABLED: bool = False
     AUTH_TEST_LOGIN_EMAIL: str = ""
-    # If set, /api/auth/test-login requires this secret; the web login flow does not send it-leave empty for email-only test sign-in.
+    # Required whenever AUTH_TEST_LOGIN_ENABLED is true. Empty secret is always rejected.
     AUTH_TEST_LOGIN_SECRET: str = ""
     AUTH_TEST_LOGIN_NAME: str = "Test user"
     # Resend (https://resend.com) - email OTP
@@ -34,7 +74,7 @@ class Settings(BaseSettings):
     OTP_RESEND_SECONDS: int = 60
     # Signed API access tokens (Authorization: Bearer). Override in production.
     API_JWT_SECRET: str = "dev-api-jwt-secret-change-in-production"
-    API_JWT_EXPIRE_HOURS: int = 336  # 14 days
+    API_JWT_EXPIRE_HOURS: int = 72  # 3 days; shorter window if a token is stolen
     # Server-only secret for NextAuth → FastAPI bootstrap after Google / bypass sign-in.
     # Must match frontend INTERNAL_AUTH_SECRET (never NEXT_PUBLIC_).
     INTERNAL_AUTH_SECRET: str = "dev-internal-auth-secret-change-in-production"
@@ -57,8 +97,12 @@ class Settings(BaseSettings):
     INTEGRATION_MAX_REFRESH_HOURS: int = 168
     INTEGRATION_SCHEDULER_ENABLED: bool = True
     INTEGRATION_SCHEDULER_INTERVAL_SECONDS: int = 60
-    # Optional secret for external cron hitting POST /api/integrations/run-scheduled
+    # Required in production for POST /api/integrations/run-scheduled
     INTEGRATION_CRON_SECRET: str = ""
+    # When false, lifespan skips alembic (use a release/init command instead).
+    RUN_MIGRATIONS_ON_STARTUP: bool = True
+    # Heuristic orphan upload→workspace backfill. Unsafe on multi-tenant DBs; off in prod.
+    BACKFILL_ORPHAN_UPLOAD_WORKSPACES: bool = True
     # Microsoft 365 OAuth for Excel / OneDrive
     MICROSOFT_CLIENT_ID: str = ""
     MICROSOFT_CLIENT_SECRET: str = ""
@@ -69,5 +113,71 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.strip().lower() in ("production", "prod")
+
 
 settings = Settings()
+
+
+def collect_runtime_setting_errors(s: "Settings") -> List[str]:
+    """Configuration that is safe in development but unacceptable in production."""
+    errors: List[str] = []
+    if not s.is_production:
+        return errors
+
+    for field, insecure in INSECURE_DEFAULTS.items():
+        value = (getattr(s, field, "") or "").strip()
+        if not value:
+            errors.append(f"{field} is empty. Set a unique secret of at least 24 characters.")
+        elif value == insecure:
+            errors.append(f"{field} is still the value committed in source. Set a unique secret.")
+        elif len(value) < 24:
+            errors.append(f"{field} is too short ({len(value)} chars). Use at least 24.")
+
+    if s.AUTH_TEST_LOGIN_ENABLED:
+        if not (s.AUTH_TEST_LOGIN_SECRET or "").strip():
+            errors.append(
+                "AUTH_TEST_LOGIN_ENABLED is on with an empty AUTH_TEST_LOGIN_SECRET, which lets "
+                "anyone sign in as the test mailbox. Set a secret or disable test login."
+            )
+        if not (s.AUTH_TEST_LOGIN_EMAIL or "").strip():
+            errors.append("AUTH_TEST_LOGIN_ENABLED is on with no AUTH_TEST_LOGIN_EMAIL allowlist.")
+
+    if (s.FORCE_SUBSCRIPTION_PLAN or "").strip():
+        errors.append("FORCE_SUBSCRIPTION_PLAN overrides every user's plan. Clear it in production.")
+
+    if s.DATABASE_URL.startswith("sqlite"):
+        errors.append("DATABASE_URL points at SQLite. Use Postgres in production.")
+
+    if s.STORAGE_BACKEND.strip().lower() == "local":
+        errors.append(
+            "STORAGE_BACKEND=local keeps uploads on container disk, so a redeploy loses "
+            "customer files. Set STORAGE_BACKEND=s3 with S3_BUCKET."
+        )
+    elif not s.S3_BUCKET.strip():
+        errors.append("STORAGE_BACKEND=s3 requires S3_BUCKET.")
+
+    if any("localhost" in o or "127.0.0.1" in o for o in s.CORS_ORIGINS.split(",")):
+        errors.append("CORS_ORIGINS still allows localhost.")
+
+    if not (s.INTEGRATION_CRON_SECRET or "").strip():
+        errors.append(
+            "INTEGRATION_CRON_SECRET is empty, so POST /api/integrations/run-scheduled is open "
+            "to anyone. Set a secret or disable external cron."
+        )
+
+    if not (s.RESEND_API_KEY or "").strip():
+        errors.append(
+            "RESEND_API_KEY is empty. Email OTP sign-in will fail for every user in production."
+        )
+
+    return errors
+
+
+def validate_runtime_settings(s: "Settings" = settings) -> None:
+    errors = collect_runtime_setting_errors(s)
+    if errors:
+        joined = "\n".join(f"  - {e}" for e in errors)
+        raise RuntimeError(f"Refusing to start with APP_ENV=production:\n{joined}")

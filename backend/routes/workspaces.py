@@ -13,6 +13,8 @@ from deps import require_user
 from models.models import User, Workspace
 from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.account_deletion import delete_workspace_cascade
+from services.currency import SUPPORTED_CURRENCIES, currency_symbol, normalize_currency
+from services import overview_cache
 from services.subscription_usage import assert_workspace_create_allowed
 from services.workspace_query import get_dataset_upload_in_workspace
 
@@ -31,11 +33,18 @@ class PatchOutlookForecastRequest(BaseModel):
     value_column: Optional[str] = None
 
 
+class PatchWorkspaceRequest(BaseModel):
+    name: Optional[str] = None
+    currency: Optional[str] = None
+
+
 def _workspace_outlook_fields(w: Workspace) -> dict:
     return {
         "outlook_forecast_dataset_id": w.outlook_forecast_dataset_id,
         "outlook_forecast_date_column": w.outlook_forecast_date_column,
         "outlook_forecast_value_column": w.outlook_forecast_value_column,
+        "currency": normalize_currency(w.currency),
+        "currency_symbol": currency_symbol(normalize_currency(w.currency)),
     }
 
 
@@ -83,6 +92,59 @@ def list_workspaces(
         }
         for w in workspaces
     ]
+
+
+@router.patch("/{workspace_id}")
+def patch_workspace(
+    workspace_id: str,
+    body: PatchWorkspaceRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """Rename a workspace or set the currency its money figures are displayed in."""
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.owner_id == user.id)
+        .first()
+    )
+    if not workspace:
+        raise HTTPException(404, "Workspace not found")
+
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(400, "Workspace name cannot be empty")
+        workspace.name = name[:120]
+
+    if body.currency is not None:
+        code = body.currency.strip().upper()
+        if code not in SUPPORTED_CURRENCIES:
+            raise HTTPException(
+                400,
+                f"Unsupported currency '{code}'. Supported: {', '.join(sorted(SUPPORTED_CURRENCIES))}",
+            )
+        workspace.currency = code
+
+    db.commit()
+    db.refresh(workspace)
+    overview_cache.invalidate(workspace_id)
+
+    return {
+        "id": workspace.id,
+        "name": workspace.name,
+        "created_at": workspace.created_at.isoformat(),
+        **_workspace_outlook_fields(workspace),
+    }
+
+
+@router.get("/currencies")
+def list_currencies():
+    return {
+        "currencies": [
+            {"code": code, "symbol": currency_symbol(code)}
+            for code in sorted(SUPPORTED_CURRENCIES)
+        ]
+    }
 
 
 @router.post("/{workspace_id}/activate")

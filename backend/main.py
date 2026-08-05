@@ -1,13 +1,16 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import AsyncGenerator, Dict, List, Tuple
-
-import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
+import observability
+from config import collect_runtime_setting_errors, settings, validate_runtime_settings
 from database import Base, SessionLocal, engine
 from models import models as _models  # noqa: F401 — register ORM tables for create_all
 from routes import (
@@ -24,12 +27,38 @@ from routes import (
     workspace_timeline,
     workspaces,
 )
-from config import settings
 from schemas import HealthResponse
+from services import storage
+
+logger = logging.getLogger(__name__)
 
 
 def _cors_allow_origins() -> list[str]:
     return [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
+
+def _run_migrations() -> None:
+    """Bring the schema to head.
+
+    Databases created before Alembic existed are stamped at the baseline first;
+    revision 0002 is idempotent and fills in whatever they are missing.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from alembic.runtime.migration import MigrationContext
+
+    cfg = Config(str(Path(__file__).parent / "alembic.ini"))
+    cfg.set_main_option("script_location", str(Path(__file__).parent / "migrations"))
+
+    with engine.connect() as conn:
+        current = MigrationContext.configure(conn).get_current_revision()
+        legacy = current is None and inspect(engine).has_table("users")
+
+    if legacy:
+        logger.info("Existing pre-Alembic database detected; stamping baseline.")
+        command.stamp(cfg, "0001_baseline")
+
+    command.upgrade(cfg, "head")
 
 
 def _backfill_upload_workspace_ids() -> None:
@@ -96,18 +125,7 @@ def _backfill_upload_workspace_ids() -> None:
         db.close()
 
 
-def _ensure_dataset_dashboard_plan_column() -> None:
-    insp = inspect(engine)
-    if not insp.has_table("datasets"):
-        return
-    cols = {c["name"] for c in insp.get_columns("datasets")}
-    if "dashboard_plan_json" not in cols:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE datasets ADD COLUMN dashboard_plan_json TEXT"))
-
-
 def _backfill_workspace_timeline_snapshots() -> None:
-    from database import SessionLocal
     from services.workspace_timeline import backfill_timeline_snapshots
 
     db = SessionLocal()
@@ -120,77 +138,34 @@ def _backfill_workspace_timeline_snapshots() -> None:
         db.close()
 
 
-def _ensure_workspace_outlook_forecast_columns() -> None:
-    insp = inspect(engine)
-    if not insp.has_table("workspaces"):
-        return
-    cols = {c["name"] for c in insp.get_columns("workspaces")}
-    with engine.begin() as conn:
-        if "outlook_forecast_dataset_id" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN outlook_forecast_dataset_id VARCHAR"))
-        if "outlook_forecast_date_column" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN outlook_forecast_date_column VARCHAR"))
-        if "outlook_forecast_value_column" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN outlook_forecast_value_column VARCHAR"))
-
-
-def _ensure_dataset_business_classification_column() -> None:
-    insp = inspect(engine)
-    if not insp.has_table("datasets"):
-        return
-    cols = {c["name"] for c in insp.get_columns("datasets")}
-    with engine.begin() as conn:
-        if "business_classification" not in cols:
-            conn.execute(text("ALTER TABLE datasets ADD COLUMN business_classification VARCHAR"))
-        if "dashboard_plan_locked" not in cols:
-            conn.execute(
-                text("ALTER TABLE datasets ADD COLUMN dashboard_plan_locked INTEGER DEFAULT 0")
-            )
-        if "integration_id" not in cols:
-            conn.execute(text("ALTER TABLE datasets ADD COLUMN integration_id VARCHAR"))
-
-
-def _ensure_integration_tables() -> None:
-    Base.metadata.create_all(bind=engine, tables=[Base.metadata.tables["data_source_integrations"]])
-
-
-def _ensure_user_subscription_columns() -> None:
-    insp = inspect(engine)
-    if not insp.has_table("users"):
-        return
-    cols = {c["name"] for c in insp.get_columns("users")}
-    with engine.begin() as conn:
-        if "subscription_plan" not in cols:
-            conn.execute(
-                text(
-                    "ALTER TABLE users ADD COLUMN subscription_plan VARCHAR DEFAULT 'free'"
-                )
-            )
-            conn.execute(text("UPDATE users SET subscription_plan = 'free' WHERE subscription_plan IS NULL"))
-        if "billing_provider" not in cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN billing_provider VARCHAR"))
-        if "billing_customer_id" not in cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN billing_customer_id VARCHAR"))
-        if "billing_subscription_id" not in cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN billing_subscription_id VARCHAR"))
-        if "subscription_current_period_end" not in cols:
-            conn.execute(
-                text(
-                    "ALTER TABLE users ADD COLUMN subscription_current_period_end DATETIME"
-                )
-            )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    Base.metadata.create_all(bind=engine)
-    _ensure_dataset_dashboard_plan_column()
-    _ensure_workspace_outlook_forecast_columns()
-    _ensure_dataset_business_classification_column()
-    _ensure_integration_tables()
-    _ensure_user_subscription_columns()
-    _backfill_upload_workspace_ids()
+    observability.configure_logging()
+    validate_runtime_settings()
+    if observability.configure_sentry():
+        logger.info("Sentry error tracking enabled for %s", settings.APP_ENV)
+
+    for warning in collect_runtime_setting_errors(
+        settings.model_copy(update={"APP_ENV": "production"})
+    ):
+        if not settings.is_production:
+            logger.debug("production readiness: %s", warning)
+
+    if settings.RUN_MIGRATIONS_ON_STARTUP:
+        _run_migrations()
+    else:
+        logger.info("RUN_MIGRATIONS_ON_STARTUP=false; expecting an external migrate step.")
+
+    # Heuristic orphan backfill is unsafe on multi-tenant DBs. Off in production
+    # unless explicitly re-enabled.
+    allow_orphan_backfill = bool(settings.BACKFILL_ORPHAN_UPLOAD_WORKSPACES)
+    if settings.is_production:
+        allow_orphan_backfill = False
+    if allow_orphan_backfill:
+        _backfill_upload_workspace_ids()
     _backfill_workspace_timeline_snapshots()
+
+    logger.info("Storage backend: %s", storage.describe())
 
     scheduler_task = None
     if settings.INTEGRATION_SCHEDULER_ENABLED:
@@ -202,6 +177,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    from services.upload_worker import shutdown_executor
+
+    shutdown_executor()
+
     if scheduler_task is not None:
         scheduler_task.cancel()
         try:
@@ -212,12 +191,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Snaptix", version="0.1.0", lifespan=lifespan)
 
+observability.install(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
 
 app.include_router(auth.router)
@@ -236,4 +218,45 @@ app.include_router(workspace_timeline.router)
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check() -> Dict[str, str]:
+    """Liveness: the process is up. Does not touch dependencies."""
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness: every dependency this instance needs to serve traffic.
+
+    Returns HTTP 503 when database or storage is unavailable so orchestrators
+    stop routing traffic. OpenAI being unset is reported but does not fail
+    readiness — the product degrades to heuristics.
+    """
+    from fastapi.responses import JSONResponse
+
+    checks: Dict[str, str] = {}
+    ok = True
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as exc:  # noqa: BLE001 — the whole point is to report it
+        checks["database"] = f"error: {exc}"
+        ok = False
+
+    try:
+        probe = "healthcheck/.probe"
+        storage.write_bytes(probe, b"ok")
+        storage.delete(probe)
+        checks["storage"] = f"ok ({storage.backend()})"
+    except Exception as exc:  # noqa: BLE001
+        checks["storage"] = f"error: {exc}"
+        ok = False
+
+    from services import llm_client
+
+    checks["openai"] = "configured" if llm_client.is_configured() else "not configured"
+
+    body = {"status": "ready" if ok else "degraded", "checks": checks}
+    if not ok:
+        return JSONResponse(status_code=503, content=body)
+    return body

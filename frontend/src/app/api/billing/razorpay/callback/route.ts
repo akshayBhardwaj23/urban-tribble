@@ -7,6 +7,8 @@ const CHECKOUT_PARAM_KEYS = [
   "razorpay_signature",
 ] as const;
 
+export const RAZORPAY_HANDOFF_COOKIE = "rzp_handoff";
+
 async function readRazorpayCallbackParams(
   request: NextRequest
 ): Promise<URLSearchParams> {
@@ -61,13 +63,24 @@ export async function POST(request: NextRequest) {
   const params = await readRazorpayCallbackParams(request);
   const redirectUrl = new URL("/pricing/success", request.url);
 
-  for (const [key, value] of params) {
-    redirectUrl.searchParams.set(key, value);
+  const hasPayment = params.has("razorpay_payment_id");
+  redirectUrl.searchParams.set(hasPayment ? "pending" : "verified", "1");
+
+  const response = NextResponse.redirect(redirectUrl, 303);
+
+  if (hasPayment) {
+    // Payment id, subscription id and signature stay out of the URL: query
+    // strings leak into browser history, Referer headers and access logs.
+    response.cookies.set({
+      name: RAZORPAY_HANDOFF_COOKIE,
+      value: JSON.stringify(Object.fromEntries(params)),
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 600,
+    });
   }
 
-  if (!redirectUrl.searchParams.has("razorpay_payment_id")) {
-    redirectUrl.searchParams.set("verified", "1");
-  }
-
-  return NextResponse.redirect(redirectUrl, 303);
+  return response;
 }

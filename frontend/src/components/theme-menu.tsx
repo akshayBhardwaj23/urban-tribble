@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import {
   DropdownMenu,
@@ -13,14 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "next-themes";
+import { useMounted } from "@/lib/use-mounted";
 import { cn } from "@/lib/utils";
 
 /** Nested “Theme” submenu for use inside an existing `DropdownMenu` (e.g. user menu). */
 export function ThemeAppearanceSubmenu() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   return (
     <DropdownMenuSub>
@@ -61,9 +59,7 @@ export function ThemeAppearanceSubmenu() {
  */
 export function ThemeMenuCompact({ className }: { className?: string }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   return (
     <DropdownMenu>

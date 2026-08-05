@@ -33,7 +33,13 @@ def microsoft_oauth_configured() -> bool:
 
 
 def build_signed_state(payload: dict) -> str:
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    body = dict(payload)
+    # Short-lived so a leaked state cannot be replayed forever.
+    body.setdefault(
+        "exp",
+        int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp()),
+    )
+    raw = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
     sig = hmac.new(
         settings.INTEGRATION_OAUTH_STATE_SECRET.encode("utf-8"),
         raw,
@@ -56,7 +62,17 @@ def parse_signed_state(state: str) -> dict:
     ).digest()
     if not hmac.compare_digest(sig, expected):
         raise ValueError("Invalid OAuth state signature")
-    return json.loads(raw.decode("utf-8"))
+    data = json.loads(raw.decode("utf-8"))
+    exp = data.get("exp")
+    if exp is not None:
+        try:
+            if int(exp) < int(datetime.now(timezone.utc).timestamp()):
+                raise ValueError("OAuth state has expired; start the connection again.")
+        except (TypeError, ValueError) as e:
+            if "expired" in str(e).lower():
+                raise
+            raise ValueError("Invalid OAuth state expiry") from e
+    return data
 
 
 def build_microsoft_authorize_url(state: str) -> str:

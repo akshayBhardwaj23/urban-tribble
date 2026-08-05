@@ -25,6 +25,7 @@ from services.subscription_usage import (
 from services.ai_analyzer import AIAnalyzer
 from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.forecaster import Forecaster
+from services.workspace_settings import currency_for_workspace
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -60,7 +61,12 @@ def run_analysis(
     column_metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
     user_description = upload.user_description if upload else None
 
-    result = ai_analyzer.analyze(data_summary, column_metadata, user_description)
+    result = ai_analyzer.analyze(
+        data_summary,
+        column_metadata,
+        user_description,
+        currency=currency_for_workspace(db, wid),
+    )
     if get_effective_plan(db, user) == "free":
         result = trim_free_analysis_result(result)
 
@@ -159,8 +165,10 @@ def run_forecast(
     df = pd.read_parquet(str(parquet_path))
     schema = json.loads(dataset.schema_json) if dataset.schema_json else {}
 
-    date_col = req.date_column or (schema.get("date_columns", [None]) or [None])[0]
-    value_col = req.value_column or (schema.get("revenue_columns", [None]) or [None])[0]
+    from services.daily_metrics import resolve_date_column, resolve_revenue_column
+
+    date_col = req.date_column or resolve_date_column(df, schema)
+    value_col = req.value_column or resolve_revenue_column(df, schema)
 
     if not date_col or not value_col:
         raise HTTPException(
@@ -215,8 +223,10 @@ def run_overview_analysis(
     combined_summary["total_rows"] = sum(up.row_count or 0 for _, up in all_datasets)
 
     result = ai_analyzer.analyze(
-        combined_summary, combined_metadata,
+        combined_summary,
+        combined_metadata,
         f"Workspace with {len(all_datasets)} business datasets",
+        currency=currency_for_workspace(db, workspace_id),
     )
     if get_effective_plan(db, user) == "free":
         result = trim_free_analysis_result(result)
@@ -286,11 +296,13 @@ def _auto_pick_overview_forecast(
         schema = json.loads(ds.schema_json) if ds.schema_json else {}
         date_cols = schema.get("date_columns", [])
         rev_cols = schema.get("revenue_columns", [])
-        if date_cols and rev_cols and (up.row_count or 0) > best_rows:
+        date_col = schema.get("primary_timeline") or (date_cols[0] if date_cols else None)
+        value_col = schema.get("primary_amount") or (rev_cols[0] if rev_cols else None)
+        if date_col and value_col and (up.row_count or 0) > best_rows:
             best_ds = ds
             best_up = up
-            best_date_col = date_cols[0]
-            best_value_col = rev_cols[0]
+            best_date_col = date_col
+            best_value_col = value_col
             best_rows = up.row_count or 0
 
     if not best_ds or not best_up or not best_date_col or not best_value_col:

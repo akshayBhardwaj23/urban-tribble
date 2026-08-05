@@ -1,0 +1,21 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["venv", "migrations/versions", ".pytest_cache"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+  "E501",   # line length is handled by the formatter
+  "B008",   # FastAPI Depends() in defaults is the framework idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
+"scripts/*" = ["E402"]

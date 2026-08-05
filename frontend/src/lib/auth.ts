@@ -1,13 +1,20 @@
 import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
+import { resolveApiBase } from "@/lib/api-base";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = resolveApiBase();
 
-const INTERNAL_AUTH_SECRET =
-  process.env.INTERNAL_AUTH_SECRET ||
-  "dev-internal-auth-secret-change-in-production";
+const INTERNAL_AUTH_SECRET = (() => {
+  const configured = process.env.INTERNAL_AUTH_SECRET?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "INTERNAL_AUTH_SECRET is not set. Set it to match the backend before building for production."
+    );
+  }
+  return "dev-internal-auth-secret-change-in-production";
+})();
 
 type SignInUser = {
   id: string;

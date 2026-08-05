@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { setApiAccessToken } from "@/lib/api";
+import { resolveApiBase } from "@/lib/api-base";
 import {
   API_UNAVAILABLE_DESCRIPTION,
   API_UNAVAILABLE_TITLE,
@@ -12,8 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const IS_DEV = process.env.NODE_ENV === "development";
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = resolveApiBase();
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { status, data: session } = useSession();
@@ -49,6 +49,31 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (status === "unauthenticated") {
     return null;
+  }
+
+  // Signed into NextAuth but bootstrap never issued an API token (usually a
+  // mismatched INTERNAL_AUTH_SECRET). Show a clear failure instead of an empty shell.
+  if (!loading && status === "authenticated" && !session?.accessToken) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="max-w-md space-y-2">
+          <h1 className="text-lg font-semibold tracking-tight">
+            Could not connect your session to the API
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Sign-in succeeded, but the app could not obtain an API access token.
+            Confirm INTERNAL_AUTH_SECRET matches on the frontend and backend, then
+            sign out and try again.
+          </p>
+          {IS_DEV ? (
+            <p className="text-xs text-muted-foreground break-all">{API_URL}</p>
+          ) : null}
+        </div>
+        <Button type="button" onClick={() => router.replace("/login")}>
+          Back to sign in
+        </Button>
+      </div>
+    );
   }
 
   if (!loading && session?.accessToken && !profile) {

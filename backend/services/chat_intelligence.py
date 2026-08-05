@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from services.currency import format_money
+
 DataframeRow = tuple[str, pd.DataFrame, dict[str, Any], Optional[str]]
 
 
@@ -108,8 +110,8 @@ def build_source_catalog(
     return catalog
 
 
-def _format_inr(value: float) -> str:
-    return f"INR {value:,.2f}"
+def _format_money(value: float, currency: Optional[str] = None) -> str:
+    return format_money(value, currency)
 
 
 def catalog_with_revenue(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -175,6 +177,7 @@ _CANONICAL_RE = re.compile(
 def try_workspace_shortcut(
     question: str,
     dataframes: list[DataframeRow],
+    currency: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """
     Deterministic answers for common workspace questions (no double-counting).
@@ -199,7 +202,7 @@ def try_workspace_shortcut(
         ]
         for c in catalog:
             rev_note = (
-                f" - primary metric: {_format_inr(c['revenue_total'])} "
+                f" - primary metric: {_format_money(c['revenue_total'], currency)} "
                 f"({c['revenue_column']})"
                 if c.get("has_revenue")
                 else " - no revenue column detected"
@@ -219,16 +222,17 @@ def try_workspace_shortcut(
     if _REVENUE_BY_SOURCE_RE.search(q) or (
         "each source" in ql and ("revenue" in ql or "sale" in ql)
     ):
-        return _answer_revenue_by_source(catalog)
+        return _answer_revenue_by_source(catalog, currency=currency)
 
     if _CANONICAL_RE.search(q):
-        return _answer_canonical_revenue(catalog)
+        return _answer_canonical_revenue(catalog, currency=currency)
 
     if _REVENUE_TOTAL_RE.search(q) or (
         "total revenue" in ql and ("all" in ql or "across" in ql or "workspace" in ql)
     ):
         return _answer_revenue_by_source(
             catalog,
+            currency=currency,
             headline=(
                 "There is no single “total revenue” number across all sources - "
                 "they overlap (orders, monthly rollups, ads, SKUs). "
@@ -238,7 +242,7 @@ def try_workspace_shortcut(
 
     if _LIST_SOURCES_RE.search(q) and len(ql) < 80:
         return try_workspace_shortcut(
-            "how many sources are in this workspace", dataframes
+            "how many sources are in this workspace", dataframes, currency
         )
 
     return None
@@ -248,6 +252,7 @@ def _answer_revenue_by_source(
     catalog: list[dict[str, Any]],
     *,
     headline: Optional[str] = None,
+    currency: Optional[str] = None,
 ) -> dict[str, Any]:
     with_rev = _catalog_with_revenue(catalog)
     if not with_rev:
@@ -267,7 +272,7 @@ def _answer_revenue_by_source(
     for c in sorted(with_rev, key=lambda x: float(x["revenue_total"]), reverse=True):
         dr = f" · dates {c['date_range']}" if c.get("date_range") else ""
         lines.append(
-            f"• {c['label']} - {_format_inr(float(c['revenue_total']))} "
+            f"• {c['label']} - {_format_money(float(c['revenue_total']), currency)} "
             f"({c['revenue_column']}, {c['grain']}{dr})"
         )
 
@@ -277,7 +282,7 @@ def _answer_revenue_by_source(
             [
                 "",
                 f"For a single company revenue figure, use “{canonical['label']}” "
-                f"({_format_inr(float(canonical['revenue_total']))}) - "
+                f"({_format_money(float(canonical['revenue_total']), currency)}) - "
                 f"{canonical['grain']}. Other files are breakdowns or overlapping views.",
             ]
         )
@@ -288,7 +293,9 @@ def _answer_revenue_by_source(
     }
 
 
-def _answer_canonical_revenue(catalog: list[dict[str, Any]]) -> dict[str, Any]:
+def _answer_canonical_revenue(
+    catalog: list[dict[str, Any]], currency: Optional[str] = None
+) -> dict[str, Any]:
     canonical = _pick_canonical_revenue_source(catalog)
     if not canonical:
         return {
@@ -302,7 +309,7 @@ def _answer_canonical_revenue(catalog: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "answer": (
             f"Use “{canonical['label']}” as your primary revenue view: "
-            f"{_format_inr(float(canonical['revenue_total']))} "
+            f"{_format_money(float(canonical['revenue_total']), currency)} "
             f"on column {canonical['revenue_column']} ({canonical['grain']}).{dr} "
             "Other sources overlap this - avoid adding their revenue totals."
         ),
@@ -324,7 +331,9 @@ def chart_revenue_by_source(with_rev: list[dict[str, Any]]) -> Optional[dict[str
     }
 
 
-def format_catalog_for_prompt(catalog: list[dict[str, Any]]) -> str:
+def format_catalog_for_prompt(
+    catalog: list[dict[str, Any]], currency: Optional[str] = None
+) -> str:
     """Text block injected into LLM prompts."""
     lines = [
         "WORKSPACE SOURCE CATALOG (use for business answers - not file paths in user text):",
@@ -334,19 +343,20 @@ def format_catalog_for_prompt(catalog: list[dict[str, Any]]) -> str:
     ]
     for c in catalog:
         rev = (
-            f"primary revenue `{c['revenue_column']}` ≈ {_format_inr(float(c['revenue_total']))}"
+            f"primary revenue `{c['revenue_column']}` ≈ "
+            f"{_format_money(float(c['revenue_total']), currency)}"
             if c.get("has_revenue")
             else "no revenue column"
         )
         dr = f", dates {c['date_range']}" if c.get("date_range") else ""
         lines.append(
-            f"- {c['label']} (variable df_{c['slug']}, {c['rows']} rows, {c['grain']}, "
+            f"- {c['label']} (source key {c['slug']}, {c['rows']} rows, {c['grain']}, "
             f"{rev}{dr})"
         )
     canonical = _pick_canonical_revenue_source(catalog)
     if canonical:
         lines.append(
             f"\nSuggested canonical revenue source: {canonical['label']} "
-            f"({_format_inr(float(canonical['revenue_total']))})."
+            f"({_format_money(float(canonical['revenue_total']), currency)})."
         )
     return "\n".join(lines)

@@ -5,7 +5,7 @@ import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -138,8 +138,34 @@ class TestLoginRequest(BaseModel):
 
 
 @router.post("/otp/send")
-def otp_send(req: OtpSendRequest, db: Session = Depends(get_db)):
+def otp_send(
+    req: OtpSendRequest,
+    db: Session = Depends(get_db),
+    x_forwarded_for: Optional[str] = Header(default=None),
+):
     """Send a 6-digit sign-in code to the email (Resend)."""
+    from services.upload_rate_limit import check_rate_limit
+
+    # Global / per-IP budgets so a spray of addresses cannot burn the Resend quota.
+    client_ip = (x_forwarded_for or "").split(",")[0].strip() or "unknown"
+    try:
+        check_rate_limit(
+            db,
+            client_ip,
+            scope="otp_send_ip",
+            per_minute=10,
+            per_hour=60,
+        )
+        check_rate_limit(
+            db,
+            "global",
+            scope="otp_send_global",
+            per_minute=120,
+            per_hour=2000,
+        )
+    except HTTPException:
+        raise
+
     ok, detail, retry_after = send_otp_email(db, str(req.email))
     if detail == "rate_limited_send":
         wait = retry_after or settings.OTP_RESEND_SECONDS
@@ -152,11 +178,11 @@ def otp_send(req: OtpSendRequest, db: Session = Depends(get_db)):
         if detail == "RESEND_API_KEY not configured":
             raise HTTPException(
                 503,
-                "Email is not configured: add RESEND_API_KEY to backend .env and restart the API (see https://resend.com).",
+                "Email sign-in is temporarily unavailable. Try again later.",
             )
         raise HTTPException(
             503,
-            f"Email could not be sent. {detail}",
+            "Email could not be sent. Try again in a few minutes.",
         )
     return {
         "ok": True,
@@ -177,22 +203,19 @@ def otp_verify(req: OtpVerifyRequest, db: Session = Depends(get_db)):
 def auth_test_login(req: TestLoginRequest, db: Session = Depends(get_db)):
     """Server-only test sign-in for one allowlisted mailbox (NextAuth credentials).
 
-    The app only sends an empty secret from the login UI. If AUTH_TEST_LOGIN_SECRET is set,
-    test-login from the browser will fail until you clear the secret or call this endpoint
-    with the secret from a trusted non-browser path.
+    Requires AUTH_TEST_LOGIN_ENABLED, an allowlisted AUTH_TEST_LOGIN_EMAIL, and a matching
+    non-empty AUTH_TEST_LOGIN_SECRET. An unset secret disables the endpoint rather than
+    waiving the check, and it is refused outright in production.
     """
-    if not settings.AUTH_TEST_LOGIN_ENABLED:
+    if settings.is_production or not settings.AUTH_TEST_LOGIN_ENABLED:
         raise HTTPException(401, "Unauthorized")
     allowed = (settings.AUTH_TEST_LOGIN_EMAIL or "").strip()
-    if not allowed:
+    expected = (settings.AUTH_TEST_LOGIN_SECRET or "").strip()
+    if not allowed or not expected:
         raise HTTPException(401, "Unauthorized")
     if normalize_email(str(req.email)) != normalize_email(allowed):
         raise HTTPException(401, "Unauthorized")
-    expected = (settings.AUTH_TEST_LOGIN_SECRET or "").strip()
-    if expected:
-        if not _const_time_str_eq(req.secret.strip(), expected):
-            raise HTTPException(401, "Unauthorized")
-    elif req.secret.strip():
+    if not _const_time_str_eq(req.secret.strip(), expected):
         raise HTTPException(401, "Unauthorized")
 
     email_norm = normalize_email(str(req.email))
@@ -289,11 +312,24 @@ def get_me(
     }
 
 
+class DeleteAccountRequest(BaseModel):
+    confirmation: str = Field(
+        ...,
+        description='Must be the exact phrase "DELETE" to confirm irreversible deletion.',
+    )
+
+
 @router.delete("/me")
 def delete_me(
+    body: DeleteAccountRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
     """Permanently delete the signed-in user, all owned workspaces, uploads, and related data."""
+    if (body.confirmation or "").strip() != "DELETE":
+        raise HTTPException(
+            400,
+            'Type DELETE (all caps) in the confirmation field to permanently delete your account.',
+        )
     delete_user_account(db, user)
     return {"ok": True, "deleted": True}

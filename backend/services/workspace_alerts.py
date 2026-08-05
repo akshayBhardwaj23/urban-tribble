@@ -110,6 +110,12 @@ def _alerts_from_what_changed(wc: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _pick_expense_col(df: pd.DataFrame, metadata: dict[str, Any], exclude: set[str]) -> Optional[str]:
+    for c in metadata.get("expense_columns") or []:
+        if c in exclude or c not in df.columns:
+            continue
+        coerced = pd.to_numeric(df[c], errors="coerce")
+        if coerced.notna().sum() > max(5, len(df) * 0.2):
+            return c
     for c in df.columns:
         if c in exclude or not _EXPENSE_PAT.search(str(c)):
             continue
@@ -188,6 +194,9 @@ def _scan_single_dataset(
             })
 
     rev_cols = [c for c in metadata.get("revenue_columns", []) if c in df.columns]
+    primary_amount = metadata.get("primary_amount")
+    if primary_amount and primary_amount in df.columns:
+        rev_cols = [primary_amount] + [c for c in rev_cols if c != primary_amount]
     cat_cols = [c for c in metadata.get("category_columns", []) if c in df.columns]
     exp_col = _pick_expense_col(df, metadata, set(rev_cols))
 

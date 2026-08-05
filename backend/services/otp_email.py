@@ -7,20 +7,17 @@ import hmac
 import math
 import re
 import secrets
-from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import DefaultDict, List
 
 import httpx
 from sqlalchemy.orm import Session
 
 from config import settings
 from models.models import LoginOtpChallenge, User
+from services.upload_rate_limit import hit_custom_window, peek_custom_window
 from utils.email_norm import normalize_email, user_by_email_ci
 
 _CODE_RE = re.compile(r"^\d{6}$")
-
-_verify_fails: DefaultDict[str, List[datetime]] = defaultdict(list)
 
 
 def _hash_code(email: str, code: str) -> str:
@@ -51,20 +48,34 @@ def seconds_until_otp_resend_allowed(db: Session, email: str) -> int:
     return int(math.ceil(remaining))
 
 
-def _verify_failures_prune(email: str) -> None:
-    n = normalize_email(email)
-    cutoff = datetime.utcnow() - timedelta(minutes=15)
-    _verify_fails[n] = [t for t in _verify_fails[n] if t > cutoff]
+def _verify_window_seconds() -> int:
+    return int(getattr(settings, "OTP_VERIFY_WINDOW_SECONDS", 900))
 
 
-def _verify_rate_limited(email: str) -> bool:
-    _verify_failures_prune(email)
-    n = normalize_email(email)
-    return len(_verify_fails[n]) >= 8
+def _verify_max_failures() -> int:
+    return int(getattr(settings, "OTP_VERIFY_MAX_FAILURES", 8))
 
 
-def _record_verify_failure(email: str) -> None:
-    _verify_fails[normalize_email(email)].append(datetime.utcnow())
+def _verify_rate_limited(db: Session, email: str) -> bool:
+    """True when this mailbox has exhausted verify attempts (DB-backed)."""
+    return (
+        peek_custom_window(
+            db,
+            normalize_email(email),
+            scope="otp_verify",
+            window_seconds=_verify_window_seconds(),
+        )
+        >= _verify_max_failures()
+    )
+
+
+def _record_verify_failure(db: Session, email: str) -> None:
+    hit_custom_window(
+        db,
+        normalize_email(email),
+        scope="otp_verify",
+        window_seconds=_verify_window_seconds(),
+    )
 
 
 def generate_code() -> str:
@@ -141,10 +152,10 @@ def verify_otp_and_get_user(db: Session, email: str, code: str) -> User | None:
     """If code valid, delete challenge and return user (create if missing)."""
     n = normalize_email(email)
     if not _CODE_RE.match(code.strip()):
-        _record_verify_failure(n)
+        _record_verify_failure(db, n)
         return None
 
-    if _verify_rate_limited(n):
+    if _verify_rate_limited(db, n):
         return None
 
     row = (
@@ -154,18 +165,18 @@ def verify_otp_and_get_user(db: Session, email: str, code: str) -> User | None:
         .first()
     )
     if not row:
-        _record_verify_failure(n)
+        _record_verify_failure(db, n)
         return None
 
     if datetime.utcnow() > row.expires_at:
         db.delete(row)
         db.commit()
-        _record_verify_failure(n)
+        _record_verify_failure(db, n)
         return None
 
     expected = _hash_code(n, code.strip())
     if not hmac.compare_digest(expected, row.code_hash):
-        _record_verify_failure(n)
+        _record_verify_failure(db, n)
         return None
 
     db.delete(row)

@@ -16,6 +16,7 @@ import {
   planLimitErrorFromJson,
   setApiAccessToken,
 } from "@/lib/api";
+import { resolveApiBase } from "@/lib/api-base";
 import { clearWorkspaceScopedQueries } from "@/lib/workspace-queries";
 
 interface Workspace {
@@ -68,7 +69,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   deleteWorkspace: async () => {},
 });
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = resolveApiBase();
 
 function authHeaders(extra?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = { ...(extra || {}) };

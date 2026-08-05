@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useCallback, useRef, useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { formatUserFacingApiError } from "@/lib/api-errors";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { useWorkspace } from "@/lib/workspace-context";
 import {
   ChatMiniChart,
   type ChatChartPayload,
@@ -33,12 +35,17 @@ interface ChatPanelProps {
 
 export function ChatOverlay({ datasets }: ChatPanelProps) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Turns sent in this session, kept per conversation so switching source or
+  // workspace never shows another conversation's turns.
+  const [sentByConversation, setSentByConversation] = useState<
+    Record<string, Message[]>
+  >({});
   const [input, setInput] = useState("");
   const [selectedDataset, setSelectedDataset] =
     useState<string>(ALL_DATASETS_VALUE);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { activeWorkspace, switching } = useWorkspace();
 
   const isAllDatasets = selectedDataset === ALL_DATASETS_VALUE;
 
@@ -48,49 +55,61 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
   );
 
   const { data: historyData } = useQuery({
-    queryKey: ["chat-history", anchorId, isAllDatasets ? "workspace" : "dataset"],
+    queryKey: [
+      "chat-history",
+      activeWorkspace?.id ?? "none",
+      anchorId,
+      isAllDatasets ? "workspace" : "dataset",
+    ],
     queryFn: () =>
       api.getChatHistory(anchorId!, {
         workspace: isAllDatasets,
       }),
-    enabled: open && !!anchorId,
+    enabled: open && !!anchorId && !switching,
   });
 
-  useEffect(() => {
-    if (!open || !anchorId) return;
-    if (historyData === undefined) {
-      setMessages([]);
-      return;
-    }
-    setMessages(
-      historyData.map((m) => ({
-        id: m.id,
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }))
-    );
-  }, [open, anchorId, isAllDatasets, historyData]);
+  const conversationKey = `${activeWorkspace?.id ?? "none"}:${
+    isAllDatasets ? "workspace" : selectedDataset
+  }`;
+
+  const messages = useMemo<Message[]>(() => {
+    const stored = (historyData ?? []).map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+    return [...stored, ...(sentByConversation[conversationKey] ?? [])];
+  }, [historyData, sentByConversation, conversationKey]);
+
+  const appendMessage = useCallback((key: string, message: Message) => {
+    setSentByConversation((prev) => ({
+      ...prev,
+      [key]: [...(prev[key] ?? []), message],
+    }));
+  }, []);
 
   const chatMutation = useMutation({
     mutationFn: (question: string) =>
       isAllDatasets
         ? api.chatWorkspace(question)
         : api.chat(selectedDataset, question),
-    onSuccess: (data) => {
+    onMutate: () => conversationKey,
+    onSuccess: (data, _question, context) => {
       const chart =
         data.chart_data && typeof data.chart_data === "object"
           ? (data.chart_data as ChatChartPayload)
           : null;
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.answer, chartData: chart },
-      ]);
+      appendMessage(context as string, {
+        role: "assistant",
+        content: data.answer,
+        chartData: chart,
+      });
     },
-    onError: (err: Error) => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${err.message}` },
-      ]);
+    onError: (err: Error, _question, context) => {
+      appendMessage(context as string, {
+        role: "assistant",
+        content: formatUserFacingApiError(err, "answer that question"),
+      });
     },
   });
 
@@ -109,21 +128,20 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
   const handleSend = () => {
     if (!input.trim()) return;
     if (!isAllDatasets && !selectedDataset) return;
-    setMessages((prev) => [...prev, { role: "user", content: input }]);
+    appendMessage(conversationKey, { role: "user", content: input });
     chatMutation.mutate(input);
     setInput("");
   };
 
   const handleDatasetChange = (id: string) => {
     setSelectedDataset(id);
-    setMessages([]);
   };
 
   const showEmptySuggestions =
     messages.length === 0 && !chatMutation.isPending;
 
   const sendSuggestion = (text: string) => {
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    appendMessage(conversationKey, { role: "user", content: text });
     chatMutation.mutate(text);
   };
 
@@ -222,7 +240,12 @@ export function ChatOverlay({ datasets }: ChatPanelProps) {
 
           {/* Dataset selector */}
           <div className="border-b px-3 py-2 shrink-0">
+            <label className="sr-only" htmlFor="chat-dataset-select">
+              Choose data source for Q&amp;A
+            </label>
             <select
+              id="chat-dataset-select"
+              aria-label="Choose data source for Q&A"
               className="w-full rounded-md border px-2 py-1.5 text-xs bg-background"
               value={selectedDataset}
               onChange={(e) => handleDatasetChange(e.target.value)}

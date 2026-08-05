@@ -29,6 +29,7 @@ export default function AccountPage() {
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(
     null
   );
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["auth-me", session?.accessToken ? "authed" : "none"],
@@ -56,7 +57,7 @@ export default function AccountPage() {
   });
 
   const deleteAccount = useMutation({
-    mutationFn: () => api.deleteAuthAccount(),
+    mutationFn: () => api.deleteAuthAccount(deleteConfirm.trim()),
     onSuccess: async () => {
       queryClient.clear();
       await signOut({ callbackUrl: "/" });
@@ -261,23 +262,25 @@ export default function AccountPage() {
             and history. This cannot be undone. Active subscriptions should be cancelled with
             your payment provider where applicable.
           </p>
+          <label className="block space-y-1.5">
+            <span className="text-xs text-muted-foreground">
+              Type <span className="font-semibold text-foreground">DELETE</span> to confirm
+            </span>
+            <input
+              className="flex h-9 w-full max-w-xs rounded-md border border-input bg-transparent px-3 text-sm"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+            />
+          </label>
           <Button
             type="button"
             variant="destructive"
             size="sm"
             className="rounded-lg"
-            disabled={deleteAccount.isPending}
-            onClick={() => {
-              if (
-                typeof window !== "undefined" &&
-                !window.confirm(
-                  "Delete your account and all workspace data permanently? This cannot be undone."
-                )
-              ) {
-                return;
-              }
-              deleteAccount.mutate();
-            }}
+            disabled={deleteAccount.isPending || deleteConfirm.trim() !== "DELETE"}
+            onClick={() => deleteAccount.mutate()}
           >
             {deleteAccount.isPending ? "Deleting…" : "Delete my account"}
           </Button>
