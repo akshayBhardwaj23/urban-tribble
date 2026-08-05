@@ -94,7 +94,7 @@ export function HowWeReadPanel({
   const ambiguousDates = flags.some(
     (f) =>
       String(f.code || "").includes("ambiguous_date") ||
-      String(f.message || f.label || "")
+      String(f.message || "")
         .toLowerCase()
         .includes("ambiguous")
   );
