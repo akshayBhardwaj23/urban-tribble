@@ -39,6 +39,7 @@ import {
 import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { api, isApiPlanLimitError } from "@/lib/api";
 import { formatUserFacingApiError } from "@/lib/api-errors";
+import { INTEGRATIONS_COMING_SOON } from "@/lib/integrations-flags";
 import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
@@ -378,7 +379,7 @@ export default function DatasetPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {data.integration ? (
+          {data.integration && !INTEGRATIONS_COMING_SOON ? (
             <Button
               variant="outline"
               size="sm"

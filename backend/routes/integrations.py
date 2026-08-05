@@ -80,6 +80,14 @@ class CompleteMicrosoftOauthBody(BaseModel):
     item_id: str
 
 
+def _require_integrations_enabled() -> None:
+    if not settings.INTEGRATIONS_ENABLED:
+        raise HTTPException(
+            503,
+            "Live integrations are coming soon. Import a CSV or Excel file for now.",
+        )
+
+
 def _validate_connection_mode(provider_id: str, mode: str) -> None:
     provider = get_provider(provider_id)
     if not provider:
@@ -93,7 +101,10 @@ def _validate_connection_mode(provider_id: str, mode: str) -> None:
 
 @router.get("/catalog")
 def get_catalog():
-    return {"providers": list_catalog()}
+    return {
+        "providers": list_catalog(),
+        "enabled": settings.INTEGRATIONS_ENABLED,
+    }
 
 
 @router.post("/oauth/start")
@@ -101,6 +112,7 @@ def start_integration_oauth(
     body: StartOauthBody,
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
+    _require_integrations_enabled()
     user, workspace_id = ws
     if body.provider != "excel_onedrive":
         raise HTTPException(400, "OAuth start is only wired for Excel / OneDrive right now")
@@ -211,6 +223,7 @@ async def complete_microsoft_oauth(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
+    _require_integrations_enabled()
     user, workspace_id = ws
     session = pop_oauth_session(body.session_id)
     if not session:
@@ -278,6 +291,7 @@ async def create_integration(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
+    _require_integrations_enabled()
     _, workspace_id = ws
     provider = get_provider(body.provider)
     if not provider:
@@ -340,6 +354,7 @@ def patch_integration(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
+    _require_integrations_enabled()
     _, workspace_id = ws
     integration = (
         db.query(DataSourceIntegration)
@@ -405,6 +420,7 @@ async def test_integration(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
+    _require_integrations_enabled()
     _, workspace_id = ws
     integration = (
         db.query(DataSourceIntegration)
@@ -439,6 +455,7 @@ async def refresh_integration(
     db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
+    _require_integrations_enabled()
     _, workspace_id = ws
     integration = (
         db.query(DataSourceIntegration)
@@ -461,6 +478,7 @@ async def run_scheduled_syncs(
     x_integration_cron_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
+    _require_integrations_enabled()
     secret = (settings.INTEGRATION_CRON_SECRET or "").strip()
     if not secret:
         raise HTTPException(
