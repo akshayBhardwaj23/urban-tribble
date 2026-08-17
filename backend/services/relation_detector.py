@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List
-
-import pandas as pd
+from typing import Any
 
 
 class RelationDetector:
     def detect_relations(
         self,
-        datasets: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        datasets: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Find shared column names across multiple datasets."""
         if len(datasets) < 2:
             return []
@@ -23,7 +20,6 @@ class RelationDetector:
                 ds_b = datasets[j]
 
                 schema_a = ds_a.get("schema", {})
-                schema_b = ds_b.get("schema", {})
 
                 cols_a = set(ds_a.get("columns", []))
                 cols_b = set(ds_b.get("columns", []))
@@ -45,7 +41,7 @@ class RelationDetector:
 
         return relations
 
-    def _get_column_type(self, col: str, schema: Dict) -> str:
+    def _get_column_type(self, col: str, schema: dict) -> str:
         for type_key in ["date_columns", "revenue_columns", "category_columns", "numeric_columns"]:
             if col in schema.get(type_key, []):
                 return type_key.replace("_columns", "")

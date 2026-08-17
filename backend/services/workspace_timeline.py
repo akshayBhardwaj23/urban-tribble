@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -40,7 +40,7 @@ def build_metrics_payload(db: Session, workspace_id: str) -> dict[str, Any]:
     pairs = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     total_rows = sum(up.row_count or 0 for _, up in pairs)
     kpis: list[dict[str, Any]] = []
-    for ds, up in pairs:
+    for ds, _up in pairs:
         summary = json.loads(ds.data_summary) if ds.data_summary else {}
         metadata = json.loads(ds.schema_json) if ds.schema_json else {}
         for rev_col in metadata.get("revenue_columns", []):
@@ -202,7 +202,7 @@ def list_snapshots(
     db: Session,
     workspace_id: str,
     limit: int = 40,
-    since: Optional[datetime] = None,
+    since: datetime | None = None,
 ) -> list[WorkspaceTimelineSnapshot]:
     q = db.query(WorkspaceTimelineSnapshot).filter(
         WorkspaceTimelineSnapshot.workspace_id == workspace_id,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, EmailStr, Field
@@ -80,8 +79,8 @@ def _upsert_user(
     db: Session,
     *,
     email: str,
-    name: Optional[str],
-    image: Optional[str],
+    name: str | None,
+    image: str | None,
 ) -> User:
     email_norm = normalize_email(email)
     user = user_by_email_ci(db, email_norm)
@@ -105,7 +104,7 @@ def _upsert_user(
     return user
 
 
-def _require_internal_auth_secret(x_internal_auth_secret: Optional[str]) -> None:
+def _require_internal_auth_secret(x_internal_auth_secret: str | None) -> None:
     expected = (settings.INTERNAL_AUTH_SECRET or "").strip()
     provided = (x_internal_auth_secret or "").strip()
     if not expected or not provided or not _const_time_str_eq(provided, expected):
@@ -113,14 +112,14 @@ def _require_internal_auth_secret(x_internal_auth_secret: Optional[str]) -> None
 
 
 class SyncUserRequest(BaseModel):
-    name: Optional[str] = None
-    image: Optional[str] = None
+    name: str | None = None
+    image: str | None = None
 
 
 class BootstrapUserRequest(BaseModel):
     email: EmailStr
-    name: Optional[str] = None
-    image: Optional[str] = None
+    name: str | None = None
+    image: str | None = None
 
 
 class OtpSendRequest(BaseModel):
@@ -141,7 +140,7 @@ class TestLoginRequest(BaseModel):
 def otp_send(
     req: OtpSendRequest,
     db: Session = Depends(get_db),
-    x_forwarded_for: Optional[str] = Header(default=None),
+    x_forwarded_for: str | None = Header(default=None),
 ):
     """Send a 6-digit sign-in code to the email (Resend)."""
     from services.upload_rate_limit import check_rate_limit
@@ -237,7 +236,7 @@ def auth_test_login(req: TestLoginRequest, db: Session = Depends(get_db)):
 def bootstrap_user(
     req: BootstrapUserRequest,
     db: Session = Depends(get_db),
-    x_internal_auth_secret: Optional[str] = Header(None),
+    x_internal_auth_secret: str | None = Header(None),
 ):
     """Server-to-server user upsert after Google / NextAuth sign-in.
 

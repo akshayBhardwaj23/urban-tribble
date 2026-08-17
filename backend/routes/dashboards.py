@@ -1,6 +1,5 @@
 import json
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,11 +7,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_active_workspace
-from models.models import Dataset, Upload, User
-from services.workspace_query import (
-    dataset_upload_pairs_for_workspace,
-    get_dataset_upload_in_workspace,
-)
+from models.models import Upload, User
+from services import overview_cache
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.daily_metrics import (
     compute_daily_metrics_for_dataset,
     daily_metrics_to_records,
@@ -30,18 +27,20 @@ from services.period_change_summary import (
     build_workspace_what_changed,
     resolve_period_comparison_for_dataframe,
 )
-from services import overview_cache
-from services.workspace_alerts import build_workspace_alerts
-from services.workspace_query import latest_workspace_overview_analysis
-from services.workspace_recommended_actions import build_recommended_actions
-from services.workspace_habit_hints import build_workspace_habit_hints
-from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.subscription_usage import (
     build_workspace_usage_payload,
     empty_what_changed,
     get_effective_plan,
     plan_features,
 )
+from services.workspace_alerts import build_workspace_alerts
+from services.workspace_habit_hints import build_workspace_habit_hints
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+    latest_workspace_overview_analysis,
+)
+from services.workspace_recommended_actions import build_recommended_actions
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
@@ -49,12 +48,12 @@ router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
     try:
         parquet_path = ensure_cleaned_parquet(upload)
-    except CleanedDataMissingError:
-        raise HTTPException(404, "Cleaned data file not found")
+    except CleanedDataMissingError as exc:
+        raise HTTPException(404, "Cleaned data file not found") from exc
     return pd.read_parquet(str(parquet_path))
 
 
-def _parse_query_date(value: Optional[str]) -> Optional[pd.Timestamp]:
+def _parse_query_date(value: str | None) -> pd.Timestamp | None:
     if value is None or not str(value).strip():
         return None
     ts = pd.to_datetime(value, errors="coerce")
@@ -66,8 +65,8 @@ def _parse_query_date(value: Optional[str]) -> Optional[pd.Timestamp]:
 def _filter_df_by_date_range(
     df: pd.DataFrame,
     date_col: str,
-    start: Optional[pd.Timestamp],
-    end: Optional[pd.Timestamp],
+    start: pd.Timestamp | None,
+    end: pd.Timestamp | None,
 ) -> pd.DataFrame:
     if start is None and end is None:
         return df
@@ -83,9 +82,9 @@ def _filter_df_by_date_range(
 @router.get("/dataset/{dataset_id}")
 def get_dashboard_data(
     dataset_id: str,
-    start_date: Optional[str] = Query(None, description="Inclusive start (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="Inclusive end (YYYY-MM-DD)"),
-    last_n_days: Optional[int] = Query(
+    start_date: str | None = Query(None, description="Inclusive start (YYYY-MM-DD)"),
+    end_date: str | None = Query(None, description="Inclusive end (YYYY-MM-DD)"),
+    last_n_days: int | None = Query(
         None,
         ge=1,
         le=366,
@@ -104,7 +103,7 @@ def get_dashboard_data(
     metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
     df = df_full
 
-    date_bounds: dict[str, Optional[str]] = {"min": None, "max": None}
+    date_bounds: dict[str, str | None] = {"min": None, "max": None}
     _bounds_col = resolve_date_column(df_full, metadata)
     if _bounds_col and _bounds_col in df_full.columns:
         _bts = pd.to_datetime(df_full[_bounds_col], errors="coerce").dropna()
@@ -124,8 +123,8 @@ def get_dashboard_data(
         start_ts_explicit, end_ts_explicit = end_ts_explicit, start_ts_explicit
 
     date_col = resolve_date_column(df_full, metadata)
-    start_ts: Optional[pd.Timestamp] = None
-    end_ts: Optional[pd.Timestamp] = None
+    start_ts: pd.Timestamp | None = None
+    end_ts: pd.Timestamp | None = None
 
     if last_n_days is not None and date_col and date_bounds["max"]:
         end_ts = _parse_query_date(date_bounds["max"])
@@ -150,8 +149,8 @@ def get_dashboard_data(
         else empty_what_changed()
     )
     timeframe_applied = False
-    active_start: Optional[str] = None
-    active_end: Optional[str] = None
+    active_start: str | None = None
+    active_end: str | None = None
     if timeframe_requested and date_col:
         df = _filter_df_by_date_range(df_full, date_col, start_ts, end_ts)
         timeframe_applied = True

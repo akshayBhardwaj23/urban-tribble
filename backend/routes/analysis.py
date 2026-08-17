@@ -1,31 +1,30 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_active_workspace
 from models.models import Analysis, Dataset, Upload, User, Workspace
-from services.workspace_query import (
-    dataset_upload_pairs_for_workspace,
-    get_dataset_upload_in_workspace,
-    latest_workspace_overview_analysis,
-)
-from services.workspace_timeline import record_briefing_snapshot
+from services.ai_analyzer import AIAnalyzer
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
+from services.forecaster import Forecaster
 from services.subscription_usage import (
     assert_analysis_allowed,
     get_effective_plan,
     trim_free_analysis_result,
 )
-from services.ai_analyzer import AIAnalyzer
-from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
-from services.forecaster import Forecaster
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+    latest_workspace_overview_analysis,
+)
 from services.workspace_settings import currency_for_workspace
+from services.workspace_timeline import record_briefing_snapshot
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -39,8 +38,8 @@ class RunAnalysisRequest(BaseModel):
 
 class ForecastRequest(BaseModel):
     dataset_id: str
-    date_column: Optional[str] = None
-    value_column: Optional[str] = None
+    date_column: str | None = None
+    value_column: str | None = None
     periods: int = Field(default=90, ge=1, le=366)
 
 
@@ -159,8 +158,8 @@ def run_forecast(
 
     try:
         parquet_path = ensure_cleaned_parquet(upload)
-    except CleanedDataMissingError:
-        raise HTTPException(404, "Cleaned data file not found")
+    except CleanedDataMissingError as exc:
+        raise HTTPException(404, "Cleaned data file not found") from exc
 
     df = pd.read_parquet(str(parquet_path))
     schema = json.loads(dataset.schema_json) if dataset.schema_json else {}
@@ -178,7 +177,7 @@ def run_forecast(
     try:
         result = forecaster.forecast(df, date_col, value_col, req.periods)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
 
     return {
         "dataset_id": dataset.id,
@@ -283,7 +282,7 @@ class OverviewForecastRequest(BaseModel):
 
 def _auto_pick_overview_forecast(
     db: Session, workspace_id: str
-) -> Optional[tuple]:
+) -> tuple | None:
     """Return (dataset, upload, date_col, value_col) or None."""
     all_datasets = dataset_upload_pairs_for_workspace(db, workspace_id).all()
     best_ds = None
@@ -327,7 +326,7 @@ def run_overview_forecast(
     if not wk:
         raise HTTPException(404, "Workspace not found")
 
-    picked: Optional[tuple] = None
+    picked: tuple | None = None
     sid = (wk.outlook_forecast_dataset_id or "").strip()
     dc = (wk.outlook_forecast_date_column or "").strip()
     vc = (wk.outlook_forecast_value_column or "").strip()
@@ -356,15 +355,15 @@ def run_overview_forecast(
 
     try:
         parquet_path = ensure_cleaned_parquet(best_up)
-    except CleanedDataMissingError:
-        raise HTTPException(404, "Cleaned data file not found")
+    except CleanedDataMissingError as exc:
+        raise HTTPException(404, "Cleaned data file not found") from exc
 
     df = pd.read_parquet(str(parquet_path))
 
     try:
         result = forecaster.forecast(df, best_date_col, best_value_col, req.periods)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
 
     return {
         "dataset_id": best_ds.id,

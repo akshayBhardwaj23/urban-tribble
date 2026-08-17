@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -17,7 +17,7 @@ _EXPENSE_NAME = re.compile(
 _PROFIT_NAME = re.compile(r"(profit|margin|ebit|net_income|net income|p\/l)", re.I)
 
 
-def _pct_change(prev: float, cur: float) -> Optional[float]:
+def _pct_change(prev: float, cur: float) -> float | None:
     if prev == 0 and cur == 0:
         return 0.0
     if prev == 0:
@@ -65,7 +65,7 @@ def _pick_expense_column(
     df: pd.DataFrame,
     metadata: dict[str, Any],
     exclude: set[str],
-) -> Optional[str]:
+) -> str | None:
     # Prefer mapped expense / amount_outflow roles over name heuristics.
     for col in metadata.get("expense_columns") or []:
         if col in exclude or col not in df.columns:
@@ -85,7 +85,7 @@ def _pick_expense_column(
     return None
 
 
-def _pick_profit_column(df: pd.DataFrame, exclude: set[str]) -> Optional[str]:
+def _pick_profit_column(df: pd.DataFrame, exclude: set[str]) -> str | None:
     for col in df.columns:
         if col in exclude:
             continue
@@ -109,9 +109,9 @@ def _resolve_comparison_windows(
     df: pd.DataFrame,
     date_col: str,
     *,
-    start_ts: Optional[pd.Timestamp],
-    end_ts: Optional[pd.Timestamp],
-    last_n_days: Optional[int],
+    start_ts: pd.Timestamp | None,
+    end_ts: pd.Timestamp | None,
+    last_n_days: int | None,
 ) -> tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp, str]:
     """Returns cur_start, cur_end, prev_start, prev_end, description."""
     ts = pd.to_datetime(df[date_col], errors="coerce").dropna()
@@ -182,9 +182,9 @@ def resolve_period_comparison_for_dataframe(
     df: pd.DataFrame,
     metadata: dict[str, Any],
     *,
-    start_ts: Optional[pd.Timestamp] = None,
-    end_ts: Optional[pd.Timestamp] = None,
-    last_n_days: Optional[int] = None,
+    start_ts: pd.Timestamp | None = None,
+    end_ts: pd.Timestamp | None = None,
+    last_n_days: int | None = None,
 ) -> dict[str, Any]:
     """Calendar windows for chart overlays (matches what_changed logic)."""
     empty: dict[str, Any] = {
@@ -224,7 +224,7 @@ def _build_change_item(
     cur_v: float,
     *,
     higher_is_better: bool = True,
-    source_dataset: Optional[str] = None,
+    source_dataset: str | None = None,
 ) -> dict[str, Any]:
     direction = _direction(prev_v, cur_v)
     good = (
@@ -270,10 +270,10 @@ def build_what_changed_for_dataframe(
     df: pd.DataFrame,
     metadata: dict[str, Any],
     *,
-    start_ts: Optional[pd.Timestamp] = None,
-    end_ts: Optional[pd.Timestamp] = None,
-    last_n_days: Optional[int] = None,
-    source_dataset: Optional[str] = None,
+    start_ts: pd.Timestamp | None = None,
+    end_ts: pd.Timestamp | None = None,
+    last_n_days: int | None = None,
+    source_dataset: str | None = None,
 ) -> dict[str, Any]:
     """Return structured period-over-period deltas for one dataset."""
     empty: dict[str, Any] = {
@@ -473,9 +473,9 @@ def build_what_changed_for_dataframe(
     priority = ("revenue", "expense", "profit", "margin")
 
     def _pri(it: dict[str, Any]) -> int:
-        l = str(it.get("label", "")).lower()
+        label = str(it.get("label", "")).lower()
         for i, p in enumerate(priority):
-            if p in l:
+            if p in label:
                 return -10 + i
         return 0
 
@@ -518,9 +518,9 @@ def build_workspace_what_changed(
     dataset_pairs: list[tuple[Any, Any]],
     loader,
     *,
-    start_ts: Optional[pd.Timestamp] = None,
-    end_ts: Optional[pd.Timestamp] = None,
-    last_n_days: Optional[int] = None,
+    start_ts: pd.Timestamp | None = None,
+    end_ts: pd.Timestamp | None = None,
+    last_n_days: int | None = None,
 ) -> dict[str, Any]:
     """Merge what_changed across datasets; `loader(upload)->df`.
 

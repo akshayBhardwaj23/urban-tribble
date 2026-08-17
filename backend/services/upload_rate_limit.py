@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -122,7 +121,7 @@ def check_rate_limit(
     _maybe_prune(db, now)
 
 
-def check_upload_rate_limit(db: Session, user_email: Optional[str]) -> None:
+def check_upload_rate_limit(db: Session, user_email: str | None) -> None:
     check_rate_limit(
         db,
         user_email or "",
@@ -171,7 +170,7 @@ def peek_custom_window(
     return int(row.hits) if row else 0
 
 
-def reset_upload_rate_limit_for_tests(db: Optional[Session] = None) -> None:
+def reset_upload_rate_limit_for_tests(db: Session | None = None) -> None:
     global _calls_since_prune
     _calls_since_prune = 0
     if db is not None:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -50,8 +49,8 @@ def write_cleaned_parquet(upload: Upload, df: pd.DataFrame) -> str:
 def _load_raw_combined(
     upload: Upload,
     *,
-    sheet: Optional[str] = None,
-    header_row: Optional[int] = None,
+    sheet: str | None = None,
+    header_row: int | None = None,
 ) -> pd.DataFrame:
     paths = existing_source_paths(upload)
     if not paths:
@@ -90,7 +89,7 @@ def _light_norm(col) -> str:
 def ensure_cleaned_parquet(
     upload: Upload,
     *,
-    dataset: Optional[Dataset] = None,
+    dataset: Dataset | None = None,
 ) -> Path:
     """Return a local path to the cleaned parquet, rebuilding from sources if absent."""
     key = cleaned_parquet_key(upload)
@@ -119,7 +118,7 @@ def ensure_cleaned_parquet(
 def rebuild_from_sources(
     upload: Upload,
     *,
-    dataset: Optional[Dataset] = None,
+    dataset: Dataset | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Force re-derive cleaned dataframe from raw sources (ignores existing parquet)."""
     invalidate_cleaned_parquet(upload)

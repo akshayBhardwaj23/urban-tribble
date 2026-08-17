@@ -1,7 +1,5 @@
-from typing import List
 
 from pydantic_settings import BaseSettings
-
 
 # Values that ship in source and must never reach production. validate_runtime_settings
 # refuses to start when APP_ENV=production and any of these is still in effect.
@@ -52,7 +50,7 @@ class Settings(BaseSettings):
     # OTP verify attempts (DB-backed). Eight failures in a 15-minute window locks the mailbox.
     OTP_VERIFY_MAX_FAILURES: int = 8
     OTP_VERIFY_WINDOW_SECONDS: int = 900
-    ALLOWED_EXTENSIONS: List[str] = [".xlsx", ".xls", ".csv", ".tsv"]
+    ALLOWED_EXTENSIONS: list[str] = [".xlsx", ".xls", ".csv", ".tsv"]
     # Comma-separated. Browsers reject Access-Control-Allow-Origin: * when credentials are used.
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Legacy no-op when per-user subscription_plan is set; avoid relying on this in new code.
@@ -123,9 +121,9 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-def collect_runtime_setting_errors(s: "Settings") -> List[str]:
+def collect_runtime_setting_errors(s: "Settings") -> list[str]:
     """Configuration that is safe in development but unacceptable in production."""
-    errors: List[str] = []
+    errors: list[str] = []
     if not s.is_production:
         return errors
 

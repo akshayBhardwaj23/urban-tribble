@@ -6,7 +6,7 @@ import base64
 import io
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
@@ -149,6 +149,8 @@ async def fetch_excel_onedrive(config: dict[str, Any]) -> pd.DataFrame:
 async def fetch_excel_onedrive_oauth(config: dict[str, Any]) -> pd.DataFrame:
     from services.integration_microsoft import (
         IntegrationFetchError as MicrosoftIntegrationFetchError,
+    )
+    from services.integration_microsoft import (
         microsoft_download_item_as_dataframe,
     )
 
@@ -268,7 +270,7 @@ async def fetch_stripe(config: dict[str, Any]) -> pd.DataFrame:
     if not secret:
         raise IntegrationNotConfiguredError("Stripe secret key is required.")
     days_back = int(config.get("days_back") or 90)
-    since = int((datetime.now(timezone.utc) - timedelta(days=days_back)).timestamp())
+    since = int((datetime.now(UTC) - timedelta(days=days_back)).timestamp())
     rows: list[dict[str, Any]] = []
     url = "https://api.stripe.com/v1/charges"
     params: dict[str, Any] = {"limit": 100, "created[gte]": since}
@@ -288,7 +290,7 @@ async def fetch_stripe(config: dict[str, Any]) -> pd.DataFrame:
                     {
                         "charge_id": ch.get("id"),
                         "created_at": datetime.fromtimestamp(
-                            ch.get("created", 0), tz=timezone.utc
+                            ch.get("created", 0), tz=UTC
                         ).isoformat(),
                         "amount": (ch.get("amount") or 0) / 100.0,
                         "currency": ch.get("currency"),
@@ -316,7 +318,7 @@ async def fetch_shopify(config: dict[str, Any]) -> pd.DataFrame:
     if not shop.endswith(".myshopify.com"):
         shop = f"{shop}.myshopify.com"
     days_back = int(config.get("days_back") or 90)
-    since = (datetime.now(timezone.utc) - timedelta(days=days_back)).date().isoformat()
+    since = (datetime.now(UTC) - timedelta(days=days_back)).date().isoformat()
     rows: list[dict[str, Any]] = []
     url = f"https://{shop}/admin/api/2024-01/orders.json"
     params: dict[str, Any] = {"status": "any", "limit": 250, "created_at_min": since}
@@ -404,7 +406,7 @@ async def fetch_ga4(config: dict[str, Any]) -> pd.DataFrame:
             "GA4 property ID and service account JSON are required."
         )
     days_back = int(config.get("days_back") or 90)
-    end = datetime.now(timezone.utc).date()
+    end = datetime.now(UTC).date()
     start = end - timedelta(days=days_back)
     token = _google_bearer_token(sa_json)
     body = {
@@ -466,8 +468,8 @@ async def fetch_meta_ads(config: dict[str, Any]) -> pd.DataFrame:
     if not token or not account:
         raise IntegrationNotConfiguredError("Meta access token and ad account ID are required.")
     days_back = int(config.get("days_back") or 90)
-    since = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    until = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    since = (datetime.now(UTC) - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    until = datetime.now(UTC).strftime("%Y-%m-%d")
     url = f"https://graph.facebook.com/v21.0/act_{account}/insights"
     params: dict[str, Any] = {
         "access_token": token,
@@ -620,7 +622,7 @@ async def fetch_bigquery(config: dict[str, Any]) -> pd.DataFrame:
     rows = []
     for r in rows_raw:
         vals = [c.get("v") for c in r.get("f", [])]
-        rows.append(dict(zip(columns, vals)))
+        rows.append(dict(zip(columns, vals, strict=False)))
     df = pd.DataFrame(rows)
     for col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="ignore")

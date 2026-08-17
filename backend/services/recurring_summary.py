@@ -6,7 +6,7 @@ import html
 import json
 import re
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 from sqlalchemy.exc import IntegrityError
@@ -318,7 +318,7 @@ def _existing_row(
     workspace_id: str,
     kind: str,
     period_start: date,
-) -> Optional[WorkspaceRecurringSummary]:
+) -> WorkspaceRecurringSummary | None:
     return (
         db.query(WorkspaceRecurringSummary)
         .filter(
@@ -335,9 +335,9 @@ def ensure_summary_for_period(
     workspace_id: str,
     kind: str,
     *,
-    today: Optional[date] = None,
+    today: date | None = None,
     force_refresh: bool = False,
-) -> Optional[WorkspaceRecurringSummary]:
+) -> WorkspaceRecurringSummary | None:
     """Create or return stored summary for the canonical period (last week / prior month)."""
     if kind not in _KINDS:
         raise ValueError("kind must be weekly or monthly")
@@ -433,7 +433,7 @@ def latest_stored_summary(
     db: Session,
     workspace_id: str,
     kind: str,
-) -> Optional[WorkspaceRecurringSummary]:
+) -> WorkspaceRecurringSummary | None:
     return (
         db.query(WorkspaceRecurringSummary)
         .filter(

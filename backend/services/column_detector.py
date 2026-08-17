@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional, Set
+from typing import Any
 
 import pandas as pd
 
@@ -179,11 +179,11 @@ class ColumnDetector:
             "all_columns": [str(c) for c in df.columns],
         }
 
-    def _tokens(self, col_lower: str) -> Set[str]:
+    def _tokens(self, col_lower: str) -> set[str]:
         parts = re.split(r"[_\s\-./]+", col_lower)
         return {p for p in parts if p}
 
-    def _matches_hints(self, tokens: Set[str], hints: Set[str]) -> bool:
+    def _matches_hints(self, tokens: set[str], hints: set[str]) -> bool:
         """Whole-token match only (no bare substring)."""
         for hint in hints:
             if " " in hint or "_" in hint:
@@ -192,11 +192,6 @@ class ColumnDetector:
             if hint in tokens:
                 return True
         # Also allow exact multi-token hints joined
-        joined = "_".join(sorted(tokens))
-        for hint in hints:
-            if "_" in hint and hint.replace("-", "_") in "_".join(tokens):
-                # substring of underscore-joined original is ok for invoice_date
-                pass
         name = "_".join(tokens)
         for hint in hints:
             hint_n = hint.replace("-", "_")
@@ -204,7 +199,7 @@ class ColumnDetector:
                 return True
         return any(hint in tokens for hint in hints if "_" not in hint)
 
-    def _is_date_negative(self, col_lower: str, tokens: Set[str]) -> bool:
+    def _is_date_negative(self, col_lower: str, tokens: set[str]) -> bool:
         for pat in DATE_NEGATIVE_PATTERNS:
             if re.search(pat, col_lower):
                 return True
@@ -212,7 +207,7 @@ class ColumnDetector:
             return True
         return False
 
-    def _is_quantity_like(self, tokens: Set[str], col_lower: str) -> bool:
+    def _is_quantity_like(self, tokens: set[str], col_lower: str) -> bool:
         qty = {"qty", "quantity", "count", "units", "unit", "volume", "items"}
         if tokens & qty:
             return True
@@ -233,7 +228,7 @@ class ColumnDetector:
             return 0.0
         try:
             parsed = pd.to_datetime(non_null, errors="coerce", format="mixed")
-        except (ValueError, TypeError, TypeError):
+        except (ValueError, TypeError):
             try:
                 parsed = pd.to_datetime(non_null, errors="coerce")
             except (ValueError, TypeError):

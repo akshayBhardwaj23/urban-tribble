@@ -8,7 +8,6 @@ rejected with a clear message instead of exhausting memory.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -131,7 +130,7 @@ def _reject_zip_bomb(path: Path, max_ratio: int = 200, max_uncompressed_mb: int 
         raise FileValidationError("This workbook's compression ratio looks unsafe.")
 
 
-def validate_frame_size(df: pd.DataFrame, *, filename: Optional[str] = None) -> None:
+def validate_frame_size(df: pd.DataFrame, *, filename: str | None = None) -> None:
     """Raise when a parsed frame exceeds the configured row or column caps."""
     max_rows = int(getattr(settings, "MAX_ROWS_PER_FILE", 1_000_000))
     max_cols = int(getattr(settings, "MAX_COLUMNS_PER_FILE", 512))

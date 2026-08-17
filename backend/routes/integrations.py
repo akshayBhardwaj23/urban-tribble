@@ -4,7 +4,7 @@ import hmac
 import html
 import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -21,13 +21,6 @@ from services.integration_connectors import (
     IntegrationNotConfiguredError,
     fetch_provider_data,
 )
-from services.integration_registry import get_provider, list_catalog
-from services.integration_sync import (
-    compute_next_sync_at,
-    integration_to_dict,
-    sync_integration,
-    find_due_integrations,
-)
 from services.integration_microsoft import (
     _apply_token_payload,
     microsoft_exchange_code_for_tokens,
@@ -39,10 +32,17 @@ from services.integration_oauth import (
     create_oauth_session,
     get_oauth_session,
     microsoft_oauth_configured,
-    pop_oauth_session,
     parse_signed_state,
+    pop_oauth_session,
 )
+from services.integration_registry import get_provider, list_catalog
 from services.integration_scheduler import run_due_syncs_once
+from services.integration_sync import (
+    compute_next_sync_at,
+    find_due_integrations,
+    integration_to_dict,
+    sync_integration,
+)
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
@@ -59,12 +59,12 @@ class CreateIntegrationBody(BaseModel):
 
 
 class PatchIntegrationBody(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
-    connection_mode: Optional[str] = None
-    config: Optional[dict[str, Any]] = None
-    refresh_interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
-    auto_analyze: Optional[bool] = None
-    dashboard_plan_locked: Optional[bool] = None
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    connection_mode: str | None = None
+    config: dict[str, Any] | None = None
+    refresh_interval_hours: int | None = Field(default=None, ge=1, le=168)
+    auto_analyze: bool | None = None
+    dashboard_plan_locked: bool | None = None
 
 
 class StartOauthBody(BaseModel):
@@ -142,9 +142,9 @@ def start_integration_oauth(
 
 @router.get("/oauth/callback/microsoft", response_class=HTMLResponse)
 async def microsoft_oauth_callback(
-    code: Optional[str] = Query(default=None),
-    state: Optional[str] = Query(default=None),
-    error: Optional[str] = Query(default=None),
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
 ):
     if error:
         safe = html.escape(str(error)[:300])
@@ -475,7 +475,7 @@ async def refresh_integration(
 
 @router.post("/run-scheduled")
 async def run_scheduled_syncs(
-    x_integration_cron_secret: Optional[str] = Header(default=None),
+    x_integration_cron_secret: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
     _require_integrations_enabled()

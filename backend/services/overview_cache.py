@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -70,7 +71,7 @@ def get_or_build(
     return value
 
 
-def invalidate(workspace_id: Optional[str] = None) -> None:
+def invalidate(workspace_id: str | None = None) -> None:
     with _lock:
         if workspace_id is None:
             _entries.clear()

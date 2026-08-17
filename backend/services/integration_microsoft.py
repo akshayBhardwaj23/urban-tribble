@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any
 import io
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 import pandas as pd
@@ -30,7 +30,7 @@ def _token_expired(config: dict[str, Any]) -> bool:
         dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
     except ValueError:
         return True
-    return dt <= datetime.now(timezone.utc) + timedelta(minutes=2)
+    return dt <= datetime.now(UTC) + timedelta(minutes=2)
 
 
 def _apply_token_payload(config: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -39,7 +39,7 @@ def _apply_token_payload(config: dict[str, Any], payload: dict[str, Any]) -> Non
     if payload.get("refresh_token"):
         config["refresh_token"] = payload["refresh_token"]
     expires_in = int(payload.get("expires_in") or 3600)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
     config["access_token_expires_at"] = expires_at.isoformat()
 
 

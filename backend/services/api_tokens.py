@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 from config import settings
 
@@ -101,7 +101,7 @@ def verify_access_token(token: str) -> dict[str, Any]:
     return payload
 
 
-def bearer_from_authorization(authorization: Optional[str]) -> Optional[str]:
+def bearer_from_authorization(authorization: str | None) -> str | None:
     """Extract raw token from an ``Authorization`` header value."""
     if not authorization:
         return None

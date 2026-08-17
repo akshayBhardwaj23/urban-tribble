@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from models.models import Analysis, Dataset, Upload, User
+from models.models import Analysis, Dataset, User
 from services.ai_analyzer import AIAnalyzer
 from services.subscription_usage import (
     assert_analysis_allowed,
@@ -24,7 +23,7 @@ def run_post_sync_analysis(
     db: Session,
     workspace_id: str,
     dataset: Dataset,
-) -> Optional[str]:
+) -> str | None:
     """Run overview analysis if plan allows; returns analysis id or None."""
     row = get_dataset_upload_in_workspace(db, dataset.id, workspace_id)
     if not row:

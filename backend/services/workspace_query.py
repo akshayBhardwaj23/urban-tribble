@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy.orm import Session
 
 from models.models import Analysis, Dataset, Upload
@@ -21,7 +19,7 @@ def dataset_upload_pairs_for_workspace(db: Session, workspace_id: str):
 
 def get_dataset_upload_in_workspace(
     db: Session, dataset_id: str, workspace_id: str
-) -> Optional[tuple[Dataset, Upload]]:
+) -> tuple[Dataset, Upload] | None:
     row = (
         db.query(Dataset, Upload)
         .join(Upload, Dataset.upload_id == Upload.id)
@@ -33,7 +31,7 @@ def get_dataset_upload_in_workspace(
 
 def latest_workspace_overview_analysis(
     db: Session, workspace_id: str
-) -> Optional[Analysis]:
+) -> Analysis | None:
     """Most recent workspace-level analysis tied to a dataset in this workspace."""
     return (
         db.query(Analysis)

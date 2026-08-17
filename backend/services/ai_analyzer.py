@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 from services import llm_client
 from services.currency import format_money
@@ -10,7 +10,7 @@ from services.currency import format_money
 def compute_key_metrics(
     data_summary: dict,
     column_metadata: dict,
-    currency: Optional[str] = None,
+    currency: str | None = None,
 ) -> list[dict[str, Any]]:
     """Derive every headline number from the ingest statistics.
 
@@ -197,8 +197,8 @@ class AIAnalyzer:
         self,
         data_summary: dict,
         column_metadata: dict,
-        user_description: Optional[str] = None,
-        currency: Optional[str] = None,
+        user_description: str | None = None,
+        currency: str | None = None,
     ) -> dict:
         computed = compute_key_metrics(data_summary, column_metadata, currency)
 
@@ -227,7 +227,7 @@ class AIAnalyzer:
         data_summary: dict,
         column_metadata: dict,
         computed: list[dict],
-        user_description: Optional[str],
+        user_description: str | None,
     ) -> str:
         parts = []
         if user_description:
@@ -261,7 +261,7 @@ class AIAnalyzer:
         self,
         data_summary: dict,
         column_metadata: dict,
-        currency: Optional[str] = None,
+        currency: str | None = None,
     ) -> dict:
         """Basic analysis when the model is unavailable or unconfigured."""
         insights = []

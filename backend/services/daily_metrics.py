@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
-
 
 ORDER_ID_HINTS = frozenset(
     {
@@ -25,7 +24,7 @@ def _normalize_name(s: str) -> str:
     return s.lower().strip().replace(" ", "_").replace("-", "_")
 
 
-def find_order_id_column(df: pd.DataFrame) -> Optional[str]:
+def find_order_id_column(df: pd.DataFrame) -> str | None:
     """Column likely to be one row per order (for nunique)."""
     for c in df.columns:
         n = _normalize_name(str(c))
@@ -36,7 +35,7 @@ def find_order_id_column(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
-def resolve_revenue_column(df: pd.DataFrame, metadata: dict[str, Any]) -> Optional[str]:
+def resolve_revenue_column(df: pd.DataFrame, metadata: dict[str, Any]) -> str | None:
     # Prefer explicit primary from mapping-spec-derived metadata
     primary = metadata.get("primary_amount")
     if primary and primary in df.columns:
@@ -68,7 +67,7 @@ def resolve_revenue_column(df: pd.DataFrame, metadata: dict[str, Any]) -> Option
     return None
 
 
-def resolve_date_column(df: pd.DataFrame, metadata: dict[str, Any]) -> Optional[str]:
+def resolve_date_column(df: pd.DataFrame, metadata: dict[str, Any]) -> str | None:
     primary = metadata.get("primary_timeline")
     if primary and primary in df.columns:
         return primary
@@ -82,7 +81,7 @@ def compute_daily_metrics_df(
     df: pd.DataFrame,
     date_col: str,
     revenue_col: str,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """
     One row per calendar day:
       date (YYYY-MM-DD), revenue (sum), orders, aov (revenue/orders).
@@ -139,7 +138,7 @@ def compute_daily_metrics_df(
     out.attrs["orders_basis"] = basis
     return out
 
-def orders_basis(daily: Optional[pd.DataFrame]) -> dict[str, Any]:
+def orders_basis(daily: pd.DataFrame | None) -> dict[str, Any]:
     if daily is None:
         return {"kind": "unknown", "label": "Records"}
     return daily.attrs.get("orders_basis") or {"kind": "unknown", "label": "Records"}
@@ -153,7 +152,7 @@ RATIO_METRICS = {
 }
 
 
-def aggregate_metric(daily: pd.DataFrame, metric: str) -> Optional[float]:
+def aggregate_metric(daily: pd.DataFrame, metric: str) -> float | None:
     """Correctly aggregate a daily metric over the whole frame."""
     if daily is None or daily.empty or metric not in daily.columns:
         return None
@@ -168,7 +167,7 @@ def aggregate_metric(daily: pd.DataFrame, metric: str) -> Optional[float]:
 def compute_daily_metrics_for_dataset(
     df: pd.DataFrame,
     metadata: dict[str, Any],
-) -> tuple[Optional[pd.DataFrame], Optional[str], Optional[str]]:
+) -> tuple[pd.DataFrame | None, str | None, str | None]:
     """Returns (daily_df, date_col_used, revenue_col_used) or (None, None, None)."""
     date_col = resolve_date_column(df, metadata)
     revenue_col = resolve_revenue_column(df, metadata)
@@ -201,8 +200,8 @@ def metric_key_for_chart(
     title: str,
     y_column: str,
     agg: str,
-    revenue_col: Optional[str],
-) -> Optional[str]:
+    revenue_col: str | None,
+) -> str | None:
     """
     Map a planned chart to daily aggregate column: revenue | orders | aov.
     """

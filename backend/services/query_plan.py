@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -101,7 +101,7 @@ def _fail(msg: str) -> None:
     raise QueryPlanError(msg)
 
 
-def _resolve_column(name: Any, columns: List[str]) -> str:
+def _resolve_column(name: Any, columns: list[str]) -> str:
     """Match a model-proposed column to a real one, tolerating case and spacing."""
     if not isinstance(name, str) or not name.strip():
         _fail("A column name is missing.")
@@ -119,7 +119,7 @@ def _resolve_column(name: Any, columns: List[str]) -> str:
     return ""  # unreachable
 
 
-def validate_plan(plan: Any, frames: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
+def validate_plan(plan: Any, frames: dict[str, pd.DataFrame]) -> dict[str, Any]:
     """Return a normalized plan or raise QueryPlanError."""
     if not isinstance(plan, dict):
         _fail("Plan must be a JSON object.")
@@ -144,8 +144,8 @@ def validate_plan(plan: Any, frames: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     # Columns must be valid for every frame the plan will touch.
     targets = list(frames) if per_source else [source]
 
-    normalized_by_source: Dict[str, Dict[str, Any]] = {}
-    errors: List[str] = []
+    normalized_by_source: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
     for key in targets:
         try:
             normalized_by_source[key] = _validate_against(plan, frames[key])
@@ -163,7 +163,7 @@ def validate_plan(plan: Any, frames: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     }
 
 
-def _validate_against(plan: Dict[str, Any], df: pd.DataFrame) -> Dict[str, Any]:
+def _validate_against(plan: dict[str, Any], df: pd.DataFrame) -> dict[str, Any]:
     columns = [str(c) for c in df.columns]
 
     raw_filters = plan.get("filters") or []
@@ -193,7 +193,7 @@ def _validate_against(plan: Dict[str, Any], df: pd.DataFrame) -> Dict[str, Any]:
         _fail("group_by must be a list of column names.")
     if len(raw_group) > MAX_GROUP_BY:
         _fail(f"Too many group_by columns (max {MAX_GROUP_BY}).")
-    group_by: List[str] = []
+    group_by: list[str] = []
     for g in raw_group:
         if isinstance(g, str) and g.strip().lower() == "period" and time_bucket:
             group_by.append("period")
@@ -242,7 +242,7 @@ def _validate_against(plan: Dict[str, Any], df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _validate_filter(f: Any, columns: List[str]) -> Dict[str, Any]:
+def _validate_filter(f: Any, columns: list[str]) -> dict[str, Any]:
     if not isinstance(f, dict):
         _fail("Each filter must be an object.")
     col = _resolve_column(f.get("column"), columns)
@@ -268,7 +268,7 @@ def _validate_filter(f: Any, columns: List[str]) -> Dict[str, Any]:
     return {"column": col, "op": op, "value": value}
 
 
-def _validate_aggregate(a: Any, columns: List[str], df: pd.DataFrame) -> Dict[str, Any]:
+def _validate_aggregate(a: Any, columns: list[str], df: pd.DataFrame) -> dict[str, Any]:
     if not isinstance(a, dict):
         _fail("Each aggregate must be an object.")
     func = str(a.get("func") or "sum").lower()
@@ -296,11 +296,11 @@ def _scalar(v: Any) -> Any:
 
 
 def execute_plan(
-    normalized: Dict[str, Any], frames: Dict[str, pd.DataFrame]
-) -> Dict[str, Any]:
+    normalized: dict[str, Any], frames: dict[str, pd.DataFrame]
+) -> dict[str, Any]:
     """Run a validated plan. Returns a JSON-safe result envelope."""
     if normalized.get("per_source"):
-        breakdown: Dict[str, Any] = {}
+        breakdown: dict[str, Any] = {}
         for key, spec in normalized["by_source"].items():
             breakdown[key] = _run_one(spec, frames[key])
         return {
@@ -317,7 +317,7 @@ def execute_plan(
     return {"kind": "single", "source": source, "result": _run_one(spec, frames[source])}
 
 
-def _run_one(spec: Dict[str, Any], df: pd.DataFrame) -> Any:
+def _run_one(spec: dict[str, Any], df: pd.DataFrame) -> Any:
     work = df
 
     for f in spec["filters"]:
@@ -383,7 +383,7 @@ def _apply_agg(series: pd.Series, func: str) -> Any:
     return value
 
 
-def _filter_mask(df: pd.DataFrame, f: Dict[str, Any]) -> pd.Series:
+def _filter_mask(df: pd.DataFrame, f: dict[str, Any]) -> pd.Series:
     col = df[f["column"]]
     op = f["op"]
     value = f["value"]
@@ -414,7 +414,7 @@ def _filter_mask(df: pd.DataFrame, f: Dict[str, Any]) -> pd.Series:
     }[op]()
 
 
-def _coerce_for_compare(col: pd.Series, value: Any) -> Tuple[pd.Series, Any]:
+def _coerce_for_compare(col: pd.Series, value: Any) -> tuple[pd.Series, Any]:
     """Align the comparison value with the column dtype so eq/gt behave sensibly."""
     if pd.api.types.is_datetime64_any_dtype(col):
         if isinstance(value, list):
@@ -462,11 +462,11 @@ def _jsonable(value: Any) -> Any:
 
 
 def describe_frames(
-    frames: Dict[str, pd.DataFrame], schemas: Optional[Dict[str, Dict]] = None
+    frames: dict[str, pd.DataFrame], schemas: dict[str, dict] | None = None
 ) -> str:
     """Compact schema block for the planning prompt. Sends no cell values."""
     schemas = schemas or {}
-    parts: List[str] = []
+    parts: list[str] = []
     for key, df in frames.items():
         lines = [f'Source "{key}" ({len(df)} rows):']
         for c in df.columns:

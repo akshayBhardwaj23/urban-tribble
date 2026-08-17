@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
 from services.currency import format_money
 
-DataframeRow = tuple[str, pd.DataFrame, dict[str, Any], Optional[str]]
+DataframeRow = tuple[str, pd.DataFrame, dict[str, Any], str | None]
 
 
 def friendly_source_name(filename: str) -> str:
@@ -47,7 +47,7 @@ def _infer_grain(name: str, df: pd.DataFrame, schema: dict[str, Any]) -> str:
     return "tabular export"
 
 
-def _pick_primary_revenue_col(df: pd.DataFrame, schema: dict[str, Any]) -> Optional[str]:
+def _pick_primary_revenue_col(df: pd.DataFrame, schema: dict[str, Any]) -> str | None:
     candidates = [c for c in (schema.get("revenue_columns") or []) if c in df.columns]
     if not candidates:
         return None
@@ -75,7 +75,7 @@ def _numeric_sum(df: pd.DataFrame, col: str) -> float:
     return float(s.fillna(0).sum())
 
 
-def _date_range_label(df: pd.DataFrame, schema: dict[str, Any]) -> Optional[str]:
+def _date_range_label(df: pd.DataFrame, schema: dict[str, Any]) -> str | None:
     date_cols = schema.get("date_columns") or []
     for dc in date_cols:
         if dc not in df.columns:
@@ -110,7 +110,7 @@ def build_source_catalog(
     return catalog
 
 
-def _format_money(value: float, currency: Optional[str] = None) -> str:
+def _format_money(value: float, currency: str | None = None) -> str:
     return format_money(value, currency)
 
 
@@ -122,7 +122,7 @@ def _catalog_with_revenue(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]
     return catalog_with_revenue(catalog)
 
 
-def _pick_canonical_revenue_source(catalog: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def _pick_canonical_revenue_source(catalog: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Best single source for company-level revenue (avoid double-counting)."""
     with_rev = _catalog_with_revenue(catalog)
     if not with_rev:
@@ -177,8 +177,8 @@ _CANONICAL_RE = re.compile(
 def try_workspace_shortcut(
     question: str,
     dataframes: list[DataframeRow],
-    currency: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    currency: str | None = None,
+) -> dict[str, Any] | None:
     """
     Deterministic answers for common workspace questions (no double-counting).
     Returns {answer, chart_data} or None to fall through to LLM.
@@ -251,8 +251,8 @@ def try_workspace_shortcut(
 def _answer_revenue_by_source(
     catalog: list[dict[str, Any]],
     *,
-    headline: Optional[str] = None,
-    currency: Optional[str] = None,
+    headline: str | None = None,
+    currency: str | None = None,
 ) -> dict[str, Any]:
     with_rev = _catalog_with_revenue(catalog)
     if not with_rev:
@@ -294,7 +294,7 @@ def _answer_revenue_by_source(
 
 
 def _answer_canonical_revenue(
-    catalog: list[dict[str, Any]], currency: Optional[str] = None
+    catalog: list[dict[str, Any]], currency: str | None = None
 ) -> dict[str, Any]:
     canonical = _pick_canonical_revenue_source(catalog)
     if not canonical:
@@ -317,7 +317,7 @@ def _answer_canonical_revenue(
     }
 
 
-def chart_revenue_by_source(with_rev: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def chart_revenue_by_source(with_rev: list[dict[str, Any]]) -> dict[str, Any] | None:
     if len(with_rev) < 2:
         return None
     data = [
@@ -332,7 +332,7 @@ def chart_revenue_by_source(with_rev: list[dict[str, Any]]) -> Optional[dict[str
 
 
 def format_catalog_for_prompt(
-    catalog: list[dict[str, Any]], currency: Optional[str] = None
+    catalog: list[dict[str, Any]], currency: str | None = None
 ) -> str:
     """Text block injected into LLM prompts."""
     lines = [

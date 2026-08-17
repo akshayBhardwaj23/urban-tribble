@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -36,7 +36,7 @@ class Forecaster:
         date_col: str,
         value_col: str,
         periods: int = 30,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Forecast with Prophet when enough history, else linear regression."""
         ts, freq, period_label = self._prepare_series(df, date_col, value_col)
 
@@ -80,7 +80,7 @@ class Forecaster:
 
     def _prepare_series(
         self, df: pd.DataFrame, date_col: str, value_col: str
-    ) -> Tuple[pd.DataFrame, pd.DateOffset, str]:
+    ) -> tuple[pd.DataFrame, pd.DateOffset, str]:
         if date_col not in df.columns or value_col not in df.columns:
             raise ValueError(f"Columns {date_col} or {value_col} not found")
 
@@ -117,7 +117,7 @@ class Forecaster:
         periods: int,
         freq: pd.DateOffset,
         period_label: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         from prophet import Prophet
 
         max_rows = int(getattr(settings, "FORECAST_PROPHET_MAX_HISTORY_ROWS", 4000))
@@ -208,7 +208,7 @@ class Forecaster:
         periods: int,
         freq: pd.DateOffset,
         period_label: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Simple linear regression forecast (original implementation)."""
         x = np.arange(len(ts)).astype(float)
         y = ts[value_col].values.astype(float)

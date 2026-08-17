@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -207,7 +207,7 @@ def _build_kpi_drill_down(
     }
 
 
-def compute_kpi_value(df: pd.DataFrame, column: str, agg: str) -> Optional[float]:
+def compute_kpi_value(df: pd.DataFrame, column: str, agg: str) -> float | None:
     if column == "__row_count__":
         return float(len(df))
     if column not in df.columns:
@@ -238,7 +238,7 @@ def fallback_ui_kpis(
     df: pd.DataFrame,
     metadata: dict[str, Any],
     *,
-    kpi_context: Optional[dict[str, Any]] = None,
+    kpi_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """KPI tiles aligned with filtered dashboard rows (legacy / no AI plan)."""
     ctx = kpi_context or {
@@ -300,10 +300,10 @@ def execute_plan(
     df: pd.DataFrame,
     plan: dict[str, Any],
     *,
-    daily_metrics: Optional[pd.DataFrame] = None,
-    date_col: Optional[str] = None,
-    revenue_col: Optional[str] = None,
-    kpi_context: Optional[dict[str, Any]] = None,
+    daily_metrics: pd.DataFrame | None = None,
+    date_col: str | None = None,
+    revenue_col: str | None = None,
+    kpi_context: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Turn a stored dashboard plan into KPI payloads and Recharts-ready chart payloads."""
     kpi_specs = plan.get("kpis") or []
@@ -362,10 +362,10 @@ def _run_chart_spec(
     df: pd.DataFrame,
     spec: dict[str, Any],
     *,
-    daily_metrics: Optional[pd.DataFrame] = None,
-    date_col: Optional[str] = None,
-    revenue_col: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    daily_metrics: pd.DataFrame | None = None,
+    date_col: str | None = None,
+    revenue_col: str | None = None,
+) -> dict[str, Any] | None:
     cid = str(spec.get("id") or "chart")
     title = str(spec.get("title") or "Chart")
     ctype = str(spec.get("type") or "bar").lower()
@@ -411,9 +411,9 @@ def _chart_pie(
     cid: str,
     title: str,
     x_col: str,
-    y_col: Optional[str],
+    y_col: str | None,
     agg: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     if y_col is None or agg == "count":
         top = df[x_col].value_counts().head(12)
         data = [{"name": str(name), "value": int(cnt)} for name, cnt in top.items()]
@@ -443,7 +443,7 @@ def _chart_pie(
     return {"id": cid, "title": title, "type": "pie", "data": data}
 
 
-def _chart_bar_count(df: pd.DataFrame, cid: str, title: str, x_col: str) -> Optional[dict[str, Any]]:
+def _chart_bar_count(df: pd.DataFrame, cid: str, title: str, x_col: str) -> dict[str, Any] | None:
     top = df.groupby(x_col, dropna=False).size().sort_values(ascending=False).head(15)
     data = [{"name": str(name), "value": int(v)} for name, v in top.items()]
     if not data:
@@ -458,7 +458,7 @@ def _chart_bar_agg(
     x_col: str,
     y_col: str,
     agg: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     from services.query_plan import looks_like_rate_column
 
     if agg == "sum" and looks_like_rate_column(y_col):
@@ -487,7 +487,7 @@ def _chart_from_daily(
     title: str,
     ctype: str,
     metric_key: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     chart_data: list[dict[str, Any]] = []
     for _, row in daily.iterrows():
         yv = _safe_float(row[metric_key])
@@ -519,10 +519,10 @@ def _chart_xy_series(
     y_col: str,
     agg: str,
     *,
-    daily_metrics: Optional[pd.DataFrame] = None,
-    date_col: Optional[str] = None,
-    revenue_col: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    daily_metrics: pd.DataFrame | None = None,
+    date_col: str | None = None,
+    revenue_col: str | None = None,
+) -> dict[str, Any] | None:
     if (
         daily_metrics is not None
         and not daily_metrics.empty
@@ -616,9 +616,9 @@ def legacy_charts(
     df: pd.DataFrame,
     metadata: dict[str, Any],
     *,
-    daily_metrics: Optional[pd.DataFrame] = None,
-    primary_date: Optional[str] = None,
-    primary_revenue: Optional[str] = None,
+    daily_metrics: pd.DataFrame | None = None,
+    primary_date: str | None = None,
+    primary_revenue: str | None = None,
 ) -> list[dict[str, Any]]:
     """Rule-based charts; time series use day-level aggregates when available."""
     charts: list[dict[str, Any]] = []

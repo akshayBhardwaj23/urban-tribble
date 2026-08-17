@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import pandas as pd
 
@@ -127,17 +127,17 @@ def build_mapping_spec(
     df: pd.DataFrame,
     metadata: dict[str, Any],
     *,
-    clean_report: Optional[dict] = None,
+    clean_report: dict | None = None,
     source: MappingSource = "auto",
-    sheet: Optional[str] = None,
+    sheet: str | None = None,
     header_row: int = 0,
-    date_formats: Optional[dict[str, str]] = None,
+    date_formats: dict[str, str] | None = None,
     drop_duplicates: bool = False,
-    dayfirst: Optional[bool] = None,
-    primary_timeline: Optional[str] = None,
-    primary_amount: Optional[str] = None,
-    ingestion_profile: Optional[dict] = None,
-    llm_meanings: Optional[dict[str, str]] = None,
+    dayfirst: bool | None = None,
+    primary_timeline: str | None = None,
+    primary_amount: str | None = None,
+    ingestion_profile: dict | None = None,
+    llm_meanings: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     profiles = build_column_profiles(df)
     roles = roles_from_metadata(metadata)
@@ -254,11 +254,6 @@ def apply_mapping(
     )
 
     # Drop ignored columns if still present under normalized names
-    ignore = {
-        c["name"]
-        for c in (spec.get("columns") or [])
-        if c.get("role") == "ignore"
-    }
     # Also match by original_name → normalized
     orig_map = report.get("original_names") or {}
     reverse = {v: k for k, v in orig_map.items()}

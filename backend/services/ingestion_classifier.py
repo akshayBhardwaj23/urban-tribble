@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 # IDs match frontend DatasetClassificationId
-CLASSIFICATIONS: Dict[str, str] = {
+CLASSIFICATIONS: dict[str, str] = {
     "sales_data": "Sales data",
     "expenses": "Expenses",
     "marketing_campaigns": "Marketing campaigns",
@@ -16,7 +16,7 @@ CLASSIFICATIONS: Dict[str, str] = {
 
 ALLOWED_CLASSIFICATION_IDS = frozenset(CLASSIFICATIONS.keys())
 
-FILENAME_DESC_PATTERNS: List[Tuple[str, List[str]]] = [
+FILENAME_DESC_PATTERNS: list[tuple[str, list[str]]] = [
     ("expenses", [r"expense", r"spend", r"vendor", r"payroll", r"reimburs", r"invoice", r"ap\b", r"accounts.?payable"]),
     ("marketing_campaigns", [r"campaign", r"marketing", r"cpc", r"ctr", r"impression", r"ad.?spend", r"ads?\b"]),
     ("customer_data", [r"customer", r"crm", r"contact", r"subscriber", r"lead"]),
@@ -26,13 +26,13 @@ FILENAME_DESC_PATTERNS: List[Tuple[str, List[str]]] = [
 ]
 
 
-def _text_blob(filename: str, user_description: Optional[str]) -> str:
+def _text_blob(filename: str, user_description: str | None) -> str:
     parts = [filename or "", user_description or ""]
     return " ".join(parts).lower()
 
 
-def _score_from_text(blob: str) -> Dict[str, int]:
-    scores: Dict[str, int] = {k: 0 for k in CLASSIFICATIONS if k != "unknown_dataset"}
+def _score_from_text(blob: str) -> dict[str, int]:
+    scores: dict[str, int] = {k: 0 for k in CLASSIFICATIONS if k != "unknown_dataset"}
     for kind, patterns in FILENAME_DESC_PATTERNS:
         for pat in patterns:
             if re.search(pat, blob, re.I):
@@ -41,12 +41,12 @@ def _score_from_text(blob: str) -> Dict[str, int]:
     return scores
 
 
-def _column_blob(columns: List[str]) -> str:
+def _column_blob(columns: list[str]) -> str:
     return " ".join(str(c).lower() for c in columns)
 
 
-def _score_from_columns(col_blob: str, metadata: Dict[str, Any]) -> Dict[str, int]:
-    scores: Dict[str, int] = {k: 0 for k in CLASSIFICATIONS if k != "unknown_dataset"}
+def _score_from_columns(col_blob: str, metadata: dict[str, Any]) -> dict[str, int]:
+    scores: dict[str, int] = {k: 0 for k in CLASSIFICATIONS if k != "unknown_dataset"}
 
     if metadata.get("date_columns") and metadata.get("revenue_columns"):
         scores["sales_data"] += 3
@@ -82,7 +82,7 @@ def _score_from_columns(col_blob: str, metadata: Dict[str, Any]) -> Dict[str, in
     return scores
 
 
-def _merge_scores(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
+def _merge_scores(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
     out = dict(a)
     for k, v in b.items():
         out[k] = out.get(k, 0) + v
@@ -98,12 +98,12 @@ def _confidence(best: int, second: int) -> str:
 
 
 def _flags(
-    metadata: Dict[str, Any],
-    clean_report: Dict[str, Any],
-    columns: List[str],
-) -> List[Dict[str, str]]:
+    metadata: dict[str, Any],
+    clean_report: dict[str, Any],
+    columns: list[str],
+) -> list[dict[str, str]]:
     """Factual flags — observations, not reassurances."""
-    flags: List[Dict[str, str]] = []
+    flags: list[dict[str, str]] = []
 
     # Prefer structured flags from the cleaner
     for f in clean_report.get("flags") or []:
@@ -195,7 +195,7 @@ def _flags(
         )
 
     seen: set[str] = set()
-    unique: List[Dict[str, str]] = []
+    unique: list[dict[str, str]] = []
     for f in flags:
         c = f.get("code", "")
         if c in seen:
@@ -205,8 +205,8 @@ def _flags(
     return unique
 
 
-def _interpretations(metadata: Dict[str, Any]) -> List[str]:
-    lines: List[str] = []
+def _interpretations(metadata: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
     dc = metadata.get("date_columns") or []
     rc = metadata.get("revenue_columns") or []
     ec = metadata.get("expense_columns") or []
@@ -226,11 +226,11 @@ def _interpretations(metadata: Dict[str, Any]) -> List[str]:
 
 def build_ingestion_profile(
     filename: str,
-    user_description: Optional[str],
-    metadata: Dict[str, Any],
-    clean_report: Dict[str, Any],
-    columns: List[str],
-) -> Dict[str, Any]:
+    user_description: str | None,
+    metadata: dict[str, Any],
+    clean_report: dict[str, Any],
+    columns: list[str],
+) -> dict[str, Any]:
     blob = _text_blob(filename, user_description)
     col_blob = _column_blob(columns)
     scores = _merge_scores(_score_from_text(blob), _score_from_columns(col_blob, metadata))

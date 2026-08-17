@@ -6,7 +6,7 @@ import asyncio
 import logging
 
 from database import SessionLocal
-from models.models import DataSourceIntegration, IntegrationStatus
+from models.models import IntegrationStatus
 from services.integration_sync import find_due_integrations, sync_integration
 
 logger = logging.getLogger(__name__)

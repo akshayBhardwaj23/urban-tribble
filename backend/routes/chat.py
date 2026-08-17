@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import List, Tuple
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,14 +9,14 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_active_workspace
-from models.models import ChatMessage, Upload, User
+from models.models import ChatMessage, User
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
+from services.query_engine import QueryEngine
+from services.subscription_usage import assert_chat_allowed
 from services.workspace_query import (
     dataset_upload_pairs_for_workspace,
     get_dataset_upload_in_workspace,
 )
-from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
-from services.query_engine import QueryEngine
-from services.subscription_usage import assert_chat_allowed
 from services.workspace_settings import currency_for_workspace
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -30,12 +29,12 @@ MAX_CHAT_HISTORY_PAIRS = 12
 
 
 def _prior_chat_pairs(
-    messages: List[ChatMessage],
+    messages: list[ChatMessage],
     *,
     workspace_scope: bool,
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     """Well-formed (user, assistant) turns, optionally filtered by workspace vs single-dataset."""
-    pairs: List[Tuple[str, str]] = []
+    pairs: list[tuple[str, str]] = []
     i = 0
     while i + 1 < len(messages):
         u, a = messages[i], messages[i + 1]
@@ -62,11 +61,11 @@ def _prior_chat_pairs(
 
 
 def _messages_for_history_response(
-    rows: List[ChatMessage],
+    rows: list[ChatMessage],
     *,
     workspace_scope: bool,
-) -> List[dict]:
-    out: List[dict] = []
+) -> list[dict]:
+    out: list[dict] = []
     i = 0
     while i + 1 < len(rows):
         u, a = rows[i], rows[i + 1]
@@ -129,8 +128,8 @@ def chat(
 
     try:
         parquet_path = ensure_cleaned_parquet(upload)
-    except CleanedDataMissingError:
-        raise HTTPException(404, "Cleaned data file not found")
+    except CleanedDataMissingError as exc:
+        raise HTTPException(404, "Cleaned data file not found") from exc
 
     df = pd.read_parquet(str(parquet_path))
     schema = json.loads(dataset.schema_json) if dataset.schema_json else {}
