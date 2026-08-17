@@ -53,8 +53,8 @@ export function ContactSection({
             isCompact ? "text-sm" : "text-[15px]"
           )}
         >
-          Not sure Snaptix fits your spreadsheets, or rolling out to a team? Tell us
-          what you use today and we will help you decide next steps. Write to{" "}
+          Not sure Snaptix fits your data, or which plan you need? Tell us what you
+          use today and we will help you decide next steps. Write to{" "}
           <a
             href={mailHref}
             className="font-medium text-slate-900 underline underline-offset-2 dark:text-white"
