@@ -12,18 +12,18 @@ export const CANONICAL_SITE_URL = `https://${PRODUCT_DOMAIN}` as const;
 /** Transparent brand mark (public/) */
 export const LOGO_SRC = "/logo-snaptix.png";
 
-export const SEO_TITLE = `${PRODUCT_NAME} - AI business analyst for spreadsheets`;
+/** Search-facing title: positioning for humans, file formats for crawlers. */
+export const SEO_TITLE = `${PRODUCT_NAME} - AI analyst for founders and lean teams | Excel & CSV`;
 
 /** Primary positioning - browser, login, hero eyebrow */
 export const POSITIONING_LINE =
-  "AI analyst for revenue, cost, and the tradeoffs between them";
+  "An AI analyst that shows its work, with every number traced to its source";
 
 /** Short promise - footer, meta support, hero */
-export const PRODUCT_TAGLINE =
-  "Turn spreadsheet noise into a briefing you can act on.";
+export const PRODUCT_TAGLINE = "Weeks of analysis in days. Days in hours.";
 
 /** Browser tab + Open Graph description */
-export const META_DESCRIPTION = `${PRODUCT_NAME} helps operators read revenue, cost, and ops data: upload spreadsheets, get a calm briefing on what moved and what to verify, then decide with clearer tradeoffs.`;
+export const META_DESCRIPTION = `${PRODUCT_NAME} turns Excel and CSV data into an operator's briefing: what moved, why it matters, and what to do next, with every number computed from your file and traced to the column and date range behind it.`;
 
 export const SEO_KEYWORDS = [
   "AI business analyst",

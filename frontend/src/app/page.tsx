@@ -2,6 +2,15 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { DM_Serif_Display } from "next/font/google";
+import {
+  ArrowLeftRight,
+  Calculator,
+  FileSearch,
+  Gauge,
+  Layers,
+  MessageSquareText,
+  TrendingUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
 import {
@@ -161,13 +170,20 @@ function HeroVisual() {
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Forecast confidence
-            </p>
-            <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-slate-700">
-              <div className="h-2 w-2/3 rounded-full bg-gradient-to-r from-[#8b5cf6] to-[#4f46e5]" />
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Traced to source
+              </p>
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                High confidence
+              </span>
             </div>
-            <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">88% model certainty</p>
+            <p className="mt-2 text-[11px] leading-5 text-slate-600 dark:text-slate-300">
+              revenue_q2.xlsx, Sheet1
+            </p>
+            <p className="text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+              Columns: Order Date, Net Revenue - Apr to Jun
+            </p>
           </div>
         </div>
       </div>
@@ -216,7 +232,7 @@ function HeroFloatingSet() {
           className="floating-drift rounded-3xl border border-emerald-100 bg-[#e7f7ef] px-3 py-2 shadow-[0_16px_34px_-18px_rgba(16,185,129,0.35)]"
           style={{ animationDelay: "1.8s" }}
         >
-          <p className="text-[10px] text-emerald-700">98.4% data quality</p>
+          <p className="text-[10px] text-emerald-700">Numbers computed, not guessed</p>
         </div>
       </div>
       <div className="floating hidden xl:block" style={{ right: "8.2rem", top: "18.8rem", transform: "rotate(3deg)" }}>
@@ -314,12 +330,8 @@ function WorkspaceVisual() {
             <p className="mt-1 text-sm font-semibold text-slate-900">12 files</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-            <p className="text-[11px] text-slate-500">Owner team</p>
-            <div className="mt-2 flex -space-x-2">
-              <span className="h-6 w-6 rounded-full border border-white bg-gradient-to-br from-slate-300 to-slate-500" />
-              <span className="h-6 w-6 rounded-full border border-white bg-gradient-to-br from-violet-300 to-violet-500" />
-              <span className="h-6 w-6 rounded-full border border-white bg-gradient-to-br from-sky-300 to-blue-500" />
-            </div>
+            <p className="text-[11px] text-slate-500">Last briefing</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">2 days ago</p>
           </div>
         </div>
         <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5">
@@ -409,11 +421,10 @@ function ChatFeatureVisual() {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70">
           <p className="text-[11px] text-slate-500 dark:text-slate-400">Confidence</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">88%</p>
-          <div className="mt-2 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700">
-            <div className="h-1.5 w-[88%] rounded-full bg-gradient-to-r from-violet-500 to-indigo-500" />
-          </div>
-          <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">based on 6 data sources</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">Medium</p>
+          <p className="mt-2 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+            Limited by a short date range in the uploaded file
+          </p>
         </div>
       </div>
       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/70">
@@ -460,26 +471,34 @@ function Footer() {
 function FeatureGrid() {
   const items = [
     {
-      title: "AI That Explains Your Business",
-      body: "Get clear summaries of what changed, why it changed, and what to do next.",
+      title: "Know What Changed, and Why",
+      body: "Every period compared against the last, with the drivers named and each number traced back to the file it came from.",
+      icon: ArrowLeftRight,
+      accent: "text-violet-700 dark:text-violet-300",
       tone:
         "bg-[#ede7ff] border-violet-100 dark:border-violet-900/35 dark:bg-[oklch(0.26_0.045_290_/_0.45)]",
     },
     {
       title: "See What Happens Next",
-      body: "Forecast trends with confidence ranges built from your own historical files.",
+      body: "Forecasts built from your own history, with confidence stated plainly instead of implied.",
+      icon: TrendingUp,
+      accent: "text-sky-700 dark:text-sky-300",
       tone:
         "bg-[#eaf3ff] border-blue-100 dark:border-sky-900/40 dark:bg-[oklch(0.25_0.04_240_/_0.42)]",
     },
     {
-      title: "Ask Questions. Get Answers.",
-      body: "Use natural language chat to explore revenue, costs, churn, and growth drivers.",
+      title: "Ask in Plain English",
+      body: "Question revenue, costs, and growth drivers the way you would ask an analyst, and get an answer with its source attached.",
+      icon: MessageSquareText,
+      accent: "text-amber-700 dark:text-amber-300",
       tone:
         "bg-[#fff6d8] border-amber-100 dark:border-amber-900/45 dark:bg-[oklch(0.3_0.05_74_/_0.38)]",
     },
     {
-      title: "All Your Data in One Place",
-      body: "Combine sales, finance, and operations sheets into one AI-ready decision layer.",
+      title: "One Place for Every File",
+      body: "Sales, finance, and operations sheets combined into a single view that stays current as you upload.",
+      icon: Layers,
+      accent: "text-emerald-700 dark:text-emerald-300",
       tone:
         "bg-[#e7f7ef] border-emerald-100 dark:border-emerald-900/40 dark:bg-[oklch(0.27_0.04_155_/_0.4)]",
     },
@@ -487,21 +506,26 @@ function FeatureGrid() {
 
   return (
     <div className="grid gap-5 md:grid-cols-2">
-      {items.map((item, idx) => (
-        <div
-          key={item.title}
-          className={`group fade-up rounded-3xl border p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${item.tone} ${
-            idx % 2 === 0 ? "md:translate-y-2" : ""
-          }`}
-          style={{ animationDelay: `${idx * 80}ms` }}
-        >
-          <div className="mb-3 h-8 w-8 rounded-lg bg-white/75 shadow-sm dark:bg-white/10" />
-          <h3 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
-            {item.title}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-muted-foreground">{item.body}</p>
-        </div>
-      ))}
+      {items.map((item, idx) => {
+        const Icon = item.icon;
+        return (
+          <div
+            key={item.title}
+            className={`group fade-up rounded-3xl border p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${item.tone} ${
+              idx % 2 === 0 ? "md:translate-y-2" : ""
+            }`}
+            style={{ animationDelay: `${idx * 80}ms` }}
+          >
+            <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white/75 shadow-sm dark:bg-white/10">
+              <Icon className={cn("h-4 w-4", item.accent)} aria-hidden />
+            </div>
+            <h3 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
+              {item.title}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-muted-foreground">{item.body}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -550,12 +574,86 @@ function HeroPricingGlance() {
   );
 }
 
+function TrustSection() {
+  const proofs = [
+    {
+      title: "The AI never writes a number",
+      body: "Every figure is computed from your file on our side. Anything the model cannot tie back to your data is discarded before it reaches you.",
+      icon: Calculator,
+      accent: "text-violet-700 dark:text-violet-300",
+      tone:
+        "bg-[#ede7ff] border-violet-100 dark:border-violet-900/35 dark:bg-[oklch(0.26_0.045_290_/_0.45)]",
+    },
+    {
+      title: "Every insight is graded",
+      body: "High, Medium, or Low confidence, with the reason named, like a short date range or a missing field. No false precision.",
+      icon: Gauge,
+      accent: "text-sky-700 dark:text-sky-300",
+      tone:
+        "bg-[#eaf3ff] border-blue-100 dark:border-sky-900/40 dark:bg-[oklch(0.25_0.04_240_/_0.42)]",
+    },
+    {
+      title: "Every claim shows its source",
+      body: "The file, sheet, columns, date range, and row count behind each number, so you can check the work instead of taking it on faith.",
+      icon: FileSearch,
+      accent: "text-emerald-700 dark:text-emerald-300",
+      tone:
+        "bg-[#e7f7ef] border-emerald-100 dark:border-emerald-900/40 dark:bg-[oklch(0.27_0.04_155_/_0.4)]",
+    },
+  ] as const;
+
+  return (
+    <section
+      id="how-it-holds-up"
+      className="mx-auto max-w-6xl scroll-mt-24 px-6 py-20 md:py-24"
+    >
+      <div className="mx-auto max-w-2xl text-center fade-up">
+        <Tag>Why you can trust it</Tag>
+        <h2
+          className={`${serif.className} mt-4 text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}
+        >
+          An analyst that shows its work
+        </h2>
+        <p className="mt-5 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+          Speed only helps if you can defend the answer afterwards. Snaptix is built so
+          every figure survives a second look.
+        </p>
+      </div>
+      <div className="mt-12 grid gap-5 md:grid-cols-3">
+        {proofs.map((proof, i) => {
+          const Icon = proof.icon;
+          return (
+            <div
+              key={proof.title}
+              className={cn(
+                "fade-up rounded-3xl border p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-md",
+                proof.tone,
+              )}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white/75 shadow-sm dark:bg-white/10">
+                <Icon className={cn("h-4 w-4", proof.accent)} aria-hidden />
+              </div>
+              <h3 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
+                {proof.title}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-muted-foreground">
+                {proof.body}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function WhoItsForSection() {
   const personas = [
     {
-      title: "Small business owner",
-      subtitle: "Easy enough for non-technical teams",
-      body: "If you live in Excel but do not have an analyst, Snaptix gives you a simple path from upload to answer. You do not need SQL, Power BI, or dashboard setup to understand what changed.",
+      title: "Founder or small business owner",
+      subtitle: "From file to decision without hiring an analyst",
+      body: "If you live in Excel but do not have an analyst, Snaptix gives you a simple path from upload to answer. No SQL, no warehouse, no dashboard setup, and nothing to configure before you understand what changed.",
       workflow: "Upload spreadsheet → get briefing → act on priorities",
       advantages: [
         "Plain-English summaries instead of technical setup",
@@ -569,12 +667,12 @@ function WhoItsForSection() {
     },
     {
       title: "Operations or finance lead",
-      subtitle: "Faster reviews with fewer reporting loops",
-      body: "For lean teams managing recurring reports, Snaptix cuts the time spent cleaning, comparing, and rewriting the same updates every month. It keeps decision-making moving without adding more overhead.",
-      workflow: "Combine files → compare periods → share one clear view",
+      subtitle: "A monthly review in an afternoon, not a week",
+      body: "For anyone owning recurring reports, Snaptix cuts the time spent cleaning, comparing, and rewriting the same update every month. The comparison work that used to fill a week is done before lunch.",
+      workflow: "Combine files → compare periods → brief in one view",
       advantages: [
         "Track what changed across weeks and months",
-        "Align teams around one workspace instead of scattered exports",
+        "Keep every period in one workspace instead of scattered exports",
         "Prepare reviews faster without rebuilding decks every cycle",
       ],
       tone:
@@ -584,13 +682,13 @@ function WhoItsForSection() {
     },
     {
       title: "Dedicated analyst",
-      subtitle: "A fast layer that complements your BI stack",
-      body: "Snaptix is not trying to replace every warehouse or dashboard tool. It helps analysts move faster on spreadsheet-heavy work, answer ad hoc questions quickly, and share stakeholder-friendly summaries without starting from scratch.",
-      workflow: "Upload/export data → validate insights → brief stakeholders",
+      subtitle: "Skip the cleanup, keep the judgment",
+      body: "Snaptix is not trying to replace your warehouse or dashboard stack. It takes the grinding part of spreadsheet work off your plate and hands back a draft you can check, because every figure names the column and date range it came from.",
+      workflow: "Upload/export data → check the trace → brief stakeholders",
       advantages: [
         "Complements Excel, Power BI, and Tableau for fast-turn analysis",
-        "Turns raw exports into cleaner summaries for decision-makers",
-        "Useful when teams need answers now, not another dashboard backlog",
+        "Every number is traceable, so you can verify instead of trust",
+        "Answers ad hoc questions now, without another dashboard backlog",
       ],
       tone:
         "from-sky-50 to-white border-sky-100 dark:from-sky-950/30 dark:to-card/50 dark:border-sky-900/40",
@@ -613,8 +711,8 @@ function WhoItsForSection() {
               </h2>
               <p className="mt-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
                 Whether you&apos;re a founder, operator, finance lead, or analyst, {PRODUCT_NAME}
-                fits the spreadsheet workflows you already have and turns them into faster, clearer
-                decisions.
+                fits the workflows you already have and compresses the work between raw file and
+                real decision.
               </p>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 md:justify-start">
@@ -721,7 +819,7 @@ function LandingStructuredData() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "INR",
-          category: "free trial",
+          category: "Free tier",
         },
       },
     ],
@@ -856,9 +954,9 @@ export default function LandingPage() {
                 <span className="font-semibold tracking-[-0.01em] text-slate-800 dark:text-slate-100">
                   {PRODUCT_TAGLINE}
                 </span>{" "}
-                Upload Excel and CSV, auto-build dashboards and AI summaries, compare periods,
-                forecast trends, and ask questions in plain language-one workspace you use as your
-                numbers evolve, not a one-off file drop.
+                Upload the Excel or CSV file you already have and get an operator&apos;s briefing
+                back: what moved, why it matters, and what to do next. Every number is computed
+                from your data and traced to the column and date range behind it.
               </p>
               <div className="fade-up mt-9 flex flex-wrap items-center justify-center gap-3">
                 <LandingHeroPrimaryCta />
@@ -869,8 +967,8 @@ export default function LandingPage() {
                 </Link>
               </div>
               <p className="fade-up mx-auto mt-5 max-w-md text-xs leading-relaxed tracking-wide text-slate-500 dark:text-slate-400">
-                Free to start, no card on the free tier. Add workspaces as you grow-your data stays
-                in your account.
+                Free to start, no card required. Your first two files are on us, and your data
+                stays in your account.
               </p>
               <HeroPricingGlance />
             </div>
@@ -904,14 +1002,16 @@ export default function LandingPage() {
         </div>
       </div>
 
+      <TrustSection />
+
       <WhoItsForSection />
 
       <section id="solutions" className="mx-auto max-w-6xl px-6 py-28">
         <div className="grid gap-12 lg:grid-cols-[1fr_1fr] lg:items-center">
           <SectionIntro
             tag="Workspace"
-            title="Organize your clients and teams in workspaces"
-            body="Separate files by team, client, region, or business unit while keeping every dashboard, summary, and forecast context-aware."
+            title="Keep every client and business unit in its own workspace"
+            body="Separate files by client, region, or business unit while keeping every dashboard, summary, and forecast context-aware."
           />
           <div className="relative lg:translate-x-6 lg:translate-y-4">
             <div className="hidden lg:block absolute -left-8 -top-8 h-24 w-24 rounded-3xl bg-[#f9e7ef] rotate-[14deg] shadow-[0_18px_42px_-24px_rgba(219,39,119,0.35)]" />
@@ -988,13 +1088,13 @@ export default function LandingPage() {
 
       <section id="cta" className="mx-auto max-w-6xl px-6 py-24">
         <div className="fade-up rounded-[34px] border border-slate-200 bg-gradient-to-r from-[#eaf3ff] via-[#ede7ff] to-[#f9e7ef] px-8 py-14 text-center shadow-sm dark:border-white/[0.1] dark:from-[oklch(0.2_0.025_280_/_0.5)] dark:via-card/90 dark:to-[oklch(0.22_0.03_55_/_0.45)] md:px-14">
-          <Tag>Final CTA</Tag>
+          <Tag>Get started</Tag>
           <h2 className={`${serif.className} mx-auto mt-4 max-w-2xl text-balance text-4xl text-slate-900 dark:text-white md:text-5xl`}>
             Start using AI for your business decisions
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-slate-700 dark:text-slate-300">
-            Turn spreadsheets into dashboards, insights, forecasts, and action
-            plans in minutes.
+            Bring the file you already have. Leave with a briefing, a forecast,
+            and a shortlist of what to do next.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <LandingFooterPrimaryCta />
