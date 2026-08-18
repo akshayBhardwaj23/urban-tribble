@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -21,6 +20,7 @@ from services.integration_connectors import (
     IntegrationNotConfiguredError,
     fetch_provider_data,
 )
+from services.integration_credentials import decrypt_config, encrypt_config
 from services.integration_registry import get_provider
 from services.workspace_query import get_dataset_upload_in_workspace
 from services.workspace_timeline import record_append_snapshot, record_upload_snapshot
@@ -65,12 +65,10 @@ def integration_to_dict(
 
 
 def _load_config(integration: DataSourceIntegration) -> dict[str, Any]:
-    if not integration.config_json:
-        return {}
-    try:
-        return json.loads(integration.config_json)
-    except json.JSONDecodeError:
-        return {}
+    """Decrypt stored credentials. Raises IntegrationCredentialsError when the
+    row is encrypted but unreadable, so the caller parks it in `error` with a
+    message instead of silently syncing with no credentials."""
+    return decrypt_config(integration.config_json)
 
 
 async def sync_integration(
@@ -95,7 +93,8 @@ async def sync_integration(
             integration.connection_mode,
             config,
         )
-        integration.config_json = json.dumps(config)
+        # Providers that rotate tokens (Microsoft) mutate `config` during fetch.
+        integration.config_json = encrypt_config(config)
     except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
         integration.status = IntegrationStatus.error
         integration.last_sync_error = str(e)

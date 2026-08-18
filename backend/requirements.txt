@@ -29,6 +29,9 @@ prophet==1.1.7
 # Object storage
 boto3==1.42.97
 
+# Credentials at rest (integration config_json envelope encryption)
+cryptography==46.0.3
+
 # Third-party services
 openai==2.29.0
 razorpay==2.0.1

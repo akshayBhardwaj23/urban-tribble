@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     INTEGRATION_SCHEDULER_INTERVAL_SECONDS: int = 60
     # Required in production for POST /api/integrations/run-scheduled
     INTEGRATION_CRON_SECRET: str = ""
+    # Encryption at rest for DataSourceIntegration.config_json (third-party secrets).
+    # Comma-separated Fernet keys: the first encrypts, all are tried on decrypt so a
+    # rotation is `new,old` -> backfill -> `new`. Empty leaves credentials in cleartext,
+    # which the production guard below refuses.
+    INTEGRATION_CREDENTIALS_KEY: str = ""
     # When false, lifespan skips alembic (use a release/init command instead).
     RUN_MIGRATIONS_ON_STARTUP: bool = True
     # Heuristic orphan upload→workspace backfill. Unsafe on multi-tenant DBs; off in prod.
@@ -167,6 +172,20 @@ def collect_runtime_setting_errors(s: "Settings") -> list[str]:
             "INTEGRATION_CRON_SECRET is empty, so POST /api/integrations/run-scheduled is open "
             "to anyone. Set a secret or disable external cron."
         )
+
+    if not (s.INTEGRATION_CREDENTIALS_KEY or "").strip():
+        errors.append(
+            "INTEGRATION_CREDENTIALS_KEY is empty, so third-party integration credentials "
+            "(Stripe keys, Shopify tokens, Microsoft refresh tokens) are stored in the "
+            "database as cleartext. Generate one with: python -c \"from cryptography.fernet "
+            'import Fernet; print(Fernet.generate_key().decode())"'
+        )
+    else:
+        from services.integration_credentials import validate_configured_keys
+
+        key_error = validate_configured_keys(s.INTEGRATION_CREDENTIALS_KEY)
+        if key_error:
+            errors.append(key_error)
 
     if not (s.RESEND_API_KEY or "").strip():
         errors.append(
