@@ -14,13 +14,25 @@ backend/.env
 frontend/.env.local
 
 # Database & uploads (dev)
-backend/data/app.db
+# WAL mode also writes app.db-shm / app.db-wal
+backend/data/app.db*
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 
 # IDE
 .vscode/
 .idea/
+.claude/settings.local.json
+
+# Internal business + planning docs. This repo is public: these carry margins,
+# COGS, launch posture, and a running list of not-yet-fixed defects.
+docs/SNAPTIX_UNIT_ECONOMICS.md
+docs/SNAPTIX_UNIT_ECONOMICS.docx
+docs/SNAPTIX_LAUNCH_ROADMAP.docx
+docs/SNAPTIX_LAUNCH_ROADMAP.html
+docs/SNAPTIX_PRODUCT_BRIEF_FOR_LAUNCH.md
+docs/SNAPTIX_PRODUCT_BRIEF_FOR_LAUNCH.docx
+docs/INTEGRATIONS_PLAN.md
 
 # OS
 .DS_Store
