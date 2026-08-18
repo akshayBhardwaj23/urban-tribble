@@ -4,45 +4,54 @@ from __future__ import annotations
 
 import json
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models.models import Analysis, Dataset, User
+from models.models import Analysis, Dataset
 from services.ai_analyzer import AIAnalyzer
 from services.subscription_usage import (
     assert_analysis_allowed,
     get_effective_plan,
     trim_free_analysis_result,
 )
-from services.workspace_query import get_dataset_upload_in_workspace
+from services.workspace_query import get_dataset_upload_in_workspace, workspace_owner
 from services.workspace_settings import currency_for_workspace
 
 _ai_analyzer = AIAnalyzer()
+
+
+def _plan_limit_message(exc: Exception) -> str:
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict) and detail.get("message"):
+        return str(detail["message"])
+    return str(exc) or "Analysis limit reached for your plan."
 
 
 def run_post_sync_analysis(
     db: Session,
     workspace_id: str,
     dataset: Dataset,
-) -> str | None:
-    """Run overview analysis if plan allows; returns analysis id or None."""
+) -> tuple[str | None, str | None]:
+    """Run overview analysis if plan allows.
+
+    Returns ``(analysis_id, skipped_reason)`` -- exactly one is set. A plan
+    limit is a real, user-facing outcome ("synced, but no new briefing because
+    you're at your analysis cap"), not an internal error, so it is returned
+    rather than swallowed silently.
+    """
     row = get_dataset_upload_in_workspace(db, dataset.id, workspace_id)
     if not row:
-        return None
+        return None, "Dataset not found for analysis."
     dataset, upload = row
 
-    from models.models import Workspace
-
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not ws:
-        return None
-    user = db.query(User).filter(User.id == ws.owner_id).first()
+    user = workspace_owner(db, workspace_id)
     if not user:
-        return None
+        return None, "Workspace owner not found."
 
     try:
         assert_analysis_allowed(db, user, workspace_id)
-    except Exception:
-        return None
+    except HTTPException as e:
+        return None, _plan_limit_message(e)
 
     data_summary = json.loads(dataset.data_summary) if dataset.data_summary else {}
     column_metadata = json.loads(dataset.schema_json) if dataset.schema_json else {}
@@ -66,4 +75,4 @@ def run_post_sync_analysis(
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
-    return analysis.id
+    return analysis.id, None

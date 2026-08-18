@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from models.models import Analysis, Dataset, Upload
+from models.models import Analysis, Dataset, Upload, User, Workspace
 
 
 def dataset_upload_pairs_for_workspace(db: Session, workspace_id: str):
@@ -27,6 +27,19 @@ def get_dataset_upload_in_workspace(
         .first()
     )
     return row
+
+
+def workspace_owner(db: Session, workspace_id: str) -> User | None:
+    """Resolve the billing-relevant user for a workspace (its owner).
+
+    Used by code paths with a workspace id but no request-scoped user, such as
+    a scheduled integration sync, which still needs to enforce that user's
+    plan limits.
+    """
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not ws:
+        return None
+    return db.query(User).filter(User.id == ws.owner_id).first()
 
 
 def latest_workspace_overview_analysis(

@@ -150,6 +150,11 @@ class DataSourceIntegration(Base):
     last_sync_at = Column(DateTime, nullable=True)
     next_sync_at = Column(DateTime, nullable=True)
     last_sync_error = Column(Text, nullable=True)
+    # Set when a sync claims this row (status -> syncing), cleared on completion.
+    # A stale value (older than INTEGRATION_STALE_SYNC_MINUTES) marks a sync that
+    # crashed mid-run, so the scheduler can reclaim the row instead of it being
+    # stuck in `syncing` forever.
+    syncing_started_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

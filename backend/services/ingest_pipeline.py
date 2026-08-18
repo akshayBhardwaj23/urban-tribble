@@ -18,8 +18,13 @@ from services.column_profile import (
 )
 from services.column_semantics import propose_column_roles
 from services.dashboard_planner import DashboardPlanner
-from services.dashboard_stability import parse_metadata_json, should_rebuild_dashboard_plan
+from services.dashboard_stability import (
+    parse_metadata_json,
+    schema_changed,
+    should_rebuild_dashboard_plan,
+)
 from services.data_cleaner import DataCleaner
+from services.file_validation import validate_frame_size
 from services.ingestion_classifier import build_ingestion_profile
 from services.source_files import init_source_file
 
@@ -38,6 +43,8 @@ def process_dataframe(
     sheet: str | None = None,
     header_row: int = 0,
     use_llm: bool = True,
+    known_roles: dict[str, str] | None = None,
+    known_meanings: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Clean + profile + (advisory) LLM roles. Does not touch the database."""
     df, clean_report = data_cleaner.clean(
@@ -82,7 +89,23 @@ def process_dataframe(
         "meanings": {},
         "source": "auto",
     }
-    if use_llm:
+    if known_roles:
+        # Caller has already verified the schema is unchanged from the last
+        # sync (see ingest_dataframe). Reuse the roles/meanings that were
+        # validated then instead of falling back to the plain deterministic
+        # guess -- that fallback is strictly weaker (no "meaning" text, and no
+        # LLM correction of columns the heuristic gets wrong) and would
+        # silently downgrade an already-good dataset on every unchanged
+        # refresh. Restricted to columns process_dataframe still recognizes,
+        # in case cleaning renamed or dropped one.
+        reused_roles = {k: v for k, v in known_roles.items() if k in det_roles}
+        llm_result = {
+            "roles": {**det_roles, **reused_roles},
+            "meanings": dict(known_meanings or {}),
+            "source": "llm",
+        }
+        metadata = _metadata_from_roles(list(map(str, df.columns)), llm_result["roles"])
+    elif use_llm:
         from services.column_profile import schema_fingerprint
 
         dtypes = {str(c): str(df[c].dtype) for c in df.columns}
@@ -182,15 +205,53 @@ def ingest_dataframe(
     """Clean, profile, and persist a dataframe as upload + dataset.
 
     When ``raw_source_key`` is provided it is recorded as a durable source file
-    and is NOT overwritten with cleaned CSV output.
+    and is NOT overwritten with cleaned CSV output. Raises
+    ``services.file_validation.FileValidationError`` when the incoming or
+    cleaned frame exceeds the configured row/column caps -- this is the only
+    caller of ``process_dataframe`` that fetches data from an external source
+    with no upload-time size limit of its own, so the check has to live here.
     """
+    validate_frame_size(df, filename=name)
+
+    old_metadata = parse_metadata_json(dataset.schema_json if dataset else None)
+    existing_plan = dataset.dashboard_plan_json if dataset else None
+    old_mapping_spec = parse_metadata_json(dataset.mapping_spec_json if dataset else None)
+
+    # A schema-unchanged re-sync of a locked dashboard doesn't need the LLM to
+    # re-derive column roles it already derived last time -- every scheduled
+    # refresh of an unchanged spreadsheet would otherwise be a paid model call,
+    # forever, for data that didn't change. Comparing raw column names against
+    # the last stored schema is enough: it is exactly the signature the
+    # dashboard-stability check already treats as "nothing changed".
+    effective_use_llm = use_llm
+    known_roles: dict[str, str] | None = None
+    known_meanings: dict[str, str] | None = None
+    if (
+        use_llm
+        and dashboard_plan_locked
+        and old_metadata is not None
+        and not schema_changed(old_metadata, {"all_columns": [str(c) for c in df.columns]})
+    ):
+        effective_use_llm = False
+        if old_mapping_spec:
+            old_columns = old_mapping_spec.get("columns") or []
+            known_roles = {
+                c["name"]: c["role"] for c in old_columns if c.get("name") and c.get("role")
+            }
+            known_meanings = {
+                c["name"]: c["meaning"] for c in old_columns if c.get("name") and c.get("meaning")
+            }
+
     processed = process_dataframe(
         df,
         filename=name,
         description=description,
-        use_llm=use_llm,
+        use_llm=effective_use_llm,
+        known_roles=known_roles,
+        known_meanings=known_meanings,
     )
     df = processed["df"]
+    validate_frame_size(df, filename=name)
     clean_report = processed["clean_report"]
     metadata = processed["metadata"]
     stats = processed["stats"]
@@ -198,8 +259,6 @@ def ingest_dataframe(
     mapping_spec = processed["mapping_spec"]
     cls_id = ingestion["classification"]["id"]
 
-    old_metadata = parse_metadata_json(dataset.schema_json if dataset else None)
-    existing_plan = dataset.dashboard_plan_json if dataset else None
     rebuild_plan = should_rebuild_dashboard_plan(
         dashboard_plan_locked=dashboard_plan_locked,
         old_metadata=old_metadata,

@@ -18,6 +18,7 @@ from models.models import DataSourceIntegration, IntegrationStatus, User
 from services.integration_connectors import (
     IntegrationFetchError,
     IntegrationNotConfiguredError,
+    IntegrationSyncInProgressError,
     fetch_provider_data,
 )
 from services.integration_credentials import decrypt_config, encrypt_config
@@ -39,6 +40,7 @@ from services.integration_registry import get_provider, list_catalog
 from services.integration_scheduler import run_due_syncs_once
 from services.integration_sync import (
     compute_next_sync_at,
+    count_workspace_integrations,
     find_due_integrations,
     integration_to_dict,
     sync_integration,
@@ -85,6 +87,16 @@ def _require_integrations_enabled() -> None:
         raise HTTPException(
             503,
             "Live integrations are coming soon. Import a CSV or Excel file for now.",
+        )
+
+
+def _require_workspace_capacity(db: Session, workspace_id: str) -> None:
+    cap = int(settings.INTEGRATION_MAX_PER_WORKSPACE)
+    if cap and count_workspace_integrations(db, workspace_id) >= cap:
+        raise HTTPException(
+            400,
+            f"This workspace has reached the limit of {cap} connected sources. "
+            "Remove one before connecting another.",
         )
 
 
@@ -234,6 +246,8 @@ async def complete_microsoft_oauth(
     if not selected:
         raise HTTPException(404, "Selected workbook not found in OAuth session")
 
+    _require_workspace_capacity(db, workspace_id)
+
     config = dict(session.get("config") or {})
     config.update(
         {
@@ -260,6 +274,8 @@ async def complete_microsoft_oauth(
 
     try:
         return await sync_integration(db, integration, trigger="manual")
+    except IntegrationSyncInProgressError as e:
+        raise HTTPException(409, str(e)) from e
     except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
         raise HTTPException(422, str(e)) from e
 
@@ -297,6 +313,7 @@ async def create_integration(
     if not provider:
         raise HTTPException(400, f"Unknown provider: {body.provider}")
     _validate_connection_mode(body.provider, body.connection_mode)
+    _require_workspace_capacity(db, workspace_id)
 
     integration = DataSourceIntegration(
         workspace_id=workspace_id,
@@ -318,6 +335,8 @@ async def create_integration(
         try:
             result = await sync_integration(db, integration, trigger="manual")
             return result
+        except IntegrationSyncInProgressError as e:
+            raise HTTPException(409, str(e)) from e
         except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
             raise HTTPException(422, str(e)) from e
 
@@ -469,6 +488,8 @@ async def refresh_integration(
         raise HTTPException(404, "Integration not found")
     try:
         return await sync_integration(db, integration, trigger="manual")
+    except IntegrationSyncInProgressError as e:
+        raise HTTPException(409, str(e)) from e
     except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
         raise HTTPException(422, str(e)) from e
 
