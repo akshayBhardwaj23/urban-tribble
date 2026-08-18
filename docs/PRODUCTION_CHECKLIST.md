@@ -16,6 +16,20 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 - Set strong unique **`API_JWT_SECRET`** (signs FastAPI Bearer tokens) and matching **`INTERNAL_AUTH_SECRET`** on backend + frontend (server-only; used by NextAuth to bootstrap Google sessions). Never expose `INTERNAL_AUTH_SECRET` as `NEXT_PUBLIC_*`.
 - Override default **`OTP_PEPPER`** in production.
 - Restrict **`AUTH_TEST_LOGIN_*`** to dev only; disable or remove for production.
+- Set **`INTEGRATION_CREDENTIALS_KEY`** before any integration is connected. It encrypts
+  `DataSourceIntegration.config_json`, which holds live third-party secrets (Stripe keys,
+  Shopify tokens, Microsoft refresh tokens). Without it those sit in the database as cleartext
+  and the app refuses to boot with `APP_ENV=production`. Generate one with:
+  ```bash
+  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  ```
+  **Back this key up separately from the database.** Losing it means every connected integration
+  must be removed and reconnected — the credentials are not recoverable.
+- **Rotation** is two deploys: set `INTEGRATION_CREDENTIALS_KEY=<new>,<old>`, run
+  `python -m scripts.encrypt_integration_credentials`, then drop `<old>` and redeploy.
+  The same script backfills rows written before encryption existed.
+- If any credential was ever written to a production database in cleartext, treat it as exposed:
+  re-issue it at the provider. Rewriting the row does not scrub it from old pages, WAL, or backups.
 
 ## Razorpay
 

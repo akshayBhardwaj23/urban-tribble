@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hmac
 import html
-import json
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
@@ -21,6 +20,7 @@ from services.integration_connectors import (
     IntegrationNotConfiguredError,
     fetch_provider_data,
 )
+from services.integration_credentials import decrypt_config, encrypt_config
 from services.integration_microsoft import (
     _apply_token_payload,
     microsoft_exchange_code_for_tokens,
@@ -247,7 +247,7 @@ async def complete_microsoft_oauth(
         provider="excel_onedrive",
         name=str(session["name"]).strip() or selected.get("name") or "Excel / OneDrive data",
         connection_mode="oauth",
-        config_json=json.dumps(config),
+        config_json=encrypt_config(config),
         refresh_interval_hours=int(session["refresh_interval_hours"]) or settings.INTEGRATION_DEFAULT_REFRESH_HOURS,
         auto_analyze=1 if session["auto_analyze"] else 0,
         dashboard_plan_locked=1 if session["dashboard_plan_locked"] else 0,
@@ -303,7 +303,7 @@ async def create_integration(
         provider=body.provider,
         name=body.name,
         connection_mode=body.connection_mode,
-        config_json=json.dumps(body.config),
+        config_json=encrypt_config(body.config),
         refresh_interval_hours=body.refresh_interval_hours or settings.INTEGRATION_DEFAULT_REFRESH_HOURS,
         auto_analyze=1 if body.auto_analyze else 0,
         dashboard_plan_locked=1 if body.dashboard_plan_locked else 0,
@@ -373,7 +373,7 @@ def patch_integration(
         _validate_connection_mode(integration.provider, body.connection_mode)
         integration.connection_mode = body.connection_mode
     if body.config is not None:
-        integration.config_json = json.dumps(body.config)
+        integration.config_json = encrypt_config(body.config)
     if body.refresh_interval_hours is not None:
         integration.refresh_interval_hours = body.refresh_interval_hours
         if integration.last_sync_at:
@@ -432,8 +432,8 @@ async def test_integration(
     )
     if not integration:
         raise HTTPException(404, "Integration not found")
-    config = json.loads(integration.config_json) if integration.config_json else {}
     try:
+        config = decrypt_config(integration.config_json)
         df = await fetch_provider_data(
             integration.provider,
             integration.connection_mode,
