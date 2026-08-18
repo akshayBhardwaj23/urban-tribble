@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -110,7 +110,7 @@ class DashboardPlanner:
         df: pd.DataFrame,
         metadata: dict[str, Any],
         stats: dict[str, Any],
-        user_description: Optional[str] = None,
+        user_description: str | None = None,
     ) -> dict[str, Any]:
         if llm_client.is_configured():
             try:
@@ -132,8 +132,8 @@ class DashboardPlanner:
         df: pd.DataFrame,
         metadata: dict[str, Any],
         stats: dict[str, Any],
-        user_description: Optional[str],
-    ) -> Optional[dict[str, Any]]:
+        user_description: str | None,
+    ) -> dict[str, Any] | None:
         columns = list(df.columns)
         payload = {
             "row_count": len(df),

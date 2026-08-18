@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from services.column_profile import VALID_ROLES
 
@@ -33,7 +33,7 @@ def propose_column_roles(
     deterministic_roles: dict[str, str],
     schema_fingerprint: str,
     filename: str = "",
-    user_description: Optional[str] = None,
+    user_description: str | None = None,
 ) -> dict[str, Any]:
     """Return {roles, meanings, source} with source in {llm, auto}.
 
@@ -111,8 +111,8 @@ def _call_llm(
     profiles: list[dict[str, Any]],
     *,
     filename: str,
-    user_description: Optional[str],
-) -> Optional[dict[str, Any]]:
+    user_description: str | None,
+) -> dict[str, Any] | None:
     from services import llm_client
 
     if not llm_client.is_configured():

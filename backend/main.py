@@ -1,9 +1,9 @@
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncGenerator, Dict, List, Tuple
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +11,7 @@ from sqlalchemy import inspect, text
 
 import observability
 from config import collect_runtime_setting_errors, settings, validate_runtime_settings
-from database import Base, SessionLocal, engine
+from database import SessionLocal, engine
 from models import models as _models  # noqa: F401 — register ORM tables for create_all
 from routes import (
     analysis,
@@ -87,7 +87,7 @@ def _backfill_upload_workspace_ids() -> None:
         if not users:
             return
 
-        user_first_workspace: List[Tuple[datetime, str]] = []
+        user_first_workspace: list[tuple[datetime, str]] = []
         for u in users:
             ws = (
                 db.query(Workspace)
@@ -217,7 +217,7 @@ app.include_router(workspace_timeline.router)
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health_check() -> Dict[str, str]:
+async def health_check() -> dict[str, str]:
     """Liveness: the process is up. Does not touch dependencies."""
     return {"status": "ok"}
 
@@ -232,7 +232,7 @@ async def readiness_check():
     """
     from fastapi.responses import JSONResponse
 
-    checks: Dict[str, str] = {}
+    checks: dict[str, str] = {}
     ok = True
 
     try:

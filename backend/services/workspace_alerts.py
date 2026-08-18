@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import pandas as pd
 
@@ -109,7 +110,7 @@ def _alerts_from_what_changed(wc: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def _pick_expense_col(df: pd.DataFrame, metadata: dict[str, Any], exclude: set[str]) -> Optional[str]:
+def _pick_expense_col(df: pd.DataFrame, metadata: dict[str, Any], exclude: set[str]) -> str | None:
     for c in metadata.get("expense_columns") or []:
         if c in exclude or c not in df.columns:
             continue
@@ -364,7 +365,7 @@ def build_workspace_alerts(
     what_changed: dict[str, Any],
     dataset_pairs: list[tuple[Any, Any]],
     loader: Callable[[Any], pd.DataFrame],
-    analysis_json: Optional[dict[str, Any]] = None,
+    analysis_json: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Assemble actionable alerts for the workspace overview."""
     alerts: list[dict[str, Any]] = []

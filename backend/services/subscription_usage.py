@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import settings
-from utils.email_norm import normalize_email
 from models.models import (
     Analysis,
     ChatMessage,
@@ -22,6 +21,7 @@ from models.models import (
     WorkspaceTimelineSnapshot,
 )
 from services.plan_limits import raise_plan_limit
+from utils.email_norm import normalize_email
 
 PLAN_IDS = frozenset({"free", "starter", "pro", "internal"})
 _ANALYSIS_TYPES_FOR_CAP = ("overview", "workspace_overview")
@@ -119,7 +119,7 @@ def trim_free_analysis_result(result: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _month_start_utc(now: Optional[datetime] = None) -> datetime:
+def _month_start_utc(now: datetime | None = None) -> datetime:
     n = now or datetime.utcnow()
     return datetime(n.year, n.month, 1)
 
@@ -185,7 +185,7 @@ def _count_workspace_uploads_this_month(
 def _count_user_chat_user_messages(
     db: Session,
     user_id: str,
-    month_start: Optional[datetime] = None,
+    month_start: datetime | None = None,
 ) -> int:
     q = (
         db.query(func.count(ChatMessage.id))
@@ -217,7 +217,7 @@ def _owned_workspace_count(db: Session, user_id: str) -> int:
     )
 
 
-def _meter(used: int, limit: Optional[int]) -> Optional[dict[str, Any]]:
+def _meter(used: int, limit: int | None) -> dict[str, Any] | None:
     if limit is None:
         return None
     pct = min(1.0, used / limit) if limit > 0 else 0.0

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,9 +9,9 @@ from services.api_tokens import TokenError, bearer_from_authorization, verify_ac
 
 
 def get_current_user(
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Resolve the current user from a signed Bearer access token.
 
     Returns None when no Authorization header is present so endpoints can
@@ -25,8 +23,8 @@ def get_current_user(
 
     try:
         payload = verify_access_token(token)
-    except TokenError:
-        raise HTTPException(401, "Invalid or expired access token")
+    except TokenError as exc:
+        raise HTTPException(401, "Invalid or expired access token") from exc
 
     user_id = payload.get("sub")
     if not user_id or not isinstance(user_id, str):
@@ -39,7 +37,7 @@ def get_current_user(
 
 
 def require_user(
-    user: Optional[User] = Depends(get_current_user),
+    user: User | None = Depends(get_current_user),
 ) -> User:
     """Require authenticated user. Raises 401 if not logged in."""
     if not user:

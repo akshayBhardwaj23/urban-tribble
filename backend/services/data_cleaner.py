@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -43,7 +43,7 @@ class DataCleaner:
         df: pd.DataFrame,
         *,
         drop_duplicates: bool = False,
-        dayfirst: Optional[bool] = None,
+        dayfirst: bool | None = None,
     ) -> tuple[pd.DataFrame, dict]:
         """Clean the dataframe and return (cleaned_df, report).
 
@@ -270,7 +270,7 @@ class DataCleaner:
                 converted.append(col)
         return df, converted
 
-    def _try_coerce_numeric_series(self, series: pd.Series) -> Optional[pd.Series]:
+    def _try_coerce_numeric_series(self, series: pd.Series) -> pd.Series | None:
         non_null = series.dropna()
         if len(non_null) == 0:
             return None
@@ -327,7 +327,7 @@ class DataCleaner:
         self,
         df: pd.DataFrame,
         *,
-        dayfirst: Optional[bool] = None,
+        dayfirst: bool | None = None,
     ) -> tuple[pd.DataFrame, dict[str, dict]]:
         """Parse object columns as dates with explicit formats and 95% gate."""
         info: dict[str, dict] = {}
@@ -373,7 +373,7 @@ class DataCleaner:
             info[col] = meta
         return df, info
 
-    def _try_excel_serial(self, series: pd.Series) -> Optional[pd.Series]:
+    def _try_excel_serial(self, series: pd.Series) -> pd.Series | None:
         non_null = series.dropna()
         if len(non_null) == 0:
             return None
@@ -398,8 +398,8 @@ class DataCleaner:
         self,
         series: pd.Series,
         *,
-        dayfirst: Optional[bool] = None,
-    ) -> Optional[tuple[pd.Series, dict]]:
+        dayfirst: bool | None = None,
+    ) -> tuple[pd.Series, dict] | None:
         non_null = series.dropna()
         non_null = non_null[non_null.astype(str).str.strip() != ""]
         if len(non_null) == 0:
@@ -415,8 +415,8 @@ class DataCleaner:
             use_dayfirst = _DEFAULT_DAYFIRST
 
         formats = _DATE_FORMATS_DAYFIRST if use_dayfirst else _DATE_FORMATS_MONTHFIRST
-        best_parsed: Optional[pd.Series] = None
-        best_fmt: Optional[str] = None
+        best_parsed: pd.Series | None = None
+        best_fmt: str | None = None
         best_rate = 0.0
 
         for fmt in formats:
@@ -436,7 +436,7 @@ class DataCleaner:
                 parsed = pd.to_datetime(
                     series, errors="coerce", dayfirst=use_dayfirst, format="mixed"
                 )
-            except (ValueError, TypeError, TypeError):
+            except (ValueError, TypeError):
                 try:
                     parsed = pd.to_datetime(series, errors="coerce", dayfirst=use_dayfirst)
                 except (ValueError, TypeError):
@@ -460,7 +460,7 @@ class DataCleaner:
         }
         return best_parsed, meta
 
-    def _dayfirst_evidence(self, non_null: pd.Series) -> Optional[bool]:
+    def _dayfirst_evidence(self, non_null: pd.Series) -> bool | None:
         """Return True if DD/MM proven, False if MM/DD proven, None if ambiguous.
 
         Pattern a/b/year:

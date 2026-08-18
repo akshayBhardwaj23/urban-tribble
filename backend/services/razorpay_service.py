@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import razorpay
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 PLAN_TIERS = frozenset({"starter", "pro"})
 
 
-def _note_str(notes: Any, *keys: str) -> Optional[str]:
+def _note_str(notes: Any, *keys: str) -> str | None:
     if not isinstance(notes, dict):
         return None
     for k in keys:
@@ -73,7 +73,7 @@ def _plan_id_for_tier(tier: str) -> str:
     raise ValueError("tier must be starter or pro")
 
 
-def _tier_from_razorpay_plan_id(plan_id: Optional[str]) -> Optional[str]:
+def _tier_from_razorpay_plan_id(plan_id: str | None) -> str | None:
     if not plan_id:
         return None
     pid = plan_id.strip()
@@ -86,7 +86,7 @@ def _tier_from_razorpay_plan_id(plan_id: Optional[str]) -> Optional[str]:
 
 def activate_subscription_after_checkout(
     db: Session, user: User, subscription_id: str
-) -> Optional[str]:
+) -> str | None:
     """Apply plan from Razorpay subscription notes/plan_id after successful auth payment."""
     sub_id = subscription_id.strip()
     if not sub_id:
@@ -123,7 +123,7 @@ def verify_subscription_auth_signature(
     See https://razorpay.com/docs/payments/subscriptions/integration-guide/#payment-verification
     """
     secret = settings.RAZORPAY_KEY_SECRET.strip().encode("utf-8")
-    msg = f"{razorpay_payment_id}|{razorpay_subscription_id}".encode("utf-8")
+    msg = f"{razorpay_payment_id}|{razorpay_subscription_id}".encode()
     digest = hmac.new(secret, msg, hashlib.sha256).hexdigest()
     return hmac.compare_digest(digest, razorpay_signature.strip())
 
@@ -232,7 +232,7 @@ def verify_and_parse_webhook(raw_body: bytes, signature: str) -> dict[str, Any]:
     return json.loads(body_str)
 
 
-def _subscription_entity(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
+def _subscription_entity(payload: dict[str, Any]) -> dict[str, Any] | None:
     p = payload.get("payload")
     if not isinstance(p, dict):
         return None
@@ -243,9 +243,9 @@ def _subscription_entity(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
     return ent if isinstance(ent, dict) else None
 
 
-def _resolve_user(db: Session, entity: dict[str, Any]) -> Optional[User]:
+def _resolve_user(db: Session, entity: dict[str, Any]) -> User | None:
     notes = entity.get("notes")
-    uid: Optional[str] = None
+    uid: str | None = None
     if isinstance(notes, dict):
         uid = _note_str(notes, "snaptix_user_id", "clarus_user_id")
     if uid:
@@ -283,7 +283,7 @@ def _apply_period_end(user: User, entity: dict[str, Any]) -> None:
         pass
 
 
-def _resolve_tier(entity: dict[str, Any]) -> Optional[str]:
+def _resolve_tier(entity: dict[str, Any]) -> str | None:
     notes = entity.get("notes")
     raw = _note_str(notes, "snaptix_plan", "clarus_plan") if isinstance(notes, dict) else None
     if raw is not None:
@@ -371,7 +371,7 @@ def apply_subscription_webhook(db: Session, data: dict[str, Any], event_id: str)
         raise
 
 
-def process_webhook_request(db: Session, raw_body: bytes, signature: str, event_id_header: Optional[str]) -> None:
+def process_webhook_request(db: Session, raw_body: bytes, signature: str, event_id_header: str | None) -> None:
     try:
         data = verify_and_parse_webhook(raw_body, signature)
     except SignatureVerificationError:

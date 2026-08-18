@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -13,23 +12,19 @@ from deps import require_active_workspace
 from models.models import (
     Analysis,
     ChatMessage,
-    DataSourceIntegration,
     Dataset,
     DatasetRelation,
+    DataSourceIntegration,
     Upload,
     User,
     Workspace,
     WorkspaceTimelineSnapshot,
 )
-from services.workspace_query import (
-    dataset_upload_pairs_for_workspace,
-    get_dataset_upload_in_workspace,
-)
-from services import overview_cache
-from services.ingestion_classifier import ALLOWED_CLASSIFICATION_IDS, CLASSIFICATIONS
-from services.dashboard_stability import parse_metadata_json, should_rebuild_dashboard_plan
+from services import overview_cache, storage
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
 from services.column_detector import ColumnDetector
 from services.dashboard_planner import DashboardPlanner
+from services.dashboard_stability import parse_metadata_json, should_rebuild_dashboard_plan
 from services.data_cleaner import DataCleaner
 from services.file_processor import FileProcessor
 from services.file_validation import (
@@ -37,11 +32,15 @@ from services.file_validation import (
     validate_frame_size,
     validate_magic_bytes,
 )
-from services import storage
+from services.ingestion_classifier import ALLOWED_CLASSIFICATION_IDS, CLASSIFICATIONS
+from services.source_files import parse_source_files
 from services.subscription_usage import assert_upload_allowed
 from services.upload_io import save_upload_stream_limited
 from services.upload_rate_limit import check_upload_rate_limit
-from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
+from services.workspace_query import (
+    dataset_upload_pairs_for_workspace,
+    get_dataset_upload_in_workspace,
+)
 from services.workspace_timeline import record_append_snapshot
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
@@ -51,22 +50,22 @@ column_detector = ColumnDetector()
 
 
 class DatasetPatchBody(BaseModel):
-    business_classification: Optional[str] = None
-    primary_date_column: Optional[str] = None
-    primary_amount_column: Optional[str] = None
-    segment_columns: Optional[List[str]] = None
-    dayfirst: Optional[bool] = None
-    drop_duplicates: Optional[bool] = None
-    sheet: Optional[str] = None
-    header_row: Optional[int] = None
-    column_roles: Optional[Dict[str, str]] = None  # {column_name: role}
+    business_classification: str | None = None
+    primary_date_column: str | None = None
+    primary_amount_column: str | None = None
+    segment_columns: list[str] | None = None
+    dayfirst: bool | None = None
+    drop_duplicates: bool | None = None
+    sheet: str | None = None
+    header_row: int | None = None
+    column_roles: dict[str, str] | None = None  # {column_name: role}
 
 
 def _load_cleaned_df(upload: Upload) -> pd.DataFrame:
     try:
         parquet_path = ensure_cleaned_parquet(upload)
-    except CleanedDataMissingError:
-        raise HTTPException(404, "Cleaned data file not found")
+    except CleanedDataMissingError as exc:
+        raise HTTPException(404, "Cleaned data file not found") from exc
     return pd.read_parquet(str(parquet_path))
 
 
@@ -511,13 +510,13 @@ async def append_to_dataset(
     try:
         parquet_path = ensure_cleaned_parquet(upload)
         df_existing = pd.read_parquet(str(parquet_path))
-    except CleanedDataMissingError:
+    except CleanedDataMissingError as exc:
         staging.unlink(missing_ok=True)
-        raise HTTPException(404, "Cleaned data file not found")
+        raise HTTPException(404, "Cleaned data file not found") from exc
 
-    existing_cols = set(c.lower() for c in df_existing.columns)
+    existing_cols = {c.lower() for c in df_existing.columns}
     # Normalize new columns the same way cleaner would for overlap check
-    new_cols_raw = set(str(c).lower() for c in df_new.columns)
+    new_cols_raw = {str(c).lower() for c in df_new.columns}
     overlap = existing_cols & new_cols_raw
     # Also try normalized names
     import re

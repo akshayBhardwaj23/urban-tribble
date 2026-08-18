@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -13,9 +13,9 @@ class FileProcessor:
         self,
         file_path: str,
         *,
-        sheet_name: Optional[str | int] = None,
-        header_row: Optional[int] = None,
-        declared_ext: Optional[str] = None,
+        sheet_name: str | int | None = None,
+        header_row: int | None = None,
+        declared_ext: str | None = None,
     ) -> pd.DataFrame:
         path = Path(file_path)
         declared = (declared_ext or path.suffix).lower()
@@ -54,8 +54,8 @@ class FileProcessor:
         file_path: str,
         *,
         engine: str,
-        sheet_name: Optional[str | int],
-        header_row: Optional[int],
+        sheet_name: str | int | None,
+        header_row: int | None,
     ) -> pd.DataFrame:
         header = header_row if header_row is not None else 0
         if sheet_name is not None:

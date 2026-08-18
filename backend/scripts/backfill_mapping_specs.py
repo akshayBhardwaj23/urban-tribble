@@ -16,16 +16,16 @@ from pathlib import Path
 # Allow running as module from backend/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pandas as pd  # noqa: E402
+
 from database import SessionLocal  # noqa: E402
 from models.models import Dataset, Upload  # noqa: E402
 from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet  # noqa: E402
 from services.column_detector import ColumnDetector  # noqa: E402
 from services.column_profile import build_mapping_spec  # noqa: E402
-from services.data_cleaner import DataCleaner  # noqa: E402
 from services.file_processor import FileProcessor  # noqa: E402
 from services.ingest_pipeline import process_dataframe  # noqa: E402
 from services.source_files import init_source_file, parse_source_files  # noqa: E402
-import pandas as pd  # noqa: E402
 
 
 def _old_roles(schema: dict) -> dict[str, str]:
@@ -59,7 +59,6 @@ def main() -> int:
 
     db = SessionLocal()
     detector = ColumnDetector()
-    cleaner = DataCleaner()
     reader = FileProcessor()
     divergence: list[dict] = []
     updated = 0

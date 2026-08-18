@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -14,7 +14,6 @@ from services.cleaned_parquet import write_cleaned_parquet
 from services.column_detector import ColumnDetector
 from services.column_profile import (
     build_mapping_spec,
-    metadata_from_mapping_spec,
     roles_from_metadata,
 )
 from services.column_semantics import propose_column_roles
@@ -33,10 +32,10 @@ def process_dataframe(
     df: pd.DataFrame,
     *,
     filename: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     drop_duplicates: bool = False,
-    dayfirst: Optional[bool] = None,
-    sheet: Optional[str] = None,
+    dayfirst: bool | None = None,
+    sheet: str | None = None,
     header_row: int = 0,
     use_llm: bool = True,
 ) -> dict[str, Any]:
@@ -171,15 +170,15 @@ def ingest_dataframe(
     df: pd.DataFrame,
     workspace_id: str,
     name: str,
-    description: Optional[str] = None,
-    upload: Optional[Upload] = None,
-    dataset: Optional[Dataset] = None,
+    description: str | None = None,
+    upload: Upload | None = None,
+    dataset: Dataset | None = None,
     dashboard_plan_locked: bool = False,
-    raw_source_key: Optional[str] = None,
-    raw_source_filename: Optional[str] = None,
+    raw_source_key: str | None = None,
+    raw_source_filename: str | None = None,
     raw_source_kind: str = "original",
     use_llm: bool = True,
-) -> Tuple[Upload, Dataset, dict]:
+) -> tuple[Upload, Dataset, dict]:
     """Clean, profile, and persist a dataframe as upload + dataset.
 
     When ``raw_source_key`` is provided it is recorded as a durable source file

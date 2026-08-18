@@ -14,13 +14,13 @@ import logging
 import random
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from config import settings
 
 logger = logging.getLogger(__name__)
 
-_cache: Dict[str, tuple[float, Any]] = {}
+_cache: dict[str, tuple[float, Any]] = {}
 _cache_lock = threading.Lock()
 _MAX_CACHE_ENTRIES = 512
 
@@ -33,7 +33,7 @@ def cache_key(*parts: Any) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:40]
 
 
-def _cache_get(key: str) -> Optional[Any]:
+def _cache_get(key: str) -> Any | None:
     ttl = int(getattr(settings, "OPENAI_CACHE_TTL_SECONDS", 0) or 0)
     if ttl <= 0:
         return None
@@ -80,15 +80,15 @@ def _client():
 
 
 def chat_json(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     *,
     purpose: str,
     temperature: float = 0.2,
-    max_tokens: Optional[int] = None,
-    model: Optional[str] = None,
+    max_tokens: int | None = None,
+    model: str | None = None,
     cache: bool = True,
     cache_salt: Any = None,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Request a JSON object completion. Returns None if unavailable or invalid."""
     if not is_configured():
         return None
@@ -101,11 +101,11 @@ def chat_json(
             return hit
 
     attempts = max(1, int(getattr(settings, "OPENAI_MAX_RETRIES", 2)) + 1)
-    last_error: Optional[Exception] = None
+    last_error: Exception | None = None
 
     for attempt in range(attempts):
         try:
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "model": chosen_model,
                 "messages": messages,
                 "temperature": temperature,

@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
 
 from config import settings
 from database import SessionLocal
@@ -26,7 +25,7 @@ from services.workspace_timeline import record_upload_snapshot
 
 logger = logging.getLogger(__name__)
 
-_executor: Optional[ThreadPoolExecutor] = None
+_executor: ThreadPoolExecutor | None = None
 _file_processor = FileProcessor()
 _dashboard_planner = DashboardPlanner()
 

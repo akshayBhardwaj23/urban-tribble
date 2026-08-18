@@ -6,10 +6,10 @@ import unittest
 
 import pandas as pd
 
-from services.file_validation import resolve_reader_ext, sniff_kind
-from services.query_plan import QueryPlanError, looks_like_rate_column, validate_plan
 from services.daily_metrics import compute_daily_metrics_df
-from services.forecaster import Forecaster, NotEnoughHistoryError, MIN_POINTS_FOR_FORECAST
+from services.file_validation import sniff_kind
+from services.forecaster import MIN_POINTS_FOR_FORECAST, Forecaster, NotEnoughHistoryError
+from services.query_plan import QueryPlanError, looks_like_rate_column, validate_plan
 
 
 class RateColumnTests(unittest.TestCase):
@@ -84,8 +84,9 @@ class NumericLocaleTests(unittest.TestCase):
         self.assertAlmostEqual(float(cleaned["price"].iloc[0]), 1.234, places=3)
 
     def test_eu_thousands_with_comma_decimal(self):
-        from services.data_cleaner import DataCleaner
         import pandas as pd
+
+        from services.data_cleaner import DataCleaner
 
         df = pd.DataFrame({"amount": ["1.234,56", "2.000,00"]})
         cleaned, _ = DataCleaner().clean(df)
@@ -94,7 +95,7 @@ class NumericLocaleTests(unittest.TestCase):
 
 class SsrfGuardTests(unittest.TestCase):
     def test_blocks_metadata_and_private(self):
-        from services.integration_connectors import _assert_safe_export_url, IntegrationFetchError
+        from services.integration_connectors import IntegrationFetchError, _assert_safe_export_url
 
         for url in (
             "http://169.254.169.254/latest/meta-data/",

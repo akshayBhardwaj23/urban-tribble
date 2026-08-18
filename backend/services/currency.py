@@ -6,7 +6,7 @@ workspace has not chosen one, DEFAULT_CURRENCY applies.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from config import settings
 
@@ -26,11 +26,11 @@ SUPPORTED = tuple(SYMBOLS)
 SUPPORTED_CURRENCIES = frozenset(SYMBOLS)
 
 
-def currency_symbol(code: Optional[str]) -> str:
+def currency_symbol(code: str | None) -> str:
     return SYMBOLS[normalize_currency(code)].strip()
 
 
-def normalize_currency(code: Optional[str]) -> str:
+def normalize_currency(code: str | None) -> str:
     candidate = (code or "").strip().upper()
     if candidate in SYMBOLS:
         return candidate
@@ -43,7 +43,7 @@ def workspace_currency(workspace: Any) -> str:
     return normalize_currency(getattr(workspace, "currency", None))
 
 
-def format_money(value: Any, currency: Optional[str] = None) -> str:
+def format_money(value: Any, currency: str | None = None) -> str:
     code = normalize_currency(currency)
     try:
         amount = float(value)
@@ -57,7 +57,7 @@ def format_money(value: Any, currency: Optional[str] = None) -> str:
     return f"{sign}{symbol}{body}"
 
 
-def format_money_compact(value: Any, currency: Optional[str] = None) -> str:
+def format_money_compact(value: Any, currency: str | None = None) -> str:
     """Short form for tiles: 1.2M, 340.5K."""
     code = normalize_currency(currency)
     try:

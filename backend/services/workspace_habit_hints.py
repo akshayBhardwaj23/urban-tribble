@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -12,7 +12,7 @@ from models.models import Dataset, Upload, UploadStatus, WorkspaceTimelineSnapsh
 from services.workspace_query import latest_workspace_overview_analysis
 
 
-def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
+def _iso_utc(dt: datetime | None) -> str | None:
     if dt is None:
         return None
     if dt.tzinfo is not None:
@@ -20,7 +20,7 @@ def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() + "Z"
 
 
-def _days_between(now: datetime, then: Optional[datetime]) -> Optional[int]:
+def _days_between(now: datetime, then: datetime | None) -> int | None:
     if then is None:
         return None
     try:
@@ -147,7 +147,7 @@ def build_workspace_habit_hints(
     }
 
 
-def _activity_line(days_since_activity: Optional[int]) -> Optional[str]:
+def _activity_line(days_since_activity: int | None) -> str | None:
     if days_since_activity is None or days_since_activity < 1:
         return None
     if days_since_activity == 1:
@@ -155,7 +155,7 @@ def _activity_line(days_since_activity: Optional[int]) -> Optional[str]:
     return f"You last updated this workspace {days_since_activity} days ago."
 
 
-def _gentle_data_line(days_since_data: Optional[int]) -> Optional[str]:
+def _gentle_data_line(days_since_data: int | None) -> str | None:
     if days_since_data is None or days_since_data < 10:
         return None
     return (

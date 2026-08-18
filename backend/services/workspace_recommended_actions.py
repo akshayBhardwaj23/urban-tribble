@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 _PRI_RANK = {"high": 0, "medium": 1, "low": 2}
 
@@ -59,7 +59,7 @@ def _priority_from_alert(a: dict[str, Any]) -> str:
     return _priority_from_str(str(a.get("priority", "medium")))
 
 
-def _alert_to_action(alert: dict[str, Any]) -> Optional[str]:
+def _alert_to_action(alert: dict[str, Any]) -> str | None:
     title = str(alert.get("title", "")).strip()
     detail = str(alert.get("detail", "")).strip()
     cat = str(alert.get("category", ""))
@@ -145,7 +145,7 @@ def _what_changed_actions(wc: dict[str, Any]) -> list[tuple[str, str]]:
     return out
 
 
-def _from_top_priority(raw: dict[str, Any]) -> Optional[tuple[str, str]]:
+def _from_top_priority(raw: dict[str, Any]) -> tuple[str, str] | None:
     kind = str(raw.get("kind", "")).lower().replace(" ", "_")
     title = str(raw.get("title", "")).strip()
     expl = str(raw.get("explanation", "")).strip()
@@ -178,7 +178,7 @@ def _from_top_priority(raw: dict[str, Any]) -> Optional[tuple[str, str]]:
 
 
 def build_recommended_actions(
-    analysis: Optional[dict[str, Any]],
+    analysis: dict[str, Any] | None,
     alerts: list[dict[str, Any]],
     what_changed: dict[str, Any],
 ) -> list[dict[str, Any]]:

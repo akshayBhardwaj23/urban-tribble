@@ -6,9 +6,9 @@ import base64
 import hashlib
 import hmac
 import json
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
+from uuid import uuid4
 
 from config import settings
 
@@ -37,7 +37,7 @@ def build_signed_state(payload: dict) -> str:
     # Short-lived so a leaked state cannot be replayed forever.
     body.setdefault(
         "exp",
-        int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp()),
+        int((datetime.now(UTC) + timedelta(minutes=15)).timestamp()),
     )
     raw = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
     sig = hmac.new(
@@ -66,7 +66,7 @@ def parse_signed_state(state: str) -> dict:
     exp = data.get("exp")
     if exp is not None:
         try:
-            if int(exp) < int(datetime.now(timezone.utc).timestamp()):
+            if int(exp) < int(datetime.now(UTC).timestamp()):
                 raise ValueError("OAuth state has expired; start the connection again.")
         except (TypeError, ValueError) as e:
             if "expired" in str(e).lower():
@@ -96,7 +96,7 @@ def create_oauth_session(payload: dict) -> str:
     session_id = str(uuid4())
     _oauth_sessions[session_id] = {
         **payload,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     return session_id
 
@@ -106,7 +106,7 @@ def get_oauth_session(session_id: str) -> dict | None:
     if not session:
         return None
     created_at = datetime.fromisoformat(session["created_at"].replace("Z", "+00:00"))
-    if created_at < datetime.now(timezone.utc) - timedelta(hours=1):
+    if created_at < datetime.now(UTC) - timedelta(hours=1):
         _oauth_sessions.pop(session_id, None)
         return None
     return session

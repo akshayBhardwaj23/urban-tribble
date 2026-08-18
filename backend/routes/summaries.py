@@ -7,13 +7,13 @@ from sqlalchemy.orm import Session
 from database import get_db
 from deps import require_active_workspace
 from models.models import User
-from services.subscription_usage import assert_summary_allowed, get_effective_plan, plan_features
 from services.recurring_summary import (
     ensure_summary_for_period,
-    list_summary_history,
     latest_stored_summary,
+    list_summary_history,
     serialize_summary_row,
 )
+from services.subscription_usage import assert_summary_allowed, get_effective_plan, plan_features
 
 router = APIRouter(prefix="/api/summaries", tags=["summaries"])
 

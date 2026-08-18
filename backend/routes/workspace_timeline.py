@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -12,10 +11,10 @@ from models.models import User, WorkspaceTimelineSnapshot
 from services.subscription_usage import assert_timeline_allowed
 from services.workspace_timeline import (
     compare_snapshots,
+    compute_evolution,
     list_recent_digests,
     list_snapshots,
     serialize_snapshot,
-    compute_evolution,
 )
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
@@ -40,7 +39,7 @@ def _get_snapshot_row(
 @router.get("/timeline")
 def get_workspace_timeline(
     limit: int = Query(40, ge=1, le=100),
-    since: Optional[str] = Query(
+    since: str | None = Query(
         None,
         description="ISO 8601 datetime; return only events created after this instant.",
     ),

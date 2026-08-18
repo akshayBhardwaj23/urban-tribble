@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -8,7 +7,7 @@ class UploadResponse(BaseModel):
     id: str
     filename: str
     status: str
-    user_description: Optional[str]
+    user_description: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -18,8 +17,8 @@ class DatasetResponse(BaseModel):
     id: str
     upload_id: str
     name: str
-    column_schema: Optional[Dict] = Field(None, alias="schema_json")
-    data_summary: Optional[str]
+    column_schema: dict | None = Field(None, alias="schema_json")
+    data_summary: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True, "populate_by_name": True}
@@ -29,8 +28,8 @@ class AnalysisResponse(BaseModel):
     id: str
     dataset_id: str
     type: str
-    result_json: Optional[Dict]
-    ai_summary: Optional[str]
+    result_json: dict | None
+    ai_summary: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -39,7 +38,7 @@ class AnalysisResponse(BaseModel):
 class DashboardResponse(BaseModel):
     id: str
     name: str
-    layout_json: Optional[Dict]
+    layout_json: dict | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -52,7 +51,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
-    chart_data: Optional[Dict] = None
+    chart_data: dict | None = None
 
 
 class HealthResponse(BaseModel):

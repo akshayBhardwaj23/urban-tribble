@@ -4,24 +4,24 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from config import settings
 from models.models import (
-    DataSourceIntegration,
     Dataset,
+    DataSourceIntegration,
     IntegrationStatus,
     Upload,
 )
+from services.ingest_pipeline import ingest_dataframe
 from services.integration_connectors import (
     IntegrationFetchError,
     IntegrationNotConfiguredError,
     fetch_provider_data,
 )
 from services.integration_registry import get_provider
-from services.ingest_pipeline import ingest_dataframe
 from services.workspace_query import get_dataset_upload_in_workspace
 from services.workspace_timeline import record_append_snapshot, record_upload_snapshot
 
@@ -33,7 +33,7 @@ def _clamp_refresh_hours(hours: int) -> int:
     )
 
 
-def compute_next_sync_at(refresh_hours: int, from_time: Optional[datetime] = None) -> datetime:
+def compute_next_sync_at(refresh_hours: int, from_time: datetime | None = None) -> datetime:
     base = from_time or datetime.utcnow()
     return base + timedelta(hours=_clamp_refresh_hours(refresh_hours))
 
@@ -41,7 +41,7 @@ def compute_next_sync_at(refresh_hours: int, from_time: Optional[datetime] = Non
 def integration_to_dict(
     integration: DataSourceIntegration,
     *,
-    provider_name: Optional[str] = None,
+    provider_name: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": integration.id,
@@ -105,8 +105,8 @@ async def sync_integration(
     description = f"Synced from {provider_def['name']} ({trigger})"
     plan_locked = bool(integration.dashboard_plan_locked)
 
-    upload: Optional[Upload] = None
-    dataset: Optional[Dataset] = None
+    upload: Upload | None = None
+    dataset: Dataset | None = None
     if integration.dataset_id:
         row = get_dataset_upload_in_workspace(db, integration.dataset_id, integration.workspace_id)
         if row:
@@ -144,7 +144,7 @@ async def sync_integration(
     except Exception:
         pass
 
-    analysis_id: Optional[str] = None
+    analysis_id: str | None = None
     if integration.auto_analyze:
         from services.integration_analysis import run_post_sync_analysis
 

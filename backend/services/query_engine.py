@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -86,11 +86,11 @@ class QueryEngine:
         self,
         question: str,
         df: pd.DataFrame,
-        schema: Dict[str, Any],
-        user_description: Optional[str] = None,
-        history: Optional[List[Tuple[str, str]]] = None,
-        currency: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        schema: dict[str, Any],
+        user_description: str | None = None,
+        history: list[tuple[str, str]] | None = None,
+        currency: str | None = None,
+    ) -> dict[str, Any]:
         if not self.enabled:
             return self._fallback_answer(question, df, schema, currency)
 
@@ -121,10 +121,10 @@ class QueryEngine:
     def ask_multi(
         self,
         question: str,
-        dataframes: List[Tuple[str, pd.DataFrame, Dict[str, Any], Optional[str]]],
-        history: Optional[List[Tuple[str, str]]] = None,
-        currency: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        dataframes: list[tuple[str, pd.DataFrame, dict[str, Any], str | None]],
+        history: list[tuple[str, str]] | None = None,
+        currency: str | None = None,
+    ) -> dict[str, Any]:
         """Query across multiple named DataFrames.
 
         dataframes: list of (name, df, schema, description) tuples
@@ -139,8 +139,8 @@ class QueryEngine:
         if not self.enabled:
             return self._fallback_multi(question, dataframes, catalog, currency)
 
-        frames: Dict[str, pd.DataFrame] = {}
-        schemas: Dict[str, Dict] = {}
+        frames: dict[str, pd.DataFrame] = {}
+        schemas: dict[str, dict] = {}
         for name, df, sch, _desc in dataframes:
             key = _sanitize_name(name)
             frames[key] = df
@@ -173,11 +173,11 @@ class QueryEngine:
     def _plan_and_run(
         self,
         question: str,
-        frames: Dict[str, pd.DataFrame],
+        frames: dict[str, pd.DataFrame],
         schema_info: str,
         system_prompt: str,
-        history: List[Tuple[str, str]],
-    ) -> Dict[str, Any]:
+        history: list[tuple[str, str]],
+    ) -> dict[str, Any]:
         """Ask for a plan, validate it, and execute. One repair attempt on a bad plan."""
         messages = self._plan_messages(question, schema_info, system_prompt, history)
 
@@ -221,9 +221,9 @@ class QueryEngine:
         question: str,
         schema_info: str,
         system_prompt: str,
-        history: List[Tuple[str, str]],
-    ) -> List[Dict[str, str]]:
-        messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        history: list[tuple[str, str]],
+    ) -> list[dict[str, str]]:
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
         for uq, aa in history[-6:]:
             messages.append({"role": "user", "content": uq})
             messages.append({"role": "assistant", "content": aa[:2000]})
@@ -242,14 +242,14 @@ class QueryEngine:
 
     def _explain_history_pairs(
         self,
-        history: List[Tuple[str, str]],
+        history: list[tuple[str, str]],
         max_pairs: int = 8,
         max_assistant_chars: int = 6000,
-    ) -> List[Tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
         """Recent turns for the explain pass; trim long assistant answers."""
         if not history:
             return []
-        out: List[Tuple[str, str]] = []
+        out: list[tuple[str, str]] = []
         for uq, aa in history[-max_pairs:]:
             if len(aa) > max_assistant_chars:
                 aa = aa[: max_assistant_chars - 1] + "…"
@@ -260,12 +260,12 @@ class QueryEngine:
         self,
         question: str,
         result: Any,
-        history: Optional[List[Tuple[str, str]]] = None,
+        history: list[tuple[str, str]] | None = None,
         *,
         workspace_context: str = "",
-        currency: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        messages: List[Dict[str, str]] = [
+        currency: str | None = None,
+    ) -> dict[str, Any]:
+        messages: list[dict[str, str]] = [
             {"role": "system", "content": EXPLAIN_SYSTEM_PROMPT},
         ]
         for uq, aa in self._explain_history_pairs(history or []):
@@ -296,7 +296,7 @@ class QueryEngine:
             "chart_data": parsed.get("chart_data"),
         }
 
-    def _describe_result_plainly(self, result: Any, currency: Optional[str]) -> str:
+    def _describe_result_plainly(self, result: Any, currency: str | None) -> str:
         """Deterministic rendering used when the explain pass is unavailable."""
         if not isinstance(result, dict):
             return str(result)
@@ -316,12 +316,12 @@ class QueryEngine:
         self,
         question: str,
         df: pd.DataFrame,
-        schema: Dict,
-        currency: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        schema: dict,
+        currency: str | None = None,
+    ) -> dict[str, Any]:
         """Basic keyword-based answers when no OpenAI key is available."""
         q = question.lower()
-        answer_parts: List[str] = []
+        answer_parts: list[str] = []
 
         revenue_cols = schema.get("revenue_columns", [])
         category_cols = schema.get("category_columns", [])
@@ -369,18 +369,18 @@ class QueryEngine:
     def _fallback_multi(
         self,
         question: str,
-        dataframes: List[Tuple[str, pd.DataFrame, Dict[str, Any], Optional[str]]],
-        catalog: Optional[List[Dict[str, Any]]] = None,
-        currency: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        dataframes: list[tuple[str, pd.DataFrame, dict[str, Any], str | None]],
+        catalog: list[dict[str, Any]] | None = None,
+        currency: str | None = None,
+    ) -> dict[str, Any]:
         """Basic multi-dataset fallback when no OpenAI key is available."""
         shortcut = try_workspace_shortcut(question, dataframes)
         if shortcut:
             return shortcut
 
         q = question.lower()
-        answer_parts: List[str] = []
-        chart: Optional[Dict[str, Any]] = None
+        answer_parts: list[str] = []
+        chart: dict[str, Any] | None = None
         cat = catalog or build_source_catalog(dataframes)
 
         if any(w in q for w in ["how many", "count", "rows", "source", "file"]):

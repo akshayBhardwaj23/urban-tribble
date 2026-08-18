@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -102,7 +102,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     )
     if not sig:
         raise HTTPException(400, "Missing X-Razorpay-Signature")
-    event_id: Optional[str] = request.headers.get("X-Razorpay-Event-Id") or request.headers.get(
+    event_id: str | None = request.headers.get("X-Razorpay-Event-Id") or request.headers.get(
         "x-razorpay-event-id"
     )
     try:

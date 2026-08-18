@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,10 +10,10 @@ from sqlalchemy.orm import Session
 from database import get_db
 from deps import require_user
 from models.models import User, Workspace
-from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
-from services.account_deletion import delete_workspace_cascade
-from services.currency import SUPPORTED_CURRENCIES, currency_symbol, normalize_currency
 from services import overview_cache
+from services.account_deletion import delete_workspace_cascade
+from services.cleaned_parquet import CleanedDataMissingError, ensure_cleaned_parquet
+from services.currency import SUPPORTED_CURRENCIES, currency_symbol, normalize_currency
 from services.subscription_usage import assert_workspace_create_allowed
 from services.workspace_query import get_dataset_upload_in_workspace
 
@@ -28,14 +27,14 @@ class CreateWorkspaceRequest(BaseModel):
 class PatchOutlookForecastRequest(BaseModel):
     """Set all three for a fixed source, or omit / null all three for automatic selection."""
 
-    dataset_id: Optional[str] = None
-    date_column: Optional[str] = None
-    value_column: Optional[str] = None
+    dataset_id: str | None = None
+    date_column: str | None = None
+    value_column: str | None = None
 
 
 class PatchWorkspaceRequest(BaseModel):
-    name: Optional[str] = None
-    currency: Optional[str] = None
+    name: str | None = None
+    currency: str | None = None
 
 
 def _workspace_outlook_fields(w: Workspace) -> dict:
@@ -251,8 +250,8 @@ def patch_outlook_forecast(
 
     try:
         parquet_path = ensure_cleaned_parquet(upload)
-    except CleanedDataMissingError:
-        raise HTTPException(400, "Cleaned data file not found for this dataset.")
+    except CleanedDataMissingError as exc:
+        raise HTTPException(400, "Cleaned data file not found for this dataset.") from exc
 
     df = pd.read_parquet(str(parquet_path))
     if dc not in df.columns or vc not in df.columns:
