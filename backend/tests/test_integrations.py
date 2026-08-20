@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from config import settings
-from database import Base
+from database import Base, enable_sqlite_pragmas
 from models.models import (
     Dataset,
     DataSourceIntegration,
@@ -470,6 +470,7 @@ class OauthSessionStoreTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -701,6 +702,7 @@ class DueIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -1087,6 +1089,7 @@ class IngestDataframeSafetyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -1251,6 +1254,7 @@ class ClaimIntegrationForSyncTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -1433,6 +1437,7 @@ class WorkspaceIntegrationCapTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -1516,6 +1521,7 @@ class SyncIntegrationEndToEndTests(unittest.IsolatedAsyncioTestCase):
         # raises "SQLite objects created in a thread can only be used in that
         # same thread" the moment the executor thread uses it.
         cls.engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -1781,6 +1787,7 @@ class PostSyncAnalysisSkipReasonTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)  # FK cascade-delete needs this explicitly now
         Base.metadata.create_all(bind=cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
