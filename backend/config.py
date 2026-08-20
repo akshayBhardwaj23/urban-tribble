@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     INTEGRATION_MAX_REFRESH_HOURS: int = 168
     INTEGRATION_SCHEDULER_ENABLED: bool = False
     INTEGRATION_SCHEDULER_INTERVAL_SECONDS: int = 60
+    # A row stuck in `syncing` longer than this (crashed worker, killed process)
+    # is treated as abandoned and reclaimed by the next due-sync pass.
+    INTEGRATION_STALE_SYNC_MINUTES: int = 30
+    # Hard ceiling on connections per workspace, independent of plan tier --
+    # bounds worst-case scheduled fetch + LLM volume regardless of caps elsewhere.
+    INTEGRATION_MAX_PER_WORKSPACE: int = 10
     # Required in production for POST /api/integrations/run-scheduled
     INTEGRATION_CRON_SECRET: str = ""
     # Encryption at rest for DataSourceIntegration.config_json (third-party secrets).

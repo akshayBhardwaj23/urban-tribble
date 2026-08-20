@@ -165,7 +165,8 @@ async def microsoft_download_item_as_dataframe(config: dict[str, Any]) -> Any:
     content = resp.content
     content_type = resp.headers.get("content-type", "")
     name = str(config.get("item_name") or item_id)
-    if content[:15].lstrip().startswith(b"<!DOCTYPE") or content[:6].lstrip().startswith(b"<html"):
+    head = content.lstrip()
+    if head[:15].startswith(b"<!DOCTYPE") or head[:6].startswith(b"<html"):
         raise IntegrationFetchError("Microsoft returned a web page instead of workbook bytes.")
     if name.lower().endswith(".csv") or "csv" in content_type:
         return pd.read_csv(io.BytesIO(content))

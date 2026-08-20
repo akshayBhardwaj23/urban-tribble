@@ -499,7 +499,10 @@ PROVIDERS: list[ProviderDef] = [
                 "id": "api_key",
                 "label": "Access token + SOQL",
                 "fields": _SALESFORCE_FIELDS,
-                "available": True,
+                # Disabled until fetch_salesforce validates instance_url against
+                # the SSRF blocklist: it currently issues a server-side request
+                # to whatever host the user supplies.
+                "available": False,
                 "recommended": True,
             },
             {
@@ -521,7 +524,9 @@ PROVIDERS: list[ProviderDef] = [
                 "id": "service_account",
                 "label": "Service account + SQL",
                 "fields": _BIGQUERY_FIELDS,
-                "available": True,
+                # Warehouse tier is not part of the launch waves; keep it off
+                # until it gets the same review as the rest.
+                "available": False,
                 "recommended": True,
             },
         ],
@@ -554,7 +559,10 @@ PROVIDERS: list[ProviderDef] = [
                 "id": "api_key",
                 "label": "Connection + SQL",
                 "fields": _POSTGRES_FIELDS,
-                "available": True,
+                # Disabled until fetch_postgres validates the connection string
+                # host against the SSRF blocklist: create_engine() will happily
+                # dial an internal address.
+                "available": False,
                 "recommended": True,
             },
         ],

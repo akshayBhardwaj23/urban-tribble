@@ -1,10 +1,25 @@
-"""Run integration sync, preserve dashboard layout, and trigger analysis."""
+"""Run integration sync, preserve dashboard layout, and trigger analysis.
+
+Concurrency model: exactly one caller may hold a row in `syncing` at a time.
+`claim_integration_for_sync` is a single conditional UPDATE (a compare-and-swap
+on `status`), so it is safe under concurrent callers on both SQLite and
+Postgres without needing `SELECT ... FOR UPDATE SKIP LOCKED` -- two callers
+racing to claim the same row always leave exactly one of them with rowcount 1.
+A `syncing` row whose heartbeat (`syncing_started_at`) is older than
+`INTEGRATION_STALE_SYNC_MINUTES` is treated as abandoned (crashed worker, killed
+process) and is claimable again, so a crash cannot brick a connection forever.
+"""
 
 from __future__ import annotations
 
+import asyncio
+import functools
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+from fastapi import HTTPException
+from sqlalchemy import and_, func, or_, update
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -18,12 +33,17 @@ from services.ingest_pipeline import ingest_dataframe
 from services.integration_connectors import (
     IntegrationFetchError,
     IntegrationNotConfiguredError,
+    IntegrationSyncInProgressError,
     fetch_provider_data,
 )
 from services.integration_credentials import decrypt_config, encrypt_config
 from services.integration_registry import get_provider
-from services.workspace_query import get_dataset_upload_in_workspace
+from services.subscription_usage import assert_upload_allowed
+from services.upload_worker import get_executor
+from services.workspace_query import get_dataset_upload_in_workspace, workspace_owner
 from services.workspace_timeline import record_append_snapshot, record_upload_snapshot
+
+logger = logging.getLogger(__name__)
 
 
 def _clamp_refresh_hours(hours: int) -> int:
@@ -66,9 +86,68 @@ def integration_to_dict(
 
 def _load_config(integration: DataSourceIntegration) -> dict[str, Any]:
     """Decrypt stored credentials. Raises IntegrationCredentialsError when the
-    row is encrypted but unreadable, so the caller parks it in `error` with a
-    message instead of silently syncing with no credentials."""
+    row is encrypted but unreadable; called inside sync_integration's fetch
+    try/except so that failure is recorded like any other fetch failure."""
     return decrypt_config(integration.config_json)
+
+
+def count_workspace_integrations(db: Session, workspace_id: str) -> int:
+    return int(
+        db.query(func.count(DataSourceIntegration.id))
+        .filter(DataSourceIntegration.workspace_id == workspace_id)
+        .scalar()
+        or 0
+    )
+
+
+def _stale_cutoff(now: datetime | None = None) -> datetime:
+    now = now or datetime.utcnow()
+    return now - timedelta(minutes=max(1, int(settings.INTEGRATION_STALE_SYNC_MINUTES)))
+
+
+def claim_integration_for_sync(db: Session, integration_id: str) -> bool:
+    """Atomically transition a row to `syncing`, unless it is already syncing
+    and its heartbeat is still fresh. Returns True iff this call won the claim.
+
+    A single conditional UPDATE, not a read-then-write: the row's real status
+    at write time is what the database's own row lock decides, so two
+    concurrent callers can never both observe rowcount 1 for the same row.
+    """
+    now = datetime.utcnow()
+    result = db.execute(
+        update(DataSourceIntegration)
+        .where(
+            DataSourceIntegration.id == integration_id,
+            DataSourceIntegration.status != IntegrationStatus.disconnected,
+            or_(
+                DataSourceIntegration.status != IntegrationStatus.syncing,
+                DataSourceIntegration.syncing_started_at.is_(None),
+                DataSourceIntegration.syncing_started_at <= _stale_cutoff(now),
+            ),
+        )
+        .values(
+            status=IntegrationStatus.syncing,
+            syncing_started_at=now,
+            last_sync_error=None,
+        )
+    )
+    db.commit()
+    return result.rowcount == 1
+
+
+def _mark_sync_failed(db: Session, integration: DataSourceIntegration, message: str) -> None:
+    integration.status = IntegrationStatus.error
+    integration.last_sync_error = message[:2000]
+    integration.syncing_started_at = None
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+
+
+def _plan_limit_message(exc: HTTPException) -> str:
+    detail = exc.detail
+    if isinstance(detail, dict) and detail.get("message"):
+        return str(detail["message"])
+    return "Plan limit reached."
 
 
 async def sync_integration(
@@ -77,17 +156,39 @@ async def sync_integration(
     *,
     trigger: str = "manual",
 ) -> dict[str, Any]:
-    """Fetch remote data and update the linked dataset."""
+    """Fetch remote data and update the linked dataset.
+
+    Raises IntegrationSyncInProgressError without touching the row at all when
+    another caller already holds the claim. Every other failure path leaves
+    the row in `error` with a readable `last_sync_error` -- never stuck in
+    `syncing` -- so "Refresh now" and the scheduler can always recover it.
+    """
     provider_def = get_provider(integration.provider)
     if not provider_def:
         raise IntegrationFetchError(f"Unknown provider: {integration.provider}")
 
-    config = _load_config(integration)
-    integration.status = IntegrationStatus.syncing
-    integration.last_sync_error = None
-    db.commit()
+    if not claim_integration_for_sync(db, integration.id):
+        raise IntegrationSyncInProgressError(
+            "This connection is already syncing. Try again in a moment."
+        )
+    db.refresh(integration)
+
+    is_first_sync = integration.dataset_id is None
+    if is_first_sync:
+        # Only the first sync of a new connection creates a new Upload row;
+        # every later refresh reuses it. Check before spending a network call
+        # and an LLM pass on data that will just be discarded.
+        user = workspace_owner(db, integration.workspace_id)
+        if user is not None:
+            try:
+                assert_upload_allowed(db, user, integration.workspace_id)
+            except HTTPException as e:
+                message = _plan_limit_message(e)
+                _mark_sync_failed(db, integration, message)
+                raise IntegrationNotConfiguredError(message) from e
 
     try:
+        config = _load_config(integration)
         df = await fetch_provider_data(
             integration.provider,
             integration.connection_mode,
@@ -95,10 +196,9 @@ async def sync_integration(
         )
         # Providers that rotate tokens (Microsoft) mutate `config` during fetch.
         integration.config_json = encrypt_config(config)
-    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
-        integration.status = IntegrationStatus.error
-        integration.last_sync_error = str(e)
         db.commit()
+    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+        _mark_sync_failed(db, integration, str(e))
         raise
 
     description = f"Synced from {provider_def['name']} ({trigger})"
@@ -111,16 +211,30 @@ async def sync_integration(
         if row:
             dataset, upload = row[0], row[1]
 
-    upload, dataset, _ingestion = ingest_dataframe(
-        db,
-        df=df,
-        workspace_id=integration.workspace_id,
-        name=integration.name,
-        description=description,
-        upload=upload,
-        dataset=dataset,
-        dashboard_plan_locked=plan_locked,
-    )
+    try:
+        loop = asyncio.get_running_loop()
+        upload, dataset, _ingestion = await loop.run_in_executor(
+            get_executor(),
+            functools.partial(
+                ingest_dataframe,
+                db,
+                df=df,
+                workspace_id=integration.workspace_id,
+                name=integration.name,
+                description=description,
+                upload=upload,
+                dataset=dataset,
+                dashboard_plan_locked=plan_locked,
+            ),
+        )
+    except Exception as e:
+        # Cleaning, column detection, dashboard planning, and the frame-size
+        # cap all run inside this call. None of it is wrapped upstream, so
+        # without this the row would be left in `syncing` on any failure here.
+        _mark_sync_failed(
+            db, integration, f"Sync fetched data but failed while processing it: {e}"
+        )
+        raise
 
     integration.dataset_id = dataset.id
     dataset.integration_id = integration.id
@@ -130,6 +244,7 @@ async def sync_integration(
     integration.status = IntegrationStatus.active
     integration.last_sync_at = now
     integration.next_sync_at = compute_next_sync_at(integration.refresh_interval_hours, now)
+    integration.syncing_started_at = None
     integration.updated_at = now
     db.commit()
     db.refresh(integration)
@@ -141,13 +256,23 @@ async def sync_integration(
         elif trigger == "scheduled" and upload:
             record_upload_snapshot(db, integration.workspace_id, upload, dataset)
     except Exception:
-        pass
+        logger.exception("Timeline snapshot failed for integration %s", integration.id)
 
     analysis_id: str | None = None
+    analysis_skipped_reason: str | None = None
     if integration.auto_analyze:
         from services.integration_analysis import run_post_sync_analysis
 
-        analysis_id = run_post_sync_analysis(db, integration.workspace_id, dataset)
+        try:
+            analysis_id, analysis_skipped_reason = await loop.run_in_executor(
+                get_executor(),
+                functools.partial(
+                    run_post_sync_analysis, db, integration.workspace_id, dataset
+                ),
+            )
+        except Exception:
+            logger.exception("Post-sync analysis failed for integration %s", integration.id)
+            analysis_skipped_reason = "Briefing failed to generate; the sync itself succeeded."
 
     return {
         "integration": integration_to_dict(integration, provider_name=provider_def["name"]),
@@ -155,20 +280,36 @@ async def sync_integration(
         "row_count": upload.row_count,
         "column_count": upload.column_count,
         "analysis_id": analysis_id,
+        "analysis_skipped_reason": analysis_skipped_reason,
         "dashboard_plan_locked": plan_locked,
     }
 
 
 def find_due_integrations(db: Session, limit: int = 20) -> list[DataSourceIntegration]:
+    """Rows ready for a sync attempt: normally-due rows, plus any `syncing`
+    row whose heartbeat has gone stale (crashed mid-sync). Listing a stale
+    `syncing` row here does not claim it -- `sync_integration` still has to
+    win `claim_integration_for_sync` before touching it, so this is safe to
+    call from multiple schedulers without coordination.
+    """
     now = datetime.utcnow()
     return (
         db.query(DataSourceIntegration)
         .filter(
-            DataSourceIntegration.status.in_(
-                [IntegrationStatus.active, IntegrationStatus.pending, IntegrationStatus.error]
-            ),
             DataSourceIntegration.next_sync_at.isnot(None),
             DataSourceIntegration.next_sync_at <= now,
+            or_(
+                DataSourceIntegration.status.in_(
+                    [IntegrationStatus.active, IntegrationStatus.pending, IntegrationStatus.error]
+                ),
+                and_(
+                    DataSourceIntegration.status == IntegrationStatus.syncing,
+                    or_(
+                        DataSourceIntegration.syncing_started_at.is_(None),
+                        DataSourceIntegration.syncing_started_at <= _stale_cutoff(now),
+                    ),
+                ),
+            ),
         )
         .order_by(DataSourceIntegration.next_sync_at.asc())
         .limit(limit)

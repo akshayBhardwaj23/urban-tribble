@@ -26,6 +26,14 @@ class IntegrationNotConfiguredError(IntegrationFetchError):
     pass
 
 
+class IntegrationSyncInProgressError(IntegrationFetchError):
+    """Another caller already holds the sync claim on this row.
+
+    Raised instead of letting two syncs run concurrently and interleave
+    writes to the same dataset -- see integration_sync.claim_integration_for_sync.
+    """
+
+
 def _resolve_google_sheets_url(config: dict[str, Any]) -> str:
     if config.get("export_url"):
         return str(config["export_url"]).strip()
@@ -76,7 +84,10 @@ def _is_onedrive_share_url(url: str) -> bool:
 
 
 def _dataframe_from_bytes(content: bytes, url: str, content_type: str) -> pd.DataFrame:
-    if content[:15].lstrip().startswith(b"<!DOCTYPE") or content[:6].lstrip().startswith(b"<html"):
+    # Strip before slicing: a leading newline before an error page must not
+    # shift the probe window past the marker it is looking for.
+    head = content.lstrip()
+    if head[:15].startswith(b"<!DOCTYPE") or head[:6].startswith(b"<html"):
         raise IntegrationFetchError(
             "The URL returned a web page, not an Excel file. "
             "Use a OneDrive Share link (Copy link), not the Excel Online editor URL."
