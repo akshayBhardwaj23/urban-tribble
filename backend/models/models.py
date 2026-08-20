@@ -159,6 +159,41 @@ class DataSourceIntegration(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class IntegrationOauthSession(Base):
+    """Short-lived handoff state between a provider's OAuth callback and the
+    user confirming which file to connect.
+
+    This lived in a module-level dict until it became clear that the callback
+    and the follow-up confirmation are separate HTTP requests, which land on
+    whichever worker the load balancer picks. With more than one worker the
+    second request would hit a process that had never seen the session, so a
+    connection attempt failed roughly at random.
+
+    ``payload_json`` holds the provider's freshly-issued access and refresh
+    tokens, so it is written through the same envelope encryption as
+    ``DataSourceIntegration.config_json`` -- see services/integration_credentials.
+
+    Rows are ephemeral (``expires_at``, ~1h) and pruned opportunistically, so
+    the table stays proportional to in-flight connection attempts rather than
+    to history.
+    """
+
+    __tablename__ = "integration_oauth_sessions"
+    __table_args__ = (
+        Index("ix_integration_oauth_sessions_expires_at", "expires_at"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    workspace_id = Column(
+        String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_email = Column(String, nullable=False)
+    provider = Column(String, nullable=False)
+    payload_json = Column(Text, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class Dataset(Base):
     __tablename__ = "datasets"
 

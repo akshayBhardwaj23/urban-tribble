@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import html
+import logging
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
@@ -9,6 +10,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -45,6 +47,8 @@ from services.integration_sync import (
     integration_to_dict,
     sync_integration,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
@@ -157,6 +161,7 @@ async def microsoft_oauth_callback(
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
+    db: Session = Depends(get_db),
 ):
     if error:
         safe = html.escape(str(error)[:300])
@@ -190,19 +195,33 @@ async def microsoft_oauth_callback(
             status_code=400,
         )
 
-    session_id = create_oauth_session(
-        {
-            "provider": payload.get("provider", "excel_onedrive"),
-            "workspace_id": payload["workspace_id"],
-            "user_email": payload["user_email"],
-            "name": payload["name"],
-            "refresh_interval_hours": payload["refresh_interval_hours"],
-            "auto_analyze": payload["auto_analyze"],
-            "dashboard_plan_locked": payload["dashboard_plan_locked"],
-            "config": config,
-            "files": files,
-        }
-    )
+    try:
+        session_id = create_oauth_session(
+            db,
+            {
+                "provider": payload.get("provider", "excel_onedrive"),
+                "workspace_id": payload["workspace_id"],
+                "user_email": payload["user_email"],
+                "name": payload["name"],
+                "refresh_interval_hours": payload["refresh_interval_hours"],
+                "auto_analyze": payload["auto_analyze"],
+                "dashboard_plan_locked": payload["dashboard_plan_locked"],
+                "config": config,
+                "files": files,
+            },
+        )
+    except SQLAlchemyError:
+        # Most likely the workspace was removed while the consent screen was
+        # open, so the session has nowhere to belong. This lands in a browser
+        # redirect, so it has to render, not raise.
+        db.rollback()
+        logger.exception("Could not persist Microsoft OAuth session")
+        return HTMLResponse(
+            "<html><body><h2>Could not finish connecting</h2>"
+            "<p>That workspace is no longer available. "
+            "Start the connection again from Integrations.</p></body></html>",
+            status_code=400,
+        )
     redirect_to = f"{settings.FRONTEND_APP_URL.rstrip('/')}/integrations?oauth_session={quote(session_id)}"
     return RedirectResponse(url=redirect_to, status_code=303)
 
@@ -210,10 +229,11 @@ async def microsoft_oauth_callback(
 @router.get("/oauth/session/{session_id}")
 def get_integration_oauth_session(
     session_id: str,
+    db: Session = Depends(get_db),
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     user, workspace_id = ws
-    session = get_oauth_session(session_id)
+    session = get_oauth_session(db, session_id)
     if not session:
         raise HTTPException(404, "OAuth session not found or expired")
     if session.get("workspace_id") != workspace_id or session.get("user_email") != user.email:
@@ -237,7 +257,7 @@ async def complete_microsoft_oauth(
 ):
     _require_integrations_enabled()
     user, workspace_id = ws
-    session = pop_oauth_session(body.session_id)
+    session = pop_oauth_session(db, body.session_id)
     if not session:
         raise HTTPException(404, "OAuth session not found or expired")
     if session.get("workspace_id") != workspace_id or session.get("user_email") != user.email:

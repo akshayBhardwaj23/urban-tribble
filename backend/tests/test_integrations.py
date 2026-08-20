@@ -28,6 +28,7 @@ from database import Base
 from models.models import (
     Dataset,
     DataSourceIntegration,
+    IntegrationOauthSession,
     IntegrationStatus,
     Upload,
     User,
@@ -109,6 +110,52 @@ class ProviderRegistryTests(unittest.TestCase):
     def test_catalog_exposes_every_provider(self):
         catalog = list_catalog()
         self.assertEqual({c["id"] for c in catalog}, {p["id"] for p in PROVIDERS})
+
+    def test_ssrf_exposed_providers_are_not_connectable(self):
+        """fetch_postgres builds an engine from a user-supplied connection
+        string and fetch_salesforce GETs a user-supplied instance_url, neither
+        of which passes through the SSRF blocklist that guards the export-URL
+        path. Until they do, they must not be connectable. Snowflake and
+        BigQuery are off for the separate reason that the warehouse tier is
+        not in any launch wave."""
+        for provider_id in ("postgres", "salesforce", "snowflake", "bigquery"):
+            with self.subTest(provider=provider_id):
+                provider = get_provider(provider_id)
+                connectable = [
+                    m["id"] for m in provider["connection_modes"] if m.get("available", True)
+                ]
+                self.assertEqual(
+                    connectable, [], f"{provider_id} still has a connectable mode"
+                )
+
+    def test_disabled_modes_are_rejected_by_the_create_path(self):
+        """Registry availability has to be enforced server-side, not just
+        reflected in the UI -- a hand-rolled POST must be refused too."""
+        from routes.integrations import _validate_connection_mode
+
+        for provider_id, mode in (
+            ("postgres", "api_key"),
+            ("salesforce", "api_key"),
+            ("bigquery", "service_account"),
+        ):
+            with self.subTest(provider=provider_id), self.assertRaises(Exception) as ctx:
+                _validate_connection_mode(provider_id, mode)
+            self.assertEqual(getattr(ctx.exception, "status_code", None), 400)
+
+    def test_wave_one_providers_remain_connectable(self):
+        """Guards against over-disabling: the launch pair must stay reachable."""
+        onedrive = [
+            m["id"]
+            for m in get_provider("excel_onedrive")["connection_modes"]
+            if m.get("available", True)
+        ]
+        self.assertIn("oauth", onedrive)
+        sheets = [
+            m["id"]
+            for m in get_provider("google_sheets")["connection_modes"]
+            if m.get("available", True)
+        ]
+        self.assertTrue(sheets, "Google Sheets has no connectable mode left")
 
 
 class GoogleSheetsUrlTests(unittest.TestCase):
@@ -414,27 +461,186 @@ class OauthStateTests(unittest.TestCase):
 
 
 class OauthSessionStoreTests(unittest.TestCase):
+    """The OAuth handoff store. This was a module-level dict, which meant the
+    provider callback and the user's follow-up confirmation had to be served
+    by the same worker process or the connect failed. These now go through the
+    database, so the assertions deliberately use a *second, independent
+    session* wherever the point is that a different worker can read it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_engine("sqlite://")
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
     def setUp(self):
-        oauth._oauth_sessions.clear()
-        self.addCleanup(oauth._oauth_sessions.clear)
+        # A live but invalid INTEGRATION_CREDENTIALS_KEY in the developer's
+        # .env would otherwise decide whether these pass; pin the no-key
+        # passthrough so this class tests the store, not the cipher.
+        patcher = mock.patch.object(settings, "INTEGRATION_CREDENTIALS_KEY", "")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        creds._cipher_cache = None
+        self.addCleanup(setattr, creds, "_cipher_cache", None)
+
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+        self.addCleanup(self._wipe)
+        self.db.add_all(
+            [User(id="u1", email="o@x.com"), Workspace(id="ws1", name="W", owner_id="u1")]
+        )
+        self.db.commit()
+
+    def _wipe(self):
+        db = self.Session()
+        try:
+            db.query(IntegrationOauthSession).delete()
+            db.query(Workspace).delete()
+            db.query(User).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    def _payload(self, **kw):
+        base = {
+            "workspace_id": "ws1",
+            "user_email": "o@x.com",
+            "provider": "excel_onedrive",
+            "config": {"access_token": "ms_access", "refresh_token": "ms_refresh"},
+            "files": [{"id": "f1", "name": "Book1.xlsx"}],
+        }
+        base.update(kw)
+        return base
 
     def test_create_then_get(self):
-        sid = oauth.create_oauth_session({"workspace_id": "ws1"})
-        self.assertEqual(oauth.get_oauth_session(sid)["workspace_id"], "ws1")
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        self.assertEqual(oauth.get_oauth_session(self.db, sid)["workspace_id"], "ws1")
+
+    def test_a_different_worker_can_read_the_session(self):
+        """The whole point of this phase: the callback and the confirmation are
+        separate requests and may not share a process."""
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        other_worker = self.Session()
+        try:
+            loaded = oauth.get_oauth_session(other_worker, sid)
+        finally:
+            other_worker.close()
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded["config"]["refresh_token"], "ms_refresh")
+
+    def test_payload_round_trips_completely(self):
+        sid = oauth.create_oauth_session(self.db, self._payload(name="My workbook"))
+        loaded = oauth.get_oauth_session(self.db, sid)
+        self.assertEqual(loaded["name"], "My workbook")
+        self.assertEqual(loaded["files"], [{"id": "f1", "name": "Book1.xlsx"}])
+
+    def test_provider_tokens_are_encrypted_at_rest(self):
+        """The payload carries freshly-issued access/refresh tokens. Moving this
+        from memory into a table must not put them in the database as
+        cleartext -- that would undo the credential encryption work."""
+        with mock.patch.object(
+            settings, "INTEGRATION_CREDENTIALS_KEY", creds.generate_key()
+        ):
+            creds._cipher_cache = None
+            sid = oauth.create_oauth_session(self.db, self._payload())
+            row = (
+                self.db.query(IntegrationOauthSession)
+                .filter(IntegrationOauthSession.id == sid)
+                .first()
+            )
+            self.assertNotIn("ms_refresh", row.payload_json)
+            self.assertNotIn("ms_access", row.payload_json)
+            self.assertTrue(row.payload_json.startswith(creds.ENVELOPE_PREFIX))
+            # ...and still reads back correctly through the store.
+            self.assertEqual(
+                oauth.get_oauth_session(self.db, sid)["config"]["refresh_token"],
+                "ms_refresh",
+            )
+        creds._cipher_cache = None
 
     def test_pop_is_single_use(self):
-        sid = oauth.create_oauth_session({"workspace_id": "ws1"})
-        self.assertIsNotNone(oauth.pop_oauth_session(sid))
-        self.assertIsNone(oauth.pop_oauth_session(sid))
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        self.assertIsNotNone(oauth.pop_oauth_session(self.db, sid))
+        self.assertIsNone(oauth.pop_oauth_session(self.db, sid))
+
+    def test_pop_from_two_workers_yields_exactly_one_winner(self):
+        """A double-submit must not be able to create the integration twice."""
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        a, b = self.Session(), self.Session()
+        try:
+            results = [oauth.pop_oauth_session(a, sid), oauth.pop_oauth_session(b, sid)]
+        finally:
+            a.close()
+            b.close()
+        self.assertEqual(sum(1 for r in results if r is not None), 1)
+
+    def test_pop_removes_the_row(self):
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        oauth.pop_oauth_session(self.db, sid)
+        self.assertEqual(self.db.query(IntegrationOauthSession).count(), 0)
 
     def test_unknown_session_is_none(self):
-        self.assertIsNone(oauth.get_oauth_session("nope"))
+        self.assertIsNone(oauth.get_oauth_session(self.db, "nope"))
+        self.assertIsNone(oauth.pop_oauth_session(self.db, "nope"))
 
-    def test_sessions_expire_after_an_hour(self):
-        sid = oauth.create_oauth_session({"workspace_id": "ws1"})
-        stale = datetime.now(UTC) - timedelta(hours=2)
-        oauth._oauth_sessions[sid]["created_at"] = stale.isoformat()
-        self.assertIsNone(oauth.get_oauth_session(sid))
+    def test_expired_sessions_are_not_returned(self):
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        row = (
+            self.db.query(IntegrationOauthSession)
+            .filter(IntegrationOauthSession.id == sid)
+            .first()
+        )
+        row.expires_at = datetime.utcnow() - timedelta(minutes=1)
+        self.db.commit()
+        self.assertIsNone(oauth.get_oauth_session(self.db, sid))
+
+    def test_expired_sessions_are_not_popped_either(self):
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        row = (
+            self.db.query(IntegrationOauthSession)
+            .filter(IntegrationOauthSession.id == sid)
+            .first()
+        )
+        row.expires_at = datetime.utcnow() - timedelta(minutes=1)
+        self.db.commit()
+        self.assertIsNone(oauth.pop_oauth_session(self.db, sid))
+        self.assertEqual(self.db.query(IntegrationOauthSession).count(), 0)
+
+    def test_unreadable_payload_is_discarded_rather_than_raising(self):
+        """A rotated credentials key makes an in-flight session unreadable. It
+        is throwaway state, so the user should be asked to reconnect, not shown
+        a 500."""
+        sid = oauth.create_oauth_session(self.db, self._payload())
+        row = (
+            self.db.query(IntegrationOauthSession)
+            .filter(IntegrationOauthSession.id == sid)
+            .first()
+        )
+        row.payload_json = creds.ENVELOPE_PREFIX + "not-a-valid-token"
+        self.db.commit()
+        self.assertIsNone(oauth.get_oauth_session(self.db, sid))
+        self.assertEqual(self.db.query(IntegrationOauthSession).count(), 0)
+
+    def test_creating_a_session_prunes_expired_ones(self):
+        old_sid = oauth.create_oauth_session(self.db, self._payload())
+        row = (
+            self.db.query(IntegrationOauthSession)
+            .filter(IntegrationOauthSession.id == old_sid)
+            .first()
+        )
+        row.expires_at = datetime.utcnow() - timedelta(minutes=1)
+        self.db.commit()
+
+        oauth.create_oauth_session(self.db, self._payload())
+        remaining = [r.id for r in self.db.query(IntegrationOauthSession).all()]
+        self.assertNotIn(old_sid, remaining)
+        self.assertEqual(len(remaining), 1)
+
+    def test_deleting_a_workspace_removes_its_pending_sessions(self):
+        oauth.create_oauth_session(self.db, self._payload())
+        self.db.query(Workspace).filter(Workspace.id == "ws1").delete()
+        self.db.commit()
+        self.assertEqual(self.db.query(IntegrationOauthSession).count(), 0)
 
 
 class RefreshScheduleTests(unittest.TestCase):
