@@ -1353,11 +1353,15 @@ class ClaimConcurrencyTests(unittest.TestCase):
     checking a property (exactly-one-winner under genuine interleaving) that
     a single-process fake cannot demonstrate.
 
-    Verified manually against a local Postgres 16 while writing this phase:
-    20 threads racing a pending row, and 20 threads racing a stale-heartbeat
-    reclaim, each produced exactly one winner. Kept skipped by default so the
-    regular suite has no external dependency; point
-    INTEGRATION_TEST_POSTGRES_URL at a throwaway database to re-run it.
+    **CI runs this** against the throwaway Postgres service already defined in
+    .github/workflows/ci.yml, on the schema the migration step just built. It
+    is skipped locally only so the everyday suite needs no database server;
+    point INTEGRATION_TEST_POSTGRES_URL at a throwaway database to run it by
+    hand.
+
+    DESTRUCTIVE: truncates users, workspaces and integrations before seeding
+    its race row. Never point INTEGRATION_TEST_POSTGRES_URL at a database with
+    real data in it.
     """
 
     @classmethod

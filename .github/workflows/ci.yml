@@ -41,6 +41,19 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/postgres
 
+      # Runs against the schema the migration step just built, so it also
+      # confirms the migrated tables are usable by the ORM. Needs real
+      # Postgres: SQLite serializes writers at the connection level, so a
+      # broken compare-and-swap would still look like it had one winner.
+      # Destructive (truncates users/workspaces/integrations) -- throwaway
+      # databases only, never a live one.
+      - name: Sync-claim concurrency proof (real Postgres)
+        run: pytest tests/test_integrations.py -k ClaimConcurrency -q
+        env:
+          APP_ENV: test
+          DATABASE_URL: sqlite:///./data/ci.db
+          INTEGRATION_TEST_POSTGRES_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/postgres
+
     services:
       postgres:
         image: postgres:16-alpine
