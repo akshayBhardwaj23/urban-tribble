@@ -35,6 +35,7 @@ from services.integration_connectors import (
     IntegrationNotConfiguredError,
     IntegrationSyncInProgressError,
     fetch_provider_data,
+    remote_change_stamp,
 )
 from services.integration_credentials import decrypt_config, encrypt_config
 from services.integration_registry import get_provider
@@ -56,6 +57,30 @@ def _clamp_refresh_hours(hours: int) -> int:
 def compute_next_sync_at(refresh_hours: int, from_time: datetime | None = None) -> datetime:
     base = from_time or datetime.utcnow()
     return base + timedelta(hours=_clamp_refresh_hours(refresh_hours))
+
+
+def auto_sync_enabled() -> bool:
+    return bool(settings.INTEGRATION_AUTO_SYNC_ENABLED)
+
+
+def next_sync_at_for(
+    refresh_hours: int, from_time: datetime | None = None
+) -> datetime | None:
+    """When the next unattended refresh is due, or None if there will not be one.
+
+    Writing None rather than a timestamp is what makes "manual only" safe: a
+    row with no due date cannot be picked up even if a scheduler or cron is
+    later switched on by mistake, so the stored data agrees with the setting
+    instead of quietly waiting to fire.
+    """
+    if not auto_sync_enabled():
+        return None
+    return compute_next_sync_at(refresh_hours, from_time)
+
+
+def initial_next_sync_at() -> datetime | None:
+    """Due-date for a source that has just been created."""
+    return datetime.utcnow() if auto_sync_enabled() else None
 
 
 def integration_to_dict(
@@ -143,6 +168,39 @@ def _mark_sync_failed(db: Session, integration: DataSourceIntegration, message: 
     db.commit()
 
 
+def _finish_unchanged_sync(
+    db: Session,
+    integration: DataSourceIntegration,
+    provider_def: dict[str, Any],
+) -> dict[str, Any]:
+    """Close out a sync that had nothing to do.
+
+    The source is healthy and on schedule, so it is released exactly as a real
+    sync would release it -- active, heartbeat cleared, next run booked. The
+    dataset is deliberately untouched: re-writing identical rows would churn
+    the cache and move `last_sync_at` in a way that reads as new data arriving.
+    """
+    now = datetime.utcnow()
+    integration.status = IntegrationStatus.active
+    integration.next_sync_at = next_sync_at_for(integration.refresh_interval_hours, now)
+    integration.syncing_started_at = None
+    integration.last_sync_error = None
+    integration.updated_at = now
+    db.commit()
+    db.refresh(integration)
+    return {
+        "integration": integration_to_dict(integration, provider_name=provider_def["name"]),
+        "dataset_id": integration.dataset_id,
+        "row_count": None,
+        "column_count": None,
+        "analysis_id": None,
+        "analysis_skipped_reason": None,
+        "dashboard_plan_locked": bool(integration.dashboard_plan_locked),
+        "skipped": True,
+        "skipped_reason": "The source has not changed since the last sync.",
+    }
+
+
 def _plan_limit_message(exc: HTTPException) -> str:
     detail = exc.detail
     if isinstance(detail, dict) and detail.get("message"):
@@ -189,11 +247,27 @@ async def sync_integration(
 
     try:
         config = _load_config(integration)
+
+        # A scheduled refresh of a source nobody has edited would otherwise
+        # re-download, re-clean and re-cache the whole thing on every tick.
+        # One cheap metadata call avoids all of it. Only for scheduled runs:
+        # someone who clicks "Refresh now" gets a real fetch, because being
+        # told "nothing happened" is a worse answer than doing the work.
+        stamp = None
+        if trigger == "scheduled":
+            stamp = await remote_change_stamp(
+                integration.provider, integration.connection_mode, config
+            )
+            if stamp and config.get("last_change_stamp") == stamp:
+                return _finish_unchanged_sync(db, integration, provider_def)
+
         df = await fetch_provider_data(
             integration.provider,
             integration.connection_mode,
             config,
         )
+        if stamp:
+            config["last_change_stamp"] = stamp
         # Providers that rotate tokens (Microsoft) mutate `config` during fetch.
         integration.config_json = encrypt_config(config)
         db.commit()
@@ -243,7 +317,7 @@ async def sync_integration(
     now = datetime.utcnow()
     integration.status = IntegrationStatus.active
     integration.last_sync_at = now
-    integration.next_sync_at = compute_next_sync_at(integration.refresh_interval_hours, now)
+    integration.next_sync_at = next_sync_at_for(integration.refresh_interval_hours, now)
     integration.syncing_started_at = None
     integration.updated_at = now
     db.commit()
@@ -282,6 +356,8 @@ async def sync_integration(
         "analysis_id": analysis_id,
         "analysis_skipped_reason": analysis_skipped_reason,
         "dashboard_plan_locked": plan_locked,
+        "skipped": False,
+        "skipped_reason": None,
     }
 
 
@@ -292,6 +368,12 @@ def find_due_integrations(db: Session, limit: int = 20) -> list[DataSourceIntegr
     win `claim_integration_for_sync` before touching it, so this is safe to
     call from multiple schedulers without coordination.
     """
+    if not auto_sync_enabled():
+        # Nothing is ever due while unattended syncing is off. Checked here as
+        # well as at write time so rows created before the switch existed, or
+        # while it was on, cannot suddenly come due.
+        return []
+
     now = datetime.utcnow()
     return (
         db.query(DataSourceIntegration)

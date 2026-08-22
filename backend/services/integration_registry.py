@@ -295,16 +295,23 @@ PROVIDERS: list[ProviderDef] = [
                 "id": "oauth",
                 "label": "Google account",
                 "fields": [],
-                "available": False,
+                "available": True,
                 "recommended": True,
-                "help": "One-click sign-in with Google (coming soon).",
+                "help": (
+                    "Sign in with Google and pick your spreadsheets. Nothing has "
+                    "to be made public, and you can select several at once."
+                ),
             },
             {
                 "id": "export_url",
                 "label": "Published CSV link",
                 "fields": _SHEETS_FIELDS,
                 "available": True,
-                "help": "Works today if the sheet is published to web as CSV.",
+                "help": (
+                    "Fallback. Requires publishing the sheet to the web, which "
+                    "makes it readable by anyone with the link -- prefer signing "
+                    "in with Google above."
+                ),
             },
         ],
     },
