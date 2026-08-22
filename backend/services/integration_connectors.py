@@ -171,6 +171,14 @@ async def fetch_excel_onedrive_oauth(config: dict[str, Any]) -> pd.DataFrame:
         raise IntegrationFetchError(str(e)) from e
 
 
+async def fetch_google_sheets_oauth(config: dict[str, Any]) -> pd.DataFrame:
+    # Imported here rather than at module scope: integration_google imports the
+    # error types defined in this module.
+    from services.integration_google import google_download_item_as_dataframe
+
+    return await google_download_item_as_dataframe(config)
+
+
 def _host_is_blocked(hostname: str) -> bool:
     """Block localhost, private, link-local and metadata endpoints (SSRF)."""
     import ipaddress
@@ -653,6 +661,9 @@ async def fetch_provider_data(
 ) -> pd.DataFrame:
     if provider == "excel_onedrive" and connection_mode == "oauth":
         return await fetch_excel_onedrive_oauth(config)
+
+    if provider == "google_sheets" and connection_mode == "oauth":
+        return await fetch_google_sheets_oauth(config)
 
     if connection_mode == "oauth":
         raise IntegrationNotConfiguredError(

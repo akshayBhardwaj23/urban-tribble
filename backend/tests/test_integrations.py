@@ -13,10 +13,12 @@ fix shows up as a deliberate test edit rather than a silent behaviour change.
 
 from __future__ import annotations
 
+import io
 import json
 import unittest
 from datetime import UTC, datetime, timedelta
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 from fastapi import HTTPException
@@ -36,6 +38,7 @@ from models.models import (
 )
 from services import integration_connectors as conn
 from services import integration_credentials as creds
+from services import integration_google as gsvc
 from services import integration_oauth as oauth
 from services.file_validation import FileValidationError
 from services.ingest_pipeline import ingest_dataframe, process_dataframe
@@ -44,6 +47,7 @@ from services.integration_connectors import (
     IntegrationNotConfiguredError,
     IntegrationSyncInProgressError,
 )
+from services.integration_credentials import decrypt_config
 from services.integration_registry import PROVIDERS, get_provider, list_catalog
 from services.integration_sync import (
     claim_integration_for_sync,
@@ -346,6 +350,7 @@ class ConnectorDispatchTests(unittest.IsolatedAsyncioTestCase):
             "fetch_postgres",
             "fetch_excel_onedrive",
             "fetch_excel_onedrive_oauth",
+            "fetch_google_sheets_oauth",
             "fetch_ga4",
             "fetch_meta_ads",
             "fetch_hubspot",
@@ -382,6 +387,7 @@ class ConnectorDispatchTests(unittest.IsolatedAsyncioTestCase):
     async def test_known_providers_route_to_their_own_fetcher(self):
         cases = {
             ("google_sheets", "export_url"): "fetch_google_sheets",
+            ("google_sheets", "oauth"): "fetch_google_sheets_oauth",
             ("excel_onedrive", "oauth"): "fetch_excel_onedrive_oauth",
             ("excel_onedrive", "export_url"): "fetch_excel_onedrive",
             ("stripe", "api_key"): "fetch_stripe",
@@ -399,9 +405,11 @@ class ConnectorDispatchTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(provider=provider, mode=mode):
                 self.assertEqual(await self._dispatch_target(provider, mode), expected)
 
-    async def test_oauth_is_only_wired_for_onedrive(self):
-        """Microsoft is the only finished OAuth round trip; the rest must fail loudly."""
-        for provider in ("google_sheets", "google_drive", "quickbooks", "slack", "hubspot"):
+    async def test_oauth_is_wired_only_for_the_providers_that_finished_it(self):
+        """Microsoft and Google are the two finished OAuth round trips. Every
+        other provider advertising an `oauth` mode must fail loudly rather than
+        silently falling through to some other fetcher."""
+        for provider in ("google_drive", "quickbooks", "slack", "hubspot", "teams", "power_bi"):
             with self.subTest(provider=provider), self.assertRaises(IntegrationNotConfiguredError):
                 await conn.fetch_provider_data(provider, "oauth", {})
 
@@ -1858,6 +1866,556 @@ class PostSyncAnalysisSkipReasonTests(unittest.TestCase):
             analysis_id, reason = run_post_sync_analysis(self.db, "ws1", dataset)
         self.assertIsNotNone(analysis_id)
         self.assertIsNone(reason)
+
+
+class GoogleOauthUrlTests(unittest.TestCase):
+    """The authorize URL is where Google decides whether this connection can
+    ever refresh itself. Getting the parameters wrong produces a source that
+    works for an hour and then dies."""
+
+    def setUp(self):
+        for key, value in (
+            ("GOOGLE_CLIENT_ID", "test-client-id"),
+            ("GOOGLE_CLIENT_SECRET", "test-secret"),
+            ("GOOGLE_REDIRECT_URI", "https://api.example.com/api/integrations/oauth/callback/google"),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_configured_flag_requires_all_three_settings(self):
+        self.assertTrue(gsvc.google_oauth_configured())
+        for key in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"):
+            with self.subTest(missing=key), mock.patch.object(settings, key, ""):
+                self.assertFalse(gsvc.google_oauth_configured())
+
+    def test_authorize_url_asks_for_offline_access_and_consent(self):
+        """Without access_type=offline Google issues no refresh token at all,
+        and without prompt=consent a repeat connect silently omits it -- either
+        way the source cannot survive its first hour."""
+        url = gsvc.build_google_authorize_url("STATE123")
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        self.assertEqual(f"{parsed.scheme}://{parsed.netloc}{parsed.path}", gsvc.AUTHORIZE_URL)
+        self.assertEqual(params["access_type"], ["offline"])
+        self.assertEqual(params["prompt"], ["consent"])
+        self.assertEqual(params["response_type"], ["code"])
+        self.assertEqual(params["state"], ["STATE123"])
+        self.assertEqual(params["client_id"], ["test-client-id"])
+
+    def test_authorize_url_requests_drive_read_scope(self):
+        params = parse_qs(urlparse(gsvc.build_google_authorize_url("s")).query)
+        self.assertIn("https://www.googleapis.com/auth/drive.readonly", params["scope"][0])
+
+
+class GoogleTokenPayloadTests(unittest.TestCase):
+    """Google's refresh response omits the refresh token. Treating the payload
+    as a replacement rather than a merge would erase the only credential that
+    lets the connection renew itself."""
+
+    def test_first_exchange_stores_both_tokens_and_an_expiry(self):
+        config: dict = {}
+        gsvc._apply_token_payload(
+            config,
+            {"access_token": "at1", "refresh_token": "rt1", "expires_in": 3600},
+        )
+        self.assertEqual(config["access_token"], "at1")
+        self.assertEqual(config["refresh_token"], "rt1")
+        self.assertIn("access_token_expires_at", config)
+
+    def test_refresh_without_a_refresh_token_preserves_the_stored_one(self):
+        config = {"access_token": "at1", "refresh_token": "rt1"}
+        gsvc._apply_token_payload(config, {"access_token": "at2", "expires_in": 3600})
+        self.assertEqual(config["access_token"], "at2")
+        self.assertEqual(config["refresh_token"], "rt1", "refresh token was lost")
+
+    def test_a_rotated_refresh_token_is_taken_when_offered(self):
+        config = {"access_token": "at1", "refresh_token": "rt1"}
+        gsvc._apply_token_payload(
+            config, {"access_token": "at2", "refresh_token": "rt2", "expires_in": 3600}
+        )
+        self.assertEqual(config["refresh_token"], "rt2")
+
+    def test_missing_expiry_is_treated_as_expired(self):
+        self.assertTrue(gsvc._token_expired({}))
+
+    def test_an_expiry_in_the_near_future_still_counts_as_expired(self):
+        """Refreshed slightly early so a token cannot lapse mid-request."""
+        soon = (datetime.now(UTC) + timedelta(seconds=30)).isoformat()
+        self.assertTrue(gsvc._token_expired({"access_token_expires_at": soon}))
+
+    def test_a_comfortably_future_expiry_is_not_expired(self):
+        later = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        self.assertFalse(gsvc._token_expired({"access_token_expires_at": later}))
+
+    def test_unparseable_expiry_is_treated_as_expired(self):
+        self.assertTrue(gsvc._token_expired({"access_token_expires_at": "not-a-date"}))
+
+
+class GoogleTokenExchangeTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        for key, value in (
+            ("GOOGLE_CLIENT_ID", "cid"),
+            ("GOOGLE_CLIENT_SECRET", "sec"),
+            ("GOOGLE_REDIRECT_URI", "https://api.example.com/cb"),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _client_returning(self, *, status: int, payload=None, text=""):
+        class _Resp:
+            status_code = status
+
+            def json(self):
+                return payload or {}
+
+            @property
+            def text(self):
+                return text
+
+        class _Client:
+            def __init__(self_inner, *a, **kw):
+                pass
+
+            async def __aenter__(self_inner):
+                return self_inner
+
+            async def __aexit__(self_inner, *exc):
+                return False
+
+            async def post(self_inner, *a, **kw):
+                return _Resp()
+
+        return _Client
+
+    async def test_exchange_without_a_refresh_token_is_refused(self):
+        """Google returns no refresh token when a prior grant is still active.
+        Accepting that would create a source that dies in an hour with a
+        confusing error, so it fails now with an actionable one instead."""
+        with mock.patch.object(
+            gsvc.httpx, "AsyncClient",
+            self._client_returning(status=200, payload={"access_token": "at", "expires_in": 3600}),
+        ):
+            with self.assertRaises(IntegrationFetchError) as ctx:
+                await gsvc.google_exchange_code_for_tokens("code123")
+        self.assertIn("refresh token", str(ctx.exception).lower())
+
+    async def test_successful_exchange_returns_the_payload(self):
+        payload = {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
+        with mock.patch.object(
+            gsvc.httpx, "AsyncClient", self._client_returning(status=200, payload=payload)
+        ):
+            self.assertEqual(await gsvc.google_exchange_code_for_tokens("code123"), payload)
+
+    async def test_a_revoked_grant_on_refresh_says_to_reconnect(self):
+        with mock.patch.object(
+            gsvc.httpx, "AsyncClient",
+            self._client_returning(status=400, text='{"error":"invalid_grant"}'),
+        ):
+            with self.assertRaises(IntegrationFetchError) as ctx:
+                await gsvc.google_refresh_access_token({"refresh_token": "rt"})
+        self.assertIn("reconnect", str(ctx.exception).lower())
+
+    async def test_refresh_without_a_stored_token_fails_clearly(self):
+        with self.assertRaises(IntegrationFetchError) as ctx:
+            await gsvc.google_refresh_access_token({})
+        self.assertIn("missing", str(ctx.exception).lower())
+
+    async def test_unconfigured_deployment_is_a_config_error_not_a_crash(self):
+        with mock.patch.object(settings, "GOOGLE_CLIENT_ID", ""):
+            with self.assertRaises(IntegrationNotConfiguredError):
+                await gsvc.google_ensure_access_token({"access_token": "at"})
+
+
+class GoogleDownloadTests(unittest.IsolatedAsyncioTestCase):
+    """A native Google Sheet has no bytes to download and must be exported;
+    a genuinely uploaded file must not be. Sending either down the other's
+    path fails."""
+
+    def _capture_client(self, *, content=b"a,b\n1,2\n", status=200, content_type="text/csv"):
+        seen: dict = {}
+
+        class _Resp:
+            status_code = status
+            headers = {"content-type": content_type}
+
+            @property
+            def content(self):
+                return content
+
+            @property
+            def text(self):
+                return "error body"
+
+        class _Client:
+            def __init__(self_inner, *a, **kw):
+                pass
+
+            async def __aenter__(self_inner):
+                return self_inner
+
+            async def __aexit__(self_inner, *exc):
+                return False
+
+            async def get(self_inner, url, params=None, headers=None):
+                seen["url"] = url
+                seen["params"] = params or {}
+                return _Resp()
+
+        return _Client, seen
+
+    async def _download(self, config, **kw):
+        client_cls, seen = self._capture_client(**kw)
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(gsvc.httpx, "AsyncClient", client_cls):
+            df = await gsvc.google_download_item_as_dataframe(config)
+        return df, seen
+
+    @staticmethod
+    def _xlsx_bytes() -> bytes:
+        buf = io.BytesIO()
+        pd.DataFrame({"a": [1, 2], "b": [3, 4]}).to_excel(buf, index=False)
+        return buf.getvalue()
+
+    async def test_native_sheet_uses_the_export_endpoint_as_xlsx(self):
+        """CSV export would silently return only the first tab, so xlsx it is.
+        Uses real workbook bytes so the exported payload is actually parsed,
+        not just the request inspected."""
+        df, seen = await self._download(
+            {"item_id": "abc", "item_name": "Q4", "mime_type": gsvc.GOOGLE_SHEET_MIME},
+            content=self._xlsx_bytes(),
+            content_type=gsvc.XLSX_MIME,
+        )
+        self.assertTrue(seen["url"].endswith("/files/abc/export"))
+        self.assertEqual(seen["params"]["mimeType"], gsvc.XLSX_MIME)
+        self.assertEqual(list(df.columns), ["a", "b"])
+        self.assertEqual(len(df), 2)
+
+    async def test_uploaded_file_uses_alt_media_not_export(self):
+        df, seen = await self._download(
+            {"item_id": "abc", "item_name": "data.csv", "mime_type": "text/csv"}
+        )
+        self.assertTrue(seen["url"].endswith("/files/abc"))
+        self.assertEqual(seen["params"]["alt"], "media")
+        self.assertNotIn("export", seen["url"])
+        self.assertEqual(list(df.columns), ["a", "b"])
+
+    async def test_shared_drive_files_are_reachable(self):
+        """A sheet living in someone else's Drive is a normal way teams share."""
+        _, seen = await self._download(
+            {"item_id": "abc", "item_name": "data.csv", "mime_type": "text/csv"}
+        )
+        self.assertEqual(seen["params"].get("supportsAllDrives"), "true")
+
+    async def test_no_selected_file_is_a_config_error(self):
+        with self.assertRaises(IntegrationNotConfiguredError):
+            await self._download({"item_name": "x"})
+
+    async def test_revoked_access_says_to_reconnect(self):
+        with self.assertRaises(IntegrationFetchError) as ctx:
+            await self._download(
+                {"item_id": "abc", "mime_type": "text/csv"}, status=403
+            )
+        self.assertIn("reconnect", str(ctx.exception).lower())
+
+    async def test_deleted_file_reports_that_specifically(self):
+        with self.assertRaises(IntegrationFetchError) as ctx:
+            await self._download(
+                {"item_id": "abc", "mime_type": "text/csv"}, status=404
+            )
+        self.assertIn("no longer exists", str(ctx.exception).lower())
+
+    async def test_an_html_login_page_is_not_parsed_as_data(self):
+        """Same class of bug as the export-URL sniffer: a redirect to a sign-in
+        page must not become an empty one-column dataset."""
+        with self.assertRaises(IntegrationFetchError) as ctx:
+            await self._download(
+                {"item_id": "abc", "mime_type": "text/csv"},
+                content=b"\n  <html><body>Sign in</body></html>",
+                content_type="text/html",
+            )
+        self.assertIn("web page", str(ctx.exception).lower())
+
+
+class GoogleFileListingTests(unittest.IsolatedAsyncioTestCase):
+    async def _list(self, files):
+        payload = {"files": files}
+
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(
+            gsvc, "_drive_get_json", new=mock.AsyncMock(return_value=payload)
+        ) as drive:
+            result = await gsvc.google_list_spreadsheets({})
+        return result, drive
+
+    async def test_native_sheets_are_flagged_so_download_can_branch(self):
+        result, _ = await self._list(
+            [
+                {"id": "1", "name": "Native", "mimeType": gsvc.GOOGLE_SHEET_MIME},
+                {"id": "2", "name": "Upload.xlsx", "mimeType": gsvc.XLSX_MIME},
+            ]
+        )
+        by_id = {r["id"]: r for r in result}
+        self.assertTrue(by_id["1"]["is_native_sheet"])
+        self.assertFalse(by_id["2"]["is_native_sheet"])
+
+    async def test_query_restricts_to_spreadsheets_and_excludes_trash(self):
+        _, drive = await self._list([])
+        params = drive.await_args.kwargs["params"]
+        self.assertIn(gsvc.GOOGLE_SHEET_MIME, params["q"])
+        self.assertIn("trashed=false", params["q"])
+
+    async def test_listing_includes_shared_drives(self):
+        _, drive = await self._list([])
+        params = drive.await_args.kwargs["params"]
+        self.assertEqual(params["includeItemsFromAllDrives"], "true")
+        self.assertEqual(params["supportsAllDrives"], "true")
+
+    async def test_entries_without_an_id_are_skipped(self):
+        result, _ = await self._list([{"name": "no id"}, {"id": "1", "name": "ok"}])
+        self.assertEqual([r["id"] for r in result], ["1"])
+
+
+class GoogleMultiConnectRouteTests(unittest.TestCase):
+    """POST /oauth/complete/google, exercised through the real router.
+
+    This is the endpoint that lets one Google sign-in connect several sheets
+    at once, so the batching rules -- capacity checked for the whole selection,
+    per-file naming, no inline syncing -- are the behaviour worth pinning.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from sqlalchemy.pool import StaticPool
+
+        # TestClient serves the request on its own thread while the assertions
+        # run on this one. StaticPool keeps every thread on the same in-memory
+        # database (a fresh connection would otherwise get an empty one), and
+        # check_same_thread=False lets that single connection cross threads.
+        cls.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        enable_sqlite_pragmas(cls.engine)
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from database import get_db
+        from deps import require_active_workspace
+        from routes import integrations as routes_integrations
+
+        for key, value in (
+            ("INTEGRATIONS_ENABLED", True),
+            ("INTEGRATION_CREDENTIALS_KEY", ""),
+            ("INTEGRATION_MAX_PER_WORKSPACE", 10),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        creds._cipher_cache = None
+        self.addCleanup(setattr, creds, "_cipher_cache", None)
+
+        # The initial sync is a background task; it would otherwise fire real
+        # provider calls after the response. What it does is covered by
+        # SyncIntegrationEndToEndTests.
+        sync_patcher = mock.patch.object(
+            routes_integrations, "_sync_new_integrations", new=mock.AsyncMock()
+        )
+        self.mock_bg_sync = sync_patcher.start()
+        self.addCleanup(sync_patcher.stop)
+
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+        self.addCleanup(self._wipe)
+        self.user = User(id="u1", email="o@x.com")
+        self.db.add_all(
+            [self.user, Workspace(id="ws1", name="W", owner_id="u1")]
+        )
+        self.db.commit()
+
+        # A router-only app: mounting main.app would drag in the lifespan
+        # (migrations, backfills) which has nothing to do with this route.
+        app = FastAPI()
+        app.include_router(routes_integrations.router)
+        app.dependency_overrides[get_db] = lambda: self.db
+        app.dependency_overrides[require_active_workspace] = lambda: (self.user, "ws1")
+        self.client = TestClient(app)
+
+    def _wipe(self):
+        db = self.Session()
+        try:
+            for model in (DataSourceIntegration, IntegrationOauthSession, Workspace, User):
+                db.query(model).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    def _session_with(self, files):
+        return oauth.create_oauth_session(
+            self.db,
+            {
+                "provider": "google_sheets",
+                "workspace_id": "ws1",
+                "user_email": "o@x.com",
+                "name": "",
+                "refresh_interval_hours": 24,
+                "auto_analyze": True,
+                "dashboard_plan_locked": True,
+                "config": {"access_token": "at", "refresh_token": "rt"},
+                "files": files,
+            },
+        )
+
+    @staticmethod
+    def _files(n):
+        return [
+            {
+                "id": f"f{i}",
+                "name": f"Sheet {i}.xlsx",
+                "mime_type": gsvc.GOOGLE_SHEET_MIME,
+                "web_url": f"https://docs.google.com/{i}",
+            }
+            for i in range(1, n + 1)
+        ]
+
+    def _post(self, session_id, item_ids):
+        return self.client.post(
+            "/api/integrations/oauth/complete/google",
+            json={"session_id": session_id, "item_ids": item_ids},
+        )
+
+    def test_connecting_several_sheets_creates_one_source_each(self):
+        sid = self._session_with(self._files(3))
+        resp = self._post(sid, ["f1", "f2", "f3"])
+        self.assertEqual(resp.status_code, 200, resp.text)
+        body = resp.json()
+        self.assertEqual(body["connected"], 3)
+        self.assertEqual(self.db.query(DataSourceIntegration).count(), 3)
+
+    def test_each_source_is_named_after_its_own_file(self):
+        """One display name across a multi-select would make three identical
+        rows the user cannot tell apart."""
+        sid = self._session_with(self._files(2))
+        body = self._post(sid, ["f1", "f2"]).json()
+        self.assertEqual(
+            sorted(i["name"] for i in body["integrations"]),
+            ["Sheet 1.xlsx", "Sheet 2.xlsx"],
+        )
+
+    def test_sources_start_pending_and_sync_in_the_background(self):
+        """Syncing several sheets inline would hold the request open for
+        minutes; the client polls instead."""
+        sid = self._session_with(self._files(2))
+        body = self._post(sid, ["f1", "f2"]).json()
+        self.assertTrue(body["syncing"])
+        self.assertEqual({i["status"] for i in body["integrations"]}, {"pending"})
+        self.mock_bg_sync.assert_called_once()
+
+    def test_each_source_stores_its_own_file_reference(self):
+        sid = self._session_with(self._files(2))
+        self._post(sid, ["f1", "f2"])
+        stored = {
+            decrypt_config(r.config_json)["item_id"]
+            for r in self.db.query(DataSourceIntegration).all()
+        }
+        self.assertEqual(stored, {"f1", "f2"})
+
+    def test_the_shared_google_credentials_reach_every_source(self):
+        sid = self._session_with(self._files(2))
+        self._post(sid, ["f1", "f2"])
+        for row in self.db.query(DataSourceIntegration).all():
+            cfg = decrypt_config(row.config_json)
+            self.assertEqual(cfg["refresh_token"], "rt")
+
+    def test_a_single_selection_keeps_the_users_chosen_name(self):
+        sid = oauth.create_oauth_session(
+            self.db,
+            {
+                "provider": "google_sheets",
+                "workspace_id": "ws1",
+                "user_email": "o@x.com",
+                "name": "Q4 revenue",
+                "refresh_interval_hours": 24,
+                "auto_analyze": True,
+                "dashboard_plan_locked": True,
+                "config": {"access_token": "at", "refresh_token": "rt"},
+                "files": self._files(2),
+            },
+        )
+        body = self._post(sid, ["f1"]).json()
+        self.assertEqual(body["integrations"][0]["name"], "Q4 revenue")
+
+    def test_a_batch_that_would_exceed_the_cap_is_refused_atomically(self):
+        """Connecting some-but-not-all would leave the user guessing which
+        landed, so the whole batch is checked before anything is created."""
+        with mock.patch.object(settings, "INTEGRATION_MAX_PER_WORKSPACE", 2):
+            sid = self._session_with(self._files(3))
+            resp = self._post(sid, ["f1", "f2", "f3"])
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("exceed the limit", resp.json()["detail"])
+        self.assertEqual(self.db.query(DataSourceIntegration).count(), 0)
+
+    def test_the_cap_counts_sources_already_connected(self):
+        with mock.patch.object(settings, "INTEGRATION_MAX_PER_WORKSPACE", 2):
+            self.db.add(
+                DataSourceIntegration(
+                    workspace_id="ws1", provider="stripe", name="existing",
+                    connection_mode="api_key", refresh_interval_hours=24,
+                    status=IntegrationStatus.active,
+                )
+            )
+            self.db.commit()
+            sid = self._session_with(self._files(2))
+            resp = self._post(sid, ["f1", "f2"])
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("1 already connected", resp.json()["detail"])
+
+    def test_a_file_not_in_the_sign_in_is_rejected(self):
+        """Guards against a client posting an arbitrary Drive id that the
+        consent screen never showed."""
+        sid = self._session_with(self._files(2))
+        resp = self._post(sid, ["f1", "not-mine"])
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(self.db.query(DataSourceIntegration).count(), 0)
+
+    def test_the_session_is_single_use(self):
+        sid = self._session_with(self._files(2))
+        self.assertEqual(self._post(sid, ["f1"]).status_code, 200)
+        self.assertEqual(self._post(sid, ["f2"]).status_code, 404)
+
+    def test_another_workspaces_session_is_refused(self):
+        sid = oauth.create_oauth_session(
+            self.db,
+            {
+                "provider": "google_sheets",
+                "workspace_id": "ws1",
+                "user_email": "someone-else@x.com",
+                "name": "",
+                "refresh_interval_hours": 24,
+                "auto_analyze": True,
+                "dashboard_plan_locked": True,
+                "config": {},
+                "files": self._files(1),
+            },
+        )
+        self.assertEqual(self._post(sid, ["f1"]).status_code, 403)
+
+    def test_an_empty_selection_is_rejected_by_validation(self):
+        sid = self._session_with(self._files(1))
+        self.assertEqual(self._post(sid, []).status_code, 422)
+
+    def test_the_route_is_gated_by_the_feature_flag(self):
+        sid = self._session_with(self._files(1))
+        with mock.patch.object(settings, "INTEGRATIONS_ENABLED", False):
+            self.assertEqual(self._post(sid, ["f1"]).status_code, 503)
 
 
 if __name__ == "__main__":

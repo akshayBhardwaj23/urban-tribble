@@ -7,14 +7,14 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from config import settings
-from database import get_db
+from database import SessionLocal, get_db
 from deps import require_active_workspace
 from models.models import DataSourceIntegration, IntegrationStatus, User
 from services.integration_connectors import (
@@ -24,6 +24,15 @@ from services.integration_connectors import (
     fetch_provider_data,
 )
 from services.integration_credentials import decrypt_config, encrypt_config
+from services.integration_google import (
+    _apply_token_payload as _apply_google_token_payload,
+)
+from services.integration_google import (
+    build_google_authorize_url,
+    google_exchange_code_for_tokens,
+    google_list_spreadsheets,
+    google_oauth_configured,
+)
 from services.integration_microsoft import (
     _apply_token_payload,
     microsoft_exchange_code_for_tokens,
@@ -86,6 +95,13 @@ class CompleteMicrosoftOauthBody(BaseModel):
     item_id: str
 
 
+class CompleteGoogleOauthBody(BaseModel):
+    session_id: str
+    # Several sheets can be connected from a single sign-in; each becomes its
+    # own source with its own dashboard and refresh schedule.
+    item_ids: list[str] = Field(min_length=1, max_length=20)
+
+
 def _require_integrations_enabled() -> None:
     if not settings.INTEGRATIONS_ENABLED:
         raise HTTPException(
@@ -130,14 +146,28 @@ def start_integration_oauth(
 ):
     _require_integrations_enabled()
     user, workspace_id = ws
-    if body.provider != "excel_onedrive":
-        raise HTTPException(400, "OAuth start is only wired for Excel / OneDrive right now")
-    if not microsoft_oauth_configured():
+
+    if body.provider == "excel_onedrive":
+        if not microsoft_oauth_configured():
+            raise HTTPException(
+                503,
+                "Microsoft 365 OAuth is not configured on this deployment yet. "
+                "Set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_REDIRECT_URI.",
+            )
+        build_authorize_url = build_microsoft_authorize_url
+    elif body.provider == "google_sheets":
+        if not google_oauth_configured():
+            raise HTTPException(
+                503,
+                "Google OAuth is not configured on this deployment yet. "
+                "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.",
+            )
+        build_authorize_url = build_google_authorize_url
+    else:
         raise HTTPException(
-            503,
-            "Microsoft 365 OAuth is not configured on this deployment yet. "
-            "Set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_REDIRECT_URI.",
+            400, f"OAuth sign-in is not available for {body.provider} yet."
         )
+
     state = build_signed_state(
         {
             "provider": body.provider,
@@ -151,7 +181,7 @@ def start_integration_oauth(
         }
     )
     return {
-        "authorize_url": build_microsoft_authorize_url(state),
+        "authorize_url": build_authorize_url(state),
         "provider": body.provider,
     }
 
@@ -224,6 +254,199 @@ async def microsoft_oauth_callback(
         )
     redirect_to = f"{settings.FRONTEND_APP_URL.rstrip('/')}/integrations?oauth_session={quote(session_id)}"
     return RedirectResponse(url=redirect_to, status_code=303)
+
+
+@router.get("/oauth/callback/google", response_class=HTMLResponse)
+async def google_oauth_callback(
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    if error:
+        safe = html.escape(str(error)[:300])
+        return HTMLResponse(
+            f"<html><body><h2>Google sign-in failed</h2><p>{safe}</p></body></html>",
+            status_code=400,
+        )
+    if not code or not state:
+        return HTMLResponse(
+            "<html><body><h2>Missing Google OAuth data</h2>"
+            "<p>No code/state was returned.</p></body></html>",
+            status_code=400,
+        )
+    try:
+        payload = parse_signed_state(state)
+    except ValueError as e:
+        safe = html.escape(str(e)[:300])
+        return HTMLResponse(
+            f"<html><body><h2>Invalid OAuth state</h2><p>{safe}</p></body></html>",
+            status_code=400,
+        )
+    try:
+        token_payload = await google_exchange_code_for_tokens(code)
+        config: dict[str, Any] = {}
+        _apply_google_token_payload(config, token_payload)
+        files = await google_list_spreadsheets(config)
+    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+        safe = html.escape(str(e)[:300])
+        return HTMLResponse(
+            f"<html><body><h2>Google connect failed</h2><p>{safe}</p></body></html>",
+            status_code=400,
+        )
+
+    try:
+        session_id = create_oauth_session(
+            db,
+            {
+                "provider": "google_sheets",
+                "workspace_id": payload["workspace_id"],
+                "user_email": payload["user_email"],
+                "name": payload["name"],
+                "refresh_interval_hours": payload["refresh_interval_hours"],
+                "auto_analyze": payload["auto_analyze"],
+                "dashboard_plan_locked": payload["dashboard_plan_locked"],
+                "config": config,
+                "files": files,
+            },
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Could not persist Google OAuth session")
+        return HTMLResponse(
+            "<html><body><h2>Could not finish connecting</h2>"
+            "<p>That workspace is no longer available. "
+            "Start the connection again from Integrations.</p></body></html>",
+            status_code=400,
+        )
+
+    redirect_to = (
+        f"{settings.FRONTEND_APP_URL.rstrip('/')}/integrations"
+        f"?oauth_session={quote(session_id)}"
+    )
+    return RedirectResponse(url=redirect_to, status_code=303)
+
+
+async def _sync_new_integrations(integration_ids: list[str]) -> None:
+    """Sync freshly-connected sources after the response has been sent.
+
+    Runs on its own session because the request's session is closed by the
+    time this executes. Each source is independent: one failing must not stop
+    the rest, and sync_integration has already recorded the reason on the row,
+    so there is nothing to propagate here.
+    """
+    db = SessionLocal()
+    try:
+        for integration_id in integration_ids:
+            row = (
+                db.query(DataSourceIntegration)
+                .filter(DataSourceIntegration.id == integration_id)
+                .first()
+            )
+            if row is None:
+                continue
+            try:
+                await sync_integration(db, row, trigger="manual")
+            except Exception:
+                logger.warning(
+                    "Initial sync failed for new integration %s", integration_id
+                )
+    finally:
+        db.close()
+
+
+@router.post("/oauth/complete/google")
+def complete_google_oauth(
+    body: CompleteGoogleOauthBody,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    """Connect one or more Google spreadsheets from a single sign-in.
+
+    Returns as soon as the sources exist, with the first sync running in the
+    background. Syncing several sheets inline would mean a request holding open
+    for minutes -- each sync cleans, profiles and (on a first sync) calls the
+    model. Clients poll GET /api/integrations for status to move off `pending`.
+    """
+    _require_integrations_enabled()
+    user, workspace_id = ws
+
+    session = pop_oauth_session(db, body.session_id)
+    if not session:
+        raise HTTPException(404, "OAuth session not found or expired")
+    if session.get("workspace_id") != workspace_id or session.get("user_email") != user.email:
+        raise HTTPException(403, "OAuth session does not belong to this workspace")
+
+    files_by_id = {f.get("id"): f for f in session.get("files", []) if f.get("id")}
+    selected = [files_by_id[i] for i in body.item_ids if i in files_by_id]
+    missing = [i for i in body.item_ids if i not in files_by_id]
+    if missing:
+        raise HTTPException(
+            404,
+            f"{len(missing)} selected file(s) were not part of this sign-in. "
+            "Start the connection again.",
+        )
+
+    # Check the whole batch up front: connecting three of five and then failing
+    # would leave the user to work out which ones landed.
+    cap = int(settings.INTEGRATION_MAX_PER_WORKSPACE)
+    if cap:
+        existing = count_workspace_integrations(db, workspace_id)
+        if existing + len(selected) > cap:
+            raise HTTPException(
+                400,
+                f"Connecting {len(selected)} more source(s) would exceed the limit "
+                f"of {cap} for this workspace ({existing} already connected). "
+                "Select fewer, or remove an existing source first.",
+            )
+
+    base_config = dict(session.get("config") or {})
+    base_name = str(session.get("name") or "").strip()
+    created: list[dict[str, Any]] = []
+
+    for entry in selected:
+        config = dict(base_config)
+        config.update(
+            {
+                "item_id": entry["id"],
+                "item_name": entry.get("name"),
+                "mime_type": entry.get("mime_type"),
+                "web_url": entry.get("web_url"),
+            }
+        )
+        # With several sheets in one go, the user's single display name would
+        # collide across all of them; the file's own name is more useful.
+        display_name = entry.get("name") or base_name or "Google Sheets data"
+        if len(selected) == 1 and base_name:
+            display_name = base_name
+
+        integration = DataSourceIntegration(
+            workspace_id=workspace_id,
+            provider="google_sheets",
+            name=display_name[:120],
+            connection_mode="oauth",
+            config_json=encrypt_config(config),
+            refresh_interval_hours=int(session["refresh_interval_hours"])
+            or settings.INTEGRATION_DEFAULT_REFRESH_HOURS,
+            auto_analyze=1 if session["auto_analyze"] else 0,
+            dashboard_plan_locked=1 if session["dashboard_plan_locked"] else 0,
+            status=IntegrationStatus.pending,
+            next_sync_at=datetime.utcnow(),
+        )
+        db.add(integration)
+        db.flush()
+        created.append(integration_to_dict(integration, provider_name="Google Sheets"))
+
+    db.commit()
+
+    background_tasks.add_task(_sync_new_integrations, [c["id"] for c in created])
+
+    return {
+        "connected": len(created),
+        "integrations": created,
+        "syncing": True,
+    }
 
 
 @router.get("/oauth/session/{session_id}")

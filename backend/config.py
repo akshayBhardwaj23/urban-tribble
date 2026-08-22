@@ -119,6 +119,13 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_SECRET: str = ""
     MICROSOFT_TENANT_ID: str = "common"
     MICROSOFT_REDIRECT_URI: str = "http://localhost:8000/api/integrations/oauth/callback/microsoft"
+    # Google OAuth for Sheets / Drive. Distinct from the frontend's NextAuth
+    # Google sign-in credentials: this consents to reading spreadsheets, which
+    # is a different grant with different scopes, and the redirect lands on the
+    # API rather than the web app.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/integrations/oauth/callback/google"
     INTEGRATION_OAUTH_STATE_SECRET: str = "dev-integration-oauth-state-change-in-production"
     FRONTEND_APP_URL: str = "http://localhost:3000"
 
