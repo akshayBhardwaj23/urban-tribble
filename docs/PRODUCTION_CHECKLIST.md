@@ -31,6 +31,24 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 - If any credential was ever written to a production database in cleartext, treat it as exposed:
   re-issue it at the provider. Rewriting the row does not scrub it from old pages, WAL, or backups.
 
+## Integration refresh mode (cost control)
+
+- **`INTEGRATION_AUTO_SYNC_ENABLED` defaults to `false`: sources refresh only when a user asks.**
+  Nothing runs in the background, so no connected source can spend provider calls, model calls or
+  storage without someone having clicked something. This is a deliberate cost decision, not an
+  oversight — an unattended refresh costs per source per cycle, which is exactly the shape that
+  erodes margin on a fixed monthly price.
+- While it is off, three independent things hold: new sources are stored with **no due date**, the
+  due-query **returns nothing** even for rows written earlier, and the cron endpoint **is a no-op**
+  that reports why. Turning it on has to be deliberate.
+- **Before enabling it**, work out the per-cycle cost: (sources per workspace) × (24 ÷ refresh hours)
+  × (cost per sync). The unchanged-source check keeps an untouched sheet to a single metadata call,
+  but a genuinely changing sheet pays full cleaning, profiling and — if `auto_analyze` is on — a
+  briefing each time. Analyses are plan-capped; syncs themselves are not.
+- To enable later: set `INTEGRATION_AUTO_SYNC_ENABLED=true`, then drive it with an **external cron**
+  calling `POST /api/integrations/run-scheduled` with the `X-Integration-Cron-Secret` header. Prefer
+  that over `INTEGRATION_SCHEDULER_ENABLED`, which runs a loop inside *every* API worker.
+
 ## Google Sheets integration (OAuth)
 
 - Create an **OAuth 2.0 Client ID (Web application)** in Google Cloud Console, in the same project

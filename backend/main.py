@@ -168,7 +168,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Storage backend: %s", storage.describe())
 
     scheduler_task = None
-    if settings.INTEGRATION_SCHEDULER_ENABLED:
+    # Both switches must be on: the master one decides whether unattended
+    # syncing happens at all, the second only picks the mechanism.
+    if settings.INTEGRATION_AUTO_SYNC_ENABLED and settings.INTEGRATION_SCHEDULER_ENABLED:
         from services.integration_scheduler import integration_scheduler_loop
 
         scheduler_task = asyncio.create_task(

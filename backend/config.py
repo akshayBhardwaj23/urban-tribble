@@ -95,6 +95,14 @@ class Settings(BaseSettings):
     INTEGRATION_DEFAULT_REFRESH_HOURS: int = 24
     INTEGRATION_MIN_REFRESH_HOURS: int = 1
     INTEGRATION_MAX_REFRESH_HOURS: int = 168
+    # Master switch for unattended syncing. OFF: sources refresh only when a
+    # user asks, so no background job can spend money on API calls, model
+    # calls or storage without someone having clicked something. While this is
+    # false no row is ever marked due, the scheduler loop finds nothing, and
+    # the cron endpoint is a no-op -- three independent stops, so enabling it
+    # has to be deliberate rather than accidental.
+    INTEGRATION_AUTO_SYNC_ENABLED: bool = False
+    # Only consulted when INTEGRATION_AUTO_SYNC_ENABLED is true.
     INTEGRATION_SCHEDULER_ENABLED: bool = False
     INTEGRATION_SCHEDULER_INTERVAL_SECONDS: int = 60
     # A row stuck in `syncing` longer than this (crashed worker, killed process)

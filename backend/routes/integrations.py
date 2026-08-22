@@ -50,10 +50,12 @@ from services.integration_oauth import (
 from services.integration_registry import get_provider, list_catalog
 from services.integration_scheduler import run_due_syncs_once
 from services.integration_sync import (
-    compute_next_sync_at,
+    auto_sync_enabled,
     count_workspace_integrations,
     find_due_integrations,
+    initial_next_sync_at,
     integration_to_dict,
+    next_sync_at_for,
     sync_integration,
 )
 
@@ -432,7 +434,7 @@ def complete_google_oauth(
             auto_analyze=1 if session["auto_analyze"] else 0,
             dashboard_plan_locked=1 if session["dashboard_plan_locked"] else 0,
             status=IntegrationStatus.pending,
-            next_sync_at=datetime.utcnow(),
+            next_sync_at=initial_next_sync_at(),
         )
         db.add(integration)
         db.flush()
@@ -509,7 +511,7 @@ async def complete_microsoft_oauth(
         auto_analyze=1 if session["auto_analyze"] else 0,
         dashboard_plan_locked=1 if session["dashboard_plan_locked"] else 0,
         status=IntegrationStatus.pending,
-        next_sync_at=datetime.utcnow(),
+        next_sync_at=initial_next_sync_at(),
     )
     db.add(integration)
     db.commit()
@@ -568,7 +570,7 @@ async def create_integration(
         auto_analyze=1 if body.auto_analyze else 0,
         dashboard_plan_locked=1 if body.dashboard_plan_locked else 0,
         status=IntegrationStatus.pending,
-        next_sync_at=datetime.utcnow(),
+        next_sync_at=initial_next_sync_at(),
     )
     db.add(integration)
     db.commit()
@@ -639,7 +641,7 @@ def patch_integration(
     if body.refresh_interval_hours is not None:
         integration.refresh_interval_hours = body.refresh_interval_hours
         if integration.last_sync_at:
-            integration.next_sync_at = compute_next_sync_at(
+            integration.next_sync_at = next_sync_at_for(
                 body.refresh_interval_hours, integration.last_sync_at
             )
     if body.auto_analyze is not None:
@@ -752,6 +754,18 @@ async def run_scheduled_syncs(
     provided = (x_integration_cron_secret or "").strip()
     if not provided or not hmac.compare_digest(provided, secret):
         raise HTTPException(403, "Invalid cron secret")
+    if not auto_sync_enabled():
+        # A cron may already be pointed here. Answer plainly rather than
+        # failing, so an operator sees why nothing is happening.
+        return {
+            "synced": 0,
+            "due_remaining": 0,
+            "auto_sync_enabled": False,
+            "detail": (
+                "Unattended syncing is off (INTEGRATION_AUTO_SYNC_ENABLED=false). "
+                "Sources refresh only when a user asks."
+            ),
+        }
     count = await run_due_syncs_once()
     due_remaining = len(find_due_integrations(db, limit=100))
-    return {"synced": count, "due_remaining": due_remaining}
+    return {"synced": count, "due_remaining": due_remaining, "auto_sync_enabled": True}

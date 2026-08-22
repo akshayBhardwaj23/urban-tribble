@@ -715,6 +715,12 @@ class DueIntegrationTests(unittest.TestCase):
         cls.Session = sessionmaker(bind=cls.engine)
 
     def setUp(self):
+        # These exercise the scheduling machinery itself, so they opt into
+        # unattended syncing; it is off by default (see ManualOnlySyncTests).
+        auto = mock.patch.object(settings, "INTEGRATION_AUTO_SYNC_ENABLED", True)
+        auto.start()
+        self.addCleanup(auto.stop)
+
         self.db = self.Session()
         self.addCleanup(self.db.close)
         user = User(id="u1", email="owner@example.com")
@@ -1103,6 +1109,12 @@ class IngestDataframeSafetyTests(unittest.TestCase):
 
     def setUp(self):
         import tempfile
+
+        # These exercise the scheduling machinery itself, so they opt into
+        # unattended syncing; it is off by default (see ManualOnlySyncTests).
+        auto = mock.patch.object(settings, "INTEGRATION_AUTO_SYNC_ENABLED", True)
+        auto.start()
+        self.addCleanup(auto.stop)
 
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
@@ -1535,6 +1547,12 @@ class SyncIntegrationEndToEndTests(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         import tempfile
+
+        # These exercise the scheduling machinery itself, so they opt into
+        # unattended syncing; it is off by default (see ManualOnlySyncTests).
+        auto = mock.patch.object(settings, "INTEGRATION_AUTO_SYNC_ENABLED", True)
+        auto.start()
+        self.addCleanup(auto.stop)
 
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
@@ -2492,6 +2510,12 @@ class UnchangedSourceSkipTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         import tempfile
 
+        # These exercise the scheduling machinery itself, so they opt into
+        # unattended syncing; it is off by default (see ManualOnlySyncTests).
+        auto = mock.patch.object(settings, "INTEGRATION_AUTO_SYNC_ENABLED", True)
+        auto.start()
+        self.addCleanup(auto.stop)
+
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
         for key, value in (
@@ -2624,6 +2648,113 @@ class UnchangedSourceSkipTests(unittest.IsolatedAsyncioTestCase):
         result, fetch = await self._sync(integration, trigger="scheduled", stamp=None)
         fetch.assert_called_once()
         self.assertFalse(result["skipped"])
+
+
+class ManualOnlySyncTests(unittest.TestCase):
+    """Sources must not refresh on their own unless that is switched on.
+
+    An unattended refresh spends money -- provider calls, model calls, storage
+    writes -- with nobody watching, and it does so per connected source per
+    cycle. The default is therefore manual-only, protected in three independent
+    places so that turning it on has to be deliberate: nothing is written as
+    due, nothing is found as due, and the cron endpoint does nothing.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_engine("sqlite://")
+        enable_sqlite_pragmas(cls.engine)
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
+    def setUp(self):
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+        self.addCleanup(self._wipe)
+        self.db.add_all(
+            [User(id="u1", email="o@x.com"), Workspace(id="ws1", name="W", owner_id="u1")]
+        )
+        self.db.commit()
+
+    def _wipe(self):
+        db = self.Session()
+        try:
+            for model in (DataSourceIntegration, Workspace, User):
+                db.query(model).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    def _add_overdue(self) -> DataSourceIntegration:
+        row = DataSourceIntegration(
+            workspace_id="ws1",
+            provider="google_sheets",
+            name="s",
+            connection_mode="oauth",
+            refresh_interval_hours=24,
+            status=IntegrationStatus.active,
+            next_sync_at=datetime.utcnow() - timedelta(days=7),
+        )
+        self.db.add(row)
+        self.db.commit()
+        return row
+
+    def test_manual_only_is_the_default(self):
+        """Nobody should have to remember to switch this off."""
+        from config import Settings
+
+        self.assertFalse(Settings().INTEGRATION_AUTO_SYNC_ENABLED)
+
+    def test_new_sources_are_not_given_a_due_date(self):
+        from services.integration_sync import initial_next_sync_at, next_sync_at_for
+
+        self.assertIsNone(initial_next_sync_at())
+        self.assertIsNone(next_sync_at_for(24))
+
+    def test_a_completed_sync_does_not_book_the_next_one(self):
+        from services.integration_sync import next_sync_at_for
+
+        self.assertIsNone(next_sync_at_for(24, datetime(2026, 1, 1, 12, 0, 0)))
+
+    def test_rows_already_marked_due_are_still_never_picked_up(self):
+        """The important one: rows written while auto-sync was on, or before
+        the switch existed, must not fire the moment a scheduler appears."""
+        self._add_overdue()
+        self.assertEqual(find_due_integrations(self.db), [])
+
+    def test_the_same_rows_are_found_once_auto_sync_is_enabled(self):
+        """Proves the previous test is the switch working, not an empty query."""
+        self._add_overdue()
+        with mock.patch.object(settings, "INTEGRATION_AUTO_SYNC_ENABLED", True):
+            self.assertEqual(len(find_due_integrations(self.db)), 1)
+
+    def test_scheduler_pass_syncs_nothing(self):
+        import asyncio
+
+        from services.integration_scheduler import run_due_syncs_once
+
+        self._add_overdue()
+        with mock.patch(
+            "services.integration_sync.fetch_provider_data", new=mock.AsyncMock()
+        ) as fetch:
+            synced = asyncio.run(run_due_syncs_once())
+        self.assertEqual(synced, 0)
+        fetch.assert_not_called()
+
+    def test_a_manual_refresh_is_unaffected(self):
+        """Manual refresh is the whole point of manual-only mode: it must still
+        claim the row and run."""
+        from services.integration_sync import claim_integration_for_sync
+
+        row = self._add_overdue()
+        self.assertTrue(claim_integration_for_sync(self.db, row.id))
+
+    def test_scheduling_settings_are_reported_as_off(self):
+        from services.integration_sync import auto_sync_enabled
+
+        self.assertFalse(auto_sync_enabled())
+        with mock.patch.object(settings, "INTEGRATION_AUTO_SYNC_ENABLED", True):
+            self.assertTrue(auto_sync_enabled())
 
 
 if __name__ == "__main__":

@@ -59,6 +59,30 @@ def compute_next_sync_at(refresh_hours: int, from_time: datetime | None = None) 
     return base + timedelta(hours=_clamp_refresh_hours(refresh_hours))
 
 
+def auto_sync_enabled() -> bool:
+    return bool(settings.INTEGRATION_AUTO_SYNC_ENABLED)
+
+
+def next_sync_at_for(
+    refresh_hours: int, from_time: datetime | None = None
+) -> datetime | None:
+    """When the next unattended refresh is due, or None if there will not be one.
+
+    Writing None rather than a timestamp is what makes "manual only" safe: a
+    row with no due date cannot be picked up even if a scheduler or cron is
+    later switched on by mistake, so the stored data agrees with the setting
+    instead of quietly waiting to fire.
+    """
+    if not auto_sync_enabled():
+        return None
+    return compute_next_sync_at(refresh_hours, from_time)
+
+
+def initial_next_sync_at() -> datetime | None:
+    """Due-date for a source that has just been created."""
+    return datetime.utcnow() if auto_sync_enabled() else None
+
+
 def integration_to_dict(
     integration: DataSourceIntegration,
     *,
@@ -158,7 +182,7 @@ def _finish_unchanged_sync(
     """
     now = datetime.utcnow()
     integration.status = IntegrationStatus.active
-    integration.next_sync_at = compute_next_sync_at(integration.refresh_interval_hours, now)
+    integration.next_sync_at = next_sync_at_for(integration.refresh_interval_hours, now)
     integration.syncing_started_at = None
     integration.last_sync_error = None
     integration.updated_at = now
@@ -293,7 +317,7 @@ async def sync_integration(
     now = datetime.utcnow()
     integration.status = IntegrationStatus.active
     integration.last_sync_at = now
-    integration.next_sync_at = compute_next_sync_at(integration.refresh_interval_hours, now)
+    integration.next_sync_at = next_sync_at_for(integration.refresh_interval_hours, now)
     integration.syncing_started_at = None
     integration.updated_at = now
     db.commit()
@@ -344,6 +368,12 @@ def find_due_integrations(db: Session, limit: int = 20) -> list[DataSourceIntegr
     win `claim_integration_for_sync` before touching it, so this is safe to
     call from multiple schedulers without coordination.
     """
+    if not auto_sync_enabled():
+        # Nothing is ever due while unattended syncing is off. Checked here as
+        # well as at write time so rows created before the switch existed, or
+        # while it was on, cannot suddenly come due.
+        return []
+
     now = datetime.utcnow()
     return (
         db.query(DataSourceIntegration)
