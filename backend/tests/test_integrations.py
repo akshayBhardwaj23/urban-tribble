@@ -2418,5 +2418,213 @@ class GoogleMultiConnectRouteTests(unittest.TestCase):
             self.assertEqual(self._post(sid, ["f1"]).status_code, 503)
 
 
+class GoogleChangeStampTests(unittest.IsolatedAsyncioTestCase):
+    """The cheap freshness probe. It must never be the reason a sync fails --
+    it is an optimisation, so anything unexpected has to fall through to a
+    normal sync rather than break a working connection."""
+
+    async def test_returns_the_remote_modified_time(self):
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(
+            gsvc,
+            "_drive_get_json",
+            new=mock.AsyncMock(return_value={"modifiedTime": "2026-01-01T00:00:00Z"}),
+        ):
+            stamp = await gsvc.google_remote_change_stamp({"item_id": "abc"})
+        self.assertEqual(stamp, "2026-01-01T00:00:00Z")
+
+    async def test_probe_asks_only_for_the_timestamp(self):
+        """The point is that this is cheap; pulling the whole file record back
+        would defeat it."""
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(
+            gsvc, "_drive_get_json", new=mock.AsyncMock(return_value={})
+        ) as drive:
+            await gsvc.google_remote_change_stamp({"item_id": "abc"})
+        self.assertEqual(drive.await_args.kwargs["params"]["fields"], "modifiedTime")
+
+    async def test_no_selected_file_yields_no_stamp(self):
+        self.assertIsNone(await gsvc.google_remote_change_stamp({}))
+
+    async def test_a_failing_probe_is_swallowed_not_raised(self):
+        with mock.patch.object(
+            gsvc,
+            "google_ensure_access_token",
+            new=mock.AsyncMock(side_effect=IntegrationFetchError("token dead")),
+        ):
+            self.assertIsNone(await gsvc.google_remote_change_stamp({"item_id": "abc"}))
+
+    async def test_a_response_without_a_timestamp_yields_no_stamp(self):
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(
+            gsvc, "_drive_get_json", new=mock.AsyncMock(return_value={})
+        ):
+            self.assertIsNone(await gsvc.google_remote_change_stamp({"item_id": "abc"}))
+
+    async def test_dispatcher_returns_none_for_providers_without_a_probe(self):
+        for provider, mode in (
+            ("stripe", "api_key"),
+            ("excel_onedrive", "oauth"),
+            ("google_sheets", "export_url"),
+        ):
+            with self.subTest(provider=provider):
+                self.assertIsNone(await conn.remote_change_stamp(provider, mode, {}))
+
+
+class UnchangedSourceSkipTests(unittest.IsolatedAsyncioTestCase):
+    """A scheduled refresh of a source nobody edited should cost one metadata
+    call, not a full download-clean-recache cycle."""
+
+    @classmethod
+    def setUpClass(cls):
+        # A real (non-skipped) sync offloads ingest_dataframe onto a worker
+        # thread, so this engine is used from a thread other than the one that
+        # created it -- same reason SyncIntegrationEndToEndTests overrides
+        # check_same_thread.
+        cls.engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+        enable_sqlite_pragmas(cls.engine)
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
+    def setUp(self):
+        import tempfile
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        for key, value in (
+            ("UPLOAD_DIR", self._tmpdir.name),
+            ("INTEGRATION_CREDENTIALS_KEY", ""),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        creds._cipher_cache = None
+        self.addCleanup(setattr, creds, "_cipher_cache", None)
+
+        llm = mock.patch("services.ingest_pipeline.propose_column_roles")
+        m = llm.start()
+        m.return_value = {"roles": {}, "meanings": {}, "source": "auto"}
+        self.addCleanup(llm.stop)
+
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+        self.addCleanup(self._wipe)
+        self.db.add_all([User(id="u1", email="o@x.com"), Workspace(id="ws1", name="W", owner_id="u1")])
+        self.db.commit()
+
+    def _wipe(self):
+        db = self.Session()
+        try:
+            for model in (Dataset, Upload, DataSourceIntegration, Workspace, User):
+                db.query(model).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    def _df(self):
+        return pd.DataFrame(
+            {
+                "order_date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                "revenue": [10.0, 20.0],
+            }
+        )
+
+    def _integration(self, **cfg):
+        base = {"access_token": "at", "refresh_token": "rt", "item_id": "abc"}
+        base.update(cfg)
+        row = DataSourceIntegration(
+            workspace_id="ws1",
+            provider="google_sheets",
+            name="Q4 sheet",
+            connection_mode="oauth",
+            config_json=creds.encrypt_config(base),
+            refresh_interval_hours=24,
+            status=IntegrationStatus.active,
+            next_sync_at=datetime.utcnow(),
+            auto_analyze=0,
+            dataset_id=None,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    async def _sync(self, integration, *, trigger, stamp, fetch=None):
+        fetch_mock = fetch or mock.AsyncMock(return_value=self._df())
+        with mock.patch(
+            "services.integration_sync.remote_change_stamp",
+            new=mock.AsyncMock(return_value=stamp),
+        ), mock.patch(
+            "services.integration_sync.fetch_provider_data", new=fetch_mock
+        ):
+            result = await sync_integration(self.db, integration, trigger=trigger)
+        return result, fetch_mock
+
+    async def test_scheduled_sync_of_an_unchanged_source_does_not_download(self):
+        integration = self._integration(last_change_stamp="STAMP-1")
+        result, fetch = await self._sync(integration, trigger="scheduled", stamp="STAMP-1")
+        fetch.assert_not_called()
+        self.assertTrue(result["skipped"])
+        self.assertEqual(self.db.query(Dataset).count(), 0)
+
+    async def test_a_skipped_sync_leaves_the_source_healthy_and_rescheduled(self):
+        integration = self._integration(last_change_stamp="STAMP-1")
+        before = integration.next_sync_at
+        await self._sync(integration, trigger="scheduled", stamp="STAMP-1")
+        self.db.refresh(integration)
+        self.assertEqual(integration.status, IntegrationStatus.active)
+        self.assertIsNone(integration.syncing_started_at)
+        self.assertIsNone(integration.last_sync_error)
+        self.assertGreater(integration.next_sync_at, before)
+
+    async def test_a_skipped_sync_does_not_move_last_sync_at(self):
+        """last_sync_at is what the UI shows as 'data as of'. Bumping it when
+        no data moved would tell the user something arrived that didn't."""
+        integration = self._integration(last_change_stamp="STAMP-1")
+        integration.last_sync_at = datetime(2026, 1, 1, 12, 0, 0)
+        self.db.commit()
+        await self._sync(integration, trigger="scheduled", stamp="STAMP-1")
+        self.db.refresh(integration)
+        self.assertEqual(integration.last_sync_at, datetime(2026, 1, 1, 12, 0, 0))
+
+    async def test_a_changed_source_is_downloaded(self):
+        integration = self._integration(last_change_stamp="STAMP-1")
+        result, fetch = await self._sync(integration, trigger="scheduled", stamp="STAMP-2")
+        fetch.assert_called_once()
+        self.assertFalse(result["skipped"])
+
+    async def test_the_new_stamp_is_remembered_after_a_real_sync(self):
+        integration = self._integration(last_change_stamp="STAMP-1")
+        await self._sync(integration, trigger="scheduled", stamp="STAMP-2")
+        self.db.refresh(integration)
+        self.assertEqual(decrypt_config(integration.config_json)["last_change_stamp"], "STAMP-2")
+
+    async def test_a_manual_refresh_never_skips(self):
+        """Someone who clicks Refresh gets a real fetch: 'nothing happened' is
+        a worse answer than doing the work."""
+        integration = self._integration(last_change_stamp="STAMP-1")
+        result, fetch = await self._sync(integration, trigger="manual", stamp="STAMP-1")
+        fetch.assert_called_once()
+        self.assertFalse(result["skipped"])
+
+    async def test_a_first_sync_never_skips(self):
+        """Nothing has been stored yet, so there is nothing to compare against."""
+        integration = self._integration()
+        result, fetch = await self._sync(integration, trigger="scheduled", stamp="STAMP-1")
+        fetch.assert_called_once()
+        self.assertFalse(result["skipped"])
+
+    async def test_an_unavailable_probe_falls_through_to_a_real_sync(self):
+        """Providers with no cheap probe, and failed probes, both report None.
+        Neither may be treated as 'unchanged'."""
+        integration = self._integration(last_change_stamp="STAMP-1")
+        result, fetch = await self._sync(integration, trigger="scheduled", stamp=None)
+        fetch.assert_called_once()
+        self.assertFalse(result["skipped"])
+
+
 if __name__ == "__main__":
     unittest.main()

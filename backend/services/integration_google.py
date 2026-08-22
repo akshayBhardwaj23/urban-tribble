@@ -260,6 +260,32 @@ def _dataframe_from_bytes(content: bytes, *, name: str, content_type: str) -> pd
         Path(path).unlink(missing_ok=True)
 
 
+async def google_remote_change_stamp(config: dict[str, Any]) -> str | None:
+    """Drive's ``modifiedTime`` for the connected file, or None if unknowable.
+
+    One cheap metadata call, so a scheduled refresh of a sheet nobody has
+    touched can stop before downloading and re-processing the whole thing.
+
+    Returns None rather than raising on any problem: this is an optimisation,
+    and a failed probe must fall through to a normal sync rather than turning a
+    working connection into an error.
+    """
+    file_id = str(config.get("item_id") or "").strip()
+    if not file_id:
+        return None
+    try:
+        token = await google_ensure_access_token(config)
+        data = await _drive_get_json(
+            token,
+            f"/files/{file_id}",
+            params={"fields": "modifiedTime", "supportsAllDrives": "true"},
+        )
+    except Exception:
+        return None
+    stamp = data.get("modifiedTime")
+    return str(stamp) if stamp else None
+
+
 async def google_download_item_as_dataframe(config: dict[str, Any]) -> pd.DataFrame:
     token = await google_ensure_access_token(config)
     file_id = str(config.get("item_id") or "").strip()

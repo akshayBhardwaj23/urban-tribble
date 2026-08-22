@@ -35,6 +35,7 @@ from services.integration_connectors import (
     IntegrationNotConfiguredError,
     IntegrationSyncInProgressError,
     fetch_provider_data,
+    remote_change_stamp,
 )
 from services.integration_credentials import decrypt_config, encrypt_config
 from services.integration_registry import get_provider
@@ -143,6 +144,39 @@ def _mark_sync_failed(db: Session, integration: DataSourceIntegration, message: 
     db.commit()
 
 
+def _finish_unchanged_sync(
+    db: Session,
+    integration: DataSourceIntegration,
+    provider_def: dict[str, Any],
+) -> dict[str, Any]:
+    """Close out a sync that had nothing to do.
+
+    The source is healthy and on schedule, so it is released exactly as a real
+    sync would release it -- active, heartbeat cleared, next run booked. The
+    dataset is deliberately untouched: re-writing identical rows would churn
+    the cache and move `last_sync_at` in a way that reads as new data arriving.
+    """
+    now = datetime.utcnow()
+    integration.status = IntegrationStatus.active
+    integration.next_sync_at = compute_next_sync_at(integration.refresh_interval_hours, now)
+    integration.syncing_started_at = None
+    integration.last_sync_error = None
+    integration.updated_at = now
+    db.commit()
+    db.refresh(integration)
+    return {
+        "integration": integration_to_dict(integration, provider_name=provider_def["name"]),
+        "dataset_id": integration.dataset_id,
+        "row_count": None,
+        "column_count": None,
+        "analysis_id": None,
+        "analysis_skipped_reason": None,
+        "dashboard_plan_locked": bool(integration.dashboard_plan_locked),
+        "skipped": True,
+        "skipped_reason": "The source has not changed since the last sync.",
+    }
+
+
 def _plan_limit_message(exc: HTTPException) -> str:
     detail = exc.detail
     if isinstance(detail, dict) and detail.get("message"):
@@ -189,11 +223,27 @@ async def sync_integration(
 
     try:
         config = _load_config(integration)
+
+        # A scheduled refresh of a source nobody has edited would otherwise
+        # re-download, re-clean and re-cache the whole thing on every tick.
+        # One cheap metadata call avoids all of it. Only for scheduled runs:
+        # someone who clicks "Refresh now" gets a real fetch, because being
+        # told "nothing happened" is a worse answer than doing the work.
+        stamp = None
+        if trigger == "scheduled":
+            stamp = await remote_change_stamp(
+                integration.provider, integration.connection_mode, config
+            )
+            if stamp and config.get("last_change_stamp") == stamp:
+                return _finish_unchanged_sync(db, integration, provider_def)
+
         df = await fetch_provider_data(
             integration.provider,
             integration.connection_mode,
             config,
         )
+        if stamp:
+            config["last_change_stamp"] = stamp
         # Providers that rotate tokens (Microsoft) mutate `config` during fetch.
         integration.config_json = encrypt_config(config)
         db.commit()
@@ -282,6 +332,8 @@ async def sync_integration(
         "analysis_id": analysis_id,
         "analysis_skipped_reason": analysis_skipped_reason,
         "dashboard_plan_locked": plan_locked,
+        "skipped": False,
+        "skipped_reason": None,
     }
 
 
