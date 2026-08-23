@@ -1,9 +1,19 @@
 import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
+import { accessTokenExpiresAt } from "@/lib/access-token";
 import { resolveApiBase } from "@/lib/api-base";
 
 const API_BASE = resolveApiBase();
+
+/** Re-mint the API token this long before it expires, so live pages never see a 401. */
+const REFRESH_BEFORE_EXPIRY_MS = 10 * 60 * 1000;
+
+/** A hung backend must not hang every session read. */
+const BOOTSTRAP_TIMEOUT_MS = 10_000;
+
+/** How long a signed-in browser keeps its session cookie without any activity. */
+const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 const INTERNAL_AUTH_SECRET = (() => {
   const configured = process.env.INTERNAL_AUTH_SECRET?.trim();
@@ -49,12 +59,71 @@ async function bootstrapAccessToken(user: {
         name: user.name ?? null,
         image: user.image ?? null,
       }),
+      signal: AbortSignal.timeout(BOOTSTRAP_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return (await res.json()) as BootstrapResponse;
   } catch {
     return null;
   }
+}
+
+function applyBootstrap(token: JWT, boot: BootstrapResponse): JWT {
+  token.sub = boot.id;
+  token.accessToken = boot.access_token;
+  token.accessTokenExpires = accessTokenExpiresAt(boot.access_token) ?? undefined;
+  token.email = boot.email;
+  token.name = boot.name;
+  token.picture = boot.image;
+  delete token.error;
+  return token;
+}
+
+/** Drop the API token and tell the browser to sign in again. */
+function expireSession(token: JWT): JWT {
+  delete token.accessToken;
+  delete token.accessTokenExpires;
+  token.error = "SessionExpired";
+  return token;
+}
+
+/**
+ * Keep the API token alive for as long as the NextAuth session lasts.
+ *
+ * The API token expires in hours while the session cookie lasts weeks, so
+ * without this a still-signed-in browser would 401 on every call. Runs on each
+ * session read and re-mints server-to-server once the token nears its expiry.
+ */
+async function refreshApiAccessToken(token: JWT): Promise<JWT> {
+  // Sessions issued before `accessTokenExpires` existed fall back to the token.
+  const expiresAt =
+    typeof token.accessTokenExpires === "number"
+      ? token.accessTokenExpires
+      : accessTokenExpiresAt(token.accessToken);
+  const now = Date.now();
+
+  if (token.accessToken && expiresAt && now < expiresAt - REFRESH_BEFORE_EXPIRY_MS) {
+    token.accessTokenExpires = expiresAt;
+    return token;
+  }
+
+  const email = typeof token.email === "string" ? token.email.trim() : "";
+  if (!email) return expireSession(token);
+
+  const boot = await bootstrapAccessToken({
+    email,
+    name: token.name,
+    image: token.picture,
+  });
+  if (boot?.access_token) return applyBootstrap(token, boot);
+
+  // Backend unreachable but the current token still has life in it: keep using
+  // it rather than signing the user out over a blip.
+  if (token.accessToken && expiresAt && now < expiresAt) {
+    token.accessTokenExpires = expiresAt;
+    return token;
+  }
+  return expireSession(token);
 }
 
 export const authOptions = {
@@ -159,35 +228,38 @@ export const authOptions = {
       },
     }),
   ],
-  session: { strategy: "jwt" as const },
+  session: { strategy: "jwt" as const, maxAge: SESSION_MAX_AGE_SECONDS },
   pages: {
     signIn: "/login",
   },
   callbacks: {
     async jwt({ token, user }: { token: JWT; user?: SignInUser }) {
-      if (user) {
-        token.email = user.email;
-        token.name = user.name;
-        token.picture = user.image;
+      if (!user) {
+        // Every later session read: renew the API token before it lapses.
+        return refreshApiAccessToken(token);
+      }
 
-        if (user.accessToken) {
-          token.sub = user.id;
-          token.accessToken = user.accessToken;
-        } else if (user.email) {
-          // Google OAuth / dev-bypass: mint a FastAPI token server-side.
-          const boot = await bootstrapAccessToken({
-            email: user.email,
-            name: user.name,
-            image: user.image,
-          });
-          if (boot?.access_token) {
-            token.sub = boot.id;
-            token.accessToken = boot.access_token;
-            token.email = boot.email;
-            token.name = boot.name;
-            token.picture = boot.image;
-          }
-        }
+      token.email = user.email;
+      token.name = user.name;
+      token.picture = user.image;
+      delete token.error;
+
+      if (user.accessToken) {
+        token.sub = user.id;
+        token.accessToken = user.accessToken;
+        token.accessTokenExpires =
+          accessTokenExpiresAt(user.accessToken) ?? undefined;
+        return token;
+      }
+
+      if (user.email) {
+        // Google OAuth / dev-bypass: mint a FastAPI token server-side.
+        const boot = await bootstrapAccessToken({
+          email: user.email,
+          name: user.name,
+          image: user.image,
+        });
+        if (boot?.access_token) return applyBootstrap(token, boot);
       }
       return token;
     },
@@ -202,6 +274,7 @@ export const authOptions = {
           image?: string | null;
         };
         accessToken?: string;
+        error?: "SessionExpired";
       };
       token: JWT;
     }) {
@@ -211,6 +284,7 @@ export const authOptions = {
         session.user.image = token.picture as string | null | undefined;
       }
       session.accessToken = token.accessToken;
+      session.error = token.error;
       return session;
     },
   },

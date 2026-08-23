@@ -1,9 +1,11 @@
 import type { IngestionProfile } from "@/lib/ingestion";
 import {
+  ApiAuthError,
   ApiTimeoutError,
   formatUserFacingApiError,
   sanitizeApiErrorMessage,
 } from "@/lib/api-errors";
+import { accessTokenExpiresAt } from "@/lib/access-token";
 import { resolveApiBase } from "@/lib/api-base";
 
 export { resolveApiBase };
@@ -219,7 +221,31 @@ export type RecurringSummaryRecord = {
   updated_at: string | null;
 };
 
+export type ApiWorkspace = {
+  id: string;
+  name: string;
+  is_active?: boolean;
+  created_at: string;
+  /** Saved Outlook chart source; omit or null = automatic (largest qualifying file). */
+  outlook_forecast_dataset_id?: string | null;
+  outlook_forecast_date_column?: string | null;
+  outlook_forecast_value_column?: string | null;
+};
+
+export type ApiUserProfile = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  active_workspace_id: string | null;
+  needs_onboarding: boolean;
+  subscription_plan?: string;
+  subscription_renews_at?: string | null;
+  workspaces: ApiWorkspace[];
+};
+
 let _accessToken: string | null = null;
+let _accessTokenExpires: number | null = null;
 
 /** @deprecated Prefer setApiAccessToken — email is no longer used for API auth. */
 export function setApiUserEmail(_email: string | null) {
@@ -227,11 +253,72 @@ export function setApiUserEmail(_email: string | null) {
 }
 
 export function setApiAccessToken(token: string | null) {
+  if (!token) {
+    _accessToken = null;
+    _accessTokenExpires = null;
+    return;
+  }
+
+  const expires = accessTokenExpiresAt(token);
+  // Several call sites re-apply the token from a React session snapshot that
+  // may predate a renewal we just performed. Never trade a live token for an
+  // older one — but always accept a replacement for one that already lapsed.
+  if (
+    _accessToken &&
+    _accessTokenExpires !== null &&
+    _accessTokenExpires > Date.now() &&
+    expires !== null &&
+    expires < _accessTokenExpires
+  ) {
+    return;
+  }
+
   _accessToken = token;
+  _accessTokenExpires = expires;
 }
 
 export function getApiAccessToken(): string | null {
   return _accessToken;
+}
+
+/** Ask NextAuth for a freshly minted token; resolves null if none is available. */
+type AccessTokenRenewer = () => Promise<string | null>;
+
+let _renewAccessToken: AccessTokenRenewer | null = null;
+let _onSessionExpired: (() => void) | null = null;
+
+/**
+ * Wired once by the app shell so any 401 can renew the session and retry,
+ * and so an unrenewable session ends in a sign-in prompt rather than a
+ * generic error screen. Kept as a registration hook to keep this module free
+ * of a next-auth dependency.
+ */
+export function setApiSessionHandlers(handlers: {
+  renew: AccessTokenRenewer;
+  onExpired: () => void;
+}) {
+  _renewAccessToken = handlers.renew;
+  _onSessionExpired = handlers.onExpired;
+}
+
+let _renewalInFlight: Promise<string | null> | null = null;
+
+/** Renew the access token, collapsing concurrent 401s into one attempt. */
+async function renewAccessToken(): Promise<string | null> {
+  if (!_renewAccessToken) return null;
+  if (!_renewalInFlight) {
+    const renew = _renewAccessToken;
+    _renewalInFlight = (async () => {
+      try {
+        return await renew();
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      _renewalInFlight = null;
+    });
+  }
+  return _renewalInFlight;
 }
 
 /** Client-side deadlines. Without these a hung backend leaves a spinner forever. */
@@ -254,34 +341,57 @@ type RequestOptions = RequestInit & {
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   const { timeoutMs, action, ...init } = options ?? {};
-  const headers: Record<string, string> = {
-    ...(init.headers as Record<string, string>),
+  const deadline = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const wasAuthenticated = Boolean(_accessToken);
+
+  /** One attempt, reporting which token it used so a retry can tell them apart. */
+  const send = async (): Promise<{ res: Response; token: string | null }> => {
+    const token = _accessToken;
+    const headers: Record<string, string> = {
+      ...(init.headers as Record<string, string>),
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const controller =
+      deadline > 0 && !init.signal ? new AbortController() : null;
+    const timer = controller
+      ? setTimeout(() => controller.abort(), deadline)
+      : null;
+
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        headers,
+        signal: controller?.signal ?? init.signal,
+      });
+      return { res, token };
+    } catch (e) {
+      if (controller?.signal.aborted) {
+        throw new ApiTimeoutError(action ?? "complete that request", deadline);
+      }
+      throw new Error(formatUserFacingApiError(e, action));
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   };
 
-  if (_accessToken) {
-    headers["Authorization"] = `Bearer ${_accessToken}`;
-  }
+  const first = await send();
+  let res = first.res;
 
-  const deadline = timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const controller = deadline > 0 && !init.signal ? new AbortController() : null;
-  const timer = controller
-    ? setTimeout(() => controller.abort(), deadline)
-    : null;
-
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      headers,
-      signal: controller?.signal ?? init.signal,
-    });
-  } catch (e) {
-    if (controller?.signal.aborted) {
-      throw new ApiTimeoutError(action ?? "complete that request", deadline);
+  // The token lapsed while this tab was open: renew it once and replay.
+  if (res.status === 401 && wasAuthenticated) {
+    // A parallel request may already have renewed while this one was in flight.
+    const renewed =
+      first.token !== _accessToken ? _accessToken : await renewAccessToken();
+    if (renewed) {
+      res = (await send()).res;
     }
-    throw new Error(formatUserFacingApiError(e, action));
-  } finally {
-    if (timer) clearTimeout(timer);
+    if (res.status === 401) {
+      _onSessionExpired?.();
+      throw new ApiAuthError();
+    }
   }
 
   if (!res.ok) {
@@ -336,6 +446,28 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirmation }),
     }),
+
+  syncUser: (body: { name: string | null; image: string | null }) =>
+    request<ApiUserProfile>("/api/auth/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      timeoutMs: 20_000,
+      action: "load your account",
+    }),
+
+  createWorkspace: (name: string) =>
+    request<ApiWorkspace>("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+
+  activateWorkspace: (workspaceId: string) =>
+    request<{ active_workspace_id: string }>(
+      `/api/workspaces/${workspaceId}/activate`,
+      { method: "POST" }
+    ),
 
   deleteWorkspace: (workspaceId: string) =>
     request<{

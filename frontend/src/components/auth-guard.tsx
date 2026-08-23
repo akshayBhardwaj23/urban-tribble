@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
@@ -17,15 +17,24 @@ const API_URL = resolveApiBase();
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { status, data: session } = useSession();
-  const { profile, loading, syncUser } = useWorkspace();
+  const { profile, loading, syncUser, endExpiredSession } = useWorkspace();
   const router = useRouter();
   const [retrying, setRetrying] = useState(false);
+  const sessionExpired = session?.error === "SessionExpired";
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.replace("/login");
     }
   }, [status, router]);
+
+  // NextAuth could not renew the API token (backend down long enough for it to
+  // lapse, or the account is gone). Only a fresh sign-in recovers from here.
+  useEffect(() => {
+    if (status === "authenticated" && sessionExpired) {
+      endExpiredSession();
+    }
+  }, [status, sessionExpired, endExpiredSession]);
 
   useEffect(() => {
     if (!loading && profile && profile.needs_onboarding) {
@@ -51,6 +60,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  // Sign-out is already under way; don't flash a config error on the way out.
+  if (sessionExpired) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">
+          Your session expired. Taking you to sign in…
+        </p>
+      </div>
+    );
+  }
+
   // Signed into NextAuth but bootstrap never issued an API token (usually a
   // mismatched INTERNAL_AUTH_SECRET). Show a clear failure instead of an empty shell.
   if (!loading && status === "authenticated" && !session?.accessToken) {
@@ -69,7 +89,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-muted-foreground break-all">{API_URL}</p>
           ) : null}
         </div>
-        <Button type="button" onClick={() => router.replace("/login")}>
+        <Button
+          type="button"
+          onClick={() => void signOut({ callbackUrl: "/login" })}
+        >
           Back to sign in
         </Button>
       </div>

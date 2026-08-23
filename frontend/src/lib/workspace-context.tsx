@@ -5,42 +5,24 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
-import { useSession } from "next-auth/react";
+import { getSession, signOut, useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
   api,
   getApiAccessToken,
-  planLimitErrorFromJson,
   setApiAccessToken,
+  setApiSessionHandlers,
+  type ApiUserProfile,
+  type ApiWorkspace,
 } from "@/lib/api";
-import { resolveApiBase } from "@/lib/api-base";
 import { clearWorkspaceScopedQueries } from "@/lib/workspace-queries";
 
-interface Workspace {
-  id: string;
-  name: string;
-  is_active?: boolean;
-  created_at: string;
-  /** Saved Outlook chart source; omit or null = automatic (largest qualifying file). */
-  outlook_forecast_dataset_id?: string | null;
-  outlook_forecast_date_column?: string | null;
-  outlook_forecast_value_column?: string | null;
-}
-
-interface UserProfile {
-  id: string;
-  email: string;
-  name: string | null;
-  image: string | null;
-  active_workspace_id: string | null;
-  needs_onboarding: boolean;
-  subscription_plan?: string;
-  subscription_renews_at?: string | null;
-  workspaces: Workspace[];
-}
+type Workspace = ApiWorkspace;
+type UserProfile = ApiUserProfile;
 
 interface WorkspaceContextValue {
   profile: UserProfile | null;
@@ -54,6 +36,8 @@ interface WorkspaceContextValue {
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (name: string) => Promise<Workspace>;
   deleteWorkspace: (workspaceId: string) => Promise<void>;
+  /** Sign out and land on /login with an explanation. Idempotent. */
+  endExpiredSession: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -67,18 +51,11 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   switchWorkspace: async () => {},
   createWorkspace: async () => ({ id: "", name: "", created_at: "" }),
   deleteWorkspace: async () => {},
+  endExpiredSession: () => {},
 });
 
-const API_BASE = resolveApiBase();
-
-function authHeaders(extra?: Record<string, string>): Record<string, string> {
-  const headers: Record<string, string> = { ...(extra || {}) };
-  const token = getApiAccessToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  return headers;
-}
+/** Where an unrecoverable session lands, so /login can explain what happened. */
+export const SESSION_EXPIRED_URL = "/login?reason=session-expired";
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -89,6 +66,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [switchingWorkspaceName, setSwitchingWorkspaceName] = useState<
     string | null
   >(null);
+  const endingSession = useRef(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.accessToken) {
@@ -100,38 +78,60 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [status, session?.accessToken]);
 
+  /**
+   * Pull a renewed API token from NextAuth, which re-mints it server-side when
+   * it is close to expiring. Returns null when nothing newer is available.
+   *
+   * Deliberately a plain session read rather than useSession().update(): the
+   * latter flips the provider to "loading" and blanks the page mid-renewal.
+   * The provider's own snapshot catches up on its next refetch, and
+   * setApiAccessToken ignores that older token in the meantime.
+   */
+  const renewAccessToken = useCallback(async (): Promise<string | null> => {
+    const previous = getApiAccessToken();
+    let next: string | null = null;
+    try {
+      const fetched = await getSession();
+      next = fetched?.accessToken ?? null;
+    } catch {
+      return null;
+    }
+    if (!next || next === previous) return null;
+    setApiAccessToken(next);
+    return next;
+  }, []);
+
+  /** Last resort when the session cannot be renewed: send the user to sign in. */
+  const endExpiredSession = useCallback(() => {
+    if (endingSession.current) return;
+    endingSession.current = true;
+    setApiAccessToken(null);
+    void signOut({ callbackUrl: SESSION_EXPIRED_URL });
+  }, []);
+
+  useEffect(() => {
+    setApiSessionHandlers({
+      renew: renewAccessToken,
+      onExpired: endExpiredSession,
+    });
+  }, [renewAccessToken, endExpiredSession]);
+
   const syncUser = useCallback(async () => {
     if (!session?.accessToken) return null;
     setApiAccessToken(session.accessToken);
 
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/sync`, {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          name: session.user?.name ?? null,
-          image: session.user?.image ?? null,
-        }),
-        signal: controller.signal,
+      const data = await api.syncUser({
+        name: session.user?.name ?? null,
+        image: session.user?.image ?? null,
       });
-
-      if (!res.ok) return null;
-      const data: UserProfile = await res.json();
       setProfile(data);
       return data;
     } catch {
-      /* Timeout (AbortError), offline, or bad JSON - avoid unhandled rejections */
+      /* Expired session, timeout, or offline - handled by the caller's UI. */
       return null;
-    } finally {
-      window.clearTimeout(timeoutId);
     }
-  }, [
-    session?.accessToken,
-    session?.user?.name,
-    session?.user?.image,
-  ]);
+  }, [session?.accessToken, session?.user?.name, session?.user?.image]);
 
   const switchWorkspace = useCallback(
     async (workspaceId: string) => {
@@ -149,16 +149,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       );
 
       try {
-        const res = await fetch(
-          `${API_BASE}/api/workspaces/${workspaceId}/activate`,
-          {
-            method: "POST",
-            headers: authHeaders(),
-          }
-        );
-        if (!res.ok) {
-          throw new Error("Failed to switch workspace");
-        }
+        await api.activateWorkspace(workspaceId);
         await syncUser();
       } catch {
         await syncUser();
@@ -182,21 +173,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       if (!session?.accessToken) throw new Error("Not authenticated");
       setApiAccessToken(session.accessToken);
 
-      const res = await fetch(`${API_BASE}/api/workspaces`, {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ name }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Failed" }));
-        const pl = planLimitErrorFromJson(res.status, err);
-        if (pl) throw pl;
-        const d = err.detail;
-        throw new Error(typeof d === "string" ? d : JSON.stringify(d));
-      }
-
-      const workspace: Workspace = await res.json();
+      const workspace = await api.createWorkspace(name);
       await syncUser();
       return workspace;
     },
@@ -241,6 +218,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         switchWorkspace,
         createWorkspace,
         deleteWorkspace,
+        endExpiredSession,
       }}
     >
       {children}
