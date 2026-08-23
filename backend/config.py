@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     # Integrations: default refresh cadence and background scheduler.
     # When false, create/oauth/refresh endpoints return 503 (UI shows Coming soon).
     INTEGRATIONS_ENABLED: bool = False
+    # Which providers are offered, so waves can ship independently of each
+    # other. Comma-separated provider ids; empty means every provider whose
+    # connector is available. Enforced server-side, not just hidden in the UI:
+    # a provider left out of this list cannot be connected by a hand-rolled
+    # request either.
+    INTEGRATION_ENABLED_PROVIDERS: str = "excel_onedrive,google_sheets"
     INTEGRATION_DEFAULT_REFRESH_HOURS: int = 24
     INTEGRATION_MIN_REFRESH_HOURS: int = 1
     INTEGRATION_MAX_REFRESH_HOURS: int = 168

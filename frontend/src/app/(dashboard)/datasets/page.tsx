@@ -55,8 +55,8 @@ export default function DatasetsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Sources</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Files in this workspace—used for overview, source views, and briefings. Live
-            integrations are coming soon.
+            Files and connected sources in this workspace—used for overview, source
+            views, and briefings.
           </p>
         </div>
         <div className="flex gap-2">
@@ -64,7 +64,7 @@ export default function DatasetsPage() {
             href="/integrations"
             className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
           >
-            Integrations (soon)
+            Integrations
           </Link>
           <Link
             href="/upload"

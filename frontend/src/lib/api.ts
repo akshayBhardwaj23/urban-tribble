@@ -963,6 +963,7 @@ export const api = {
   getIntegrationCatalog: () =>
     request<{
       providers: IntegrationProvider[];
+      enabled: boolean;
     }>("/api/integrations/catalog"),
 
   listIntegrations: () =>
@@ -1018,6 +1019,13 @@ export const api = {
   refreshIntegration: (id: string) =>
     request<IntegrationSyncResult>(`/api/integrations/${id}/refresh`, {
       method: "POST",
+    }),
+
+  completeGoogleOauth: (body: CompleteGoogleOauthBody) =>
+    request<GoogleConnectResult>("/api/integrations/oauth/complete/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     }),
 };
 
@@ -1093,6 +1101,23 @@ export type CompleteMicrosoftOauthBody = {
   item_id: string;
 };
 
+/** Google connects several sheets from one sign-in, so this takes a list. */
+export type CompleteGoogleOauthBody = {
+  session_id: string;
+  item_ids: string[];
+};
+
+/**
+ * Google's connect returns as soon as the sources exist; the first sync of each
+ * runs in the background, so every record comes back `pending` and the client
+ * polls the list endpoint for it to move on.
+ */
+export type GoogleConnectResult = {
+  connected: number;
+  integrations: IntegrationRecord[];
+  syncing: boolean;
+};
+
 export type PatchIntegrationBody = {
   name?: string;
   connection_mode?: string;
@@ -1105,10 +1130,15 @@ export type PatchIntegrationBody = {
 export type IntegrationSyncResult = {
   integration: IntegrationRecord;
   dataset_id?: string;
-  row_count?: number;
-  column_count?: number;
+  row_count?: number | null;
+  column_count?: number | null;
   analysis_id?: string | null;
+  /** Why no fresh briefing was produced, e.g. the plan's analysis cap. */
+  analysis_skipped_reason?: string | null;
   dashboard_plan_locked?: boolean;
+  /** True when the source was unchanged and nothing needed re-fetching. */
+  skipped?: boolean;
+  skipped_reason?: string | null;
 };
 
 export type IntegrationOauthSession = {
@@ -1118,12 +1148,18 @@ export type IntegrationOauthSession = {
   refresh_interval_hours: number;
   auto_analyze: boolean;
   dashboard_plan_locked: boolean;
-  files: {
-    id: string;
-    name: string;
-    web_url?: string | null;
-    size?: number | null;
-    last_modified?: string | null;
-    drive_id?: string | null;
-  }[];
+  files: IntegrationOauthFile[];
+};
+
+export type IntegrationOauthFile = {
+  id: string;
+  name: string;
+  web_url?: string | null;
+  size?: number | null;
+  last_modified?: string | null;
+  /** Microsoft only. */
+  drive_id?: string | null;
+  /** Google only. */
+  mime_type?: string | null;
+  is_native_sheet?: boolean;
 };

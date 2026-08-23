@@ -39,7 +39,6 @@ import {
 import { PlanLimitCallout } from "@/components/plan-limit-callout";
 import { api, isApiPlanLimitError } from "@/lib/api";
 import { formatUserFacingApiError } from "@/lib/api-errors";
-import { INTEGRATIONS_COMING_SOON } from "@/lib/integrations-flags";
 import { analysesLimitDetailFromUsage } from "@/lib/plan-meter-messages";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
@@ -209,8 +208,19 @@ export default function DatasetPage() {
 
   const integrationRefreshMutation = useMutation({
     mutationFn: (integrationId: string) => api.refreshIntegration(integrationId),
-    onSuccess: () => {
-      toast.success("Data refreshed from integration");
+    onSuccess: (result) => {
+      // A refresh that found nothing new is a real outcome, not a failure --
+      // saying "refreshed" either way would imply data moved when it did not.
+      toast.success(
+        result.skipped
+          ? "Already up to date — nothing has changed at the source."
+          : "Data refreshed from integration",
+      );
+      if (result.analysis_skipped_reason) {
+        toast.message("No new briefing", {
+          description: result.analysis_skipped_reason,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["dataset", workspaceId, params.id] });
       queryClient.invalidateQueries({
         queryKey: ["dataset-preview", workspaceId, params.id],
@@ -379,13 +389,14 @@ export default function DatasetPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {data.integration && !INTEGRATIONS_COMING_SOON ? (
+          {data.integration ? (
             <Button
               variant="outline"
               size="sm"
               disabled={
                 integrationRefreshMutation.isPending ||
-                data.integration.status === "syncing"
+                data.integration.status === "syncing" ||
+                data.integration.status === "pending"
               }
               onClick={() => integrationRefreshMutation.mutate(data.integration!.id)}
             >

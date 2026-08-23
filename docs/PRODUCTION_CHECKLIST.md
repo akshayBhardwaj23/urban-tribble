@@ -31,6 +31,28 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 - If any credential was ever written to a production database in cleartext, treat it as exposed:
   re-issue it at the provider. Rewriting the row does not scrub it from old pages, WAL, or backups.
 
+## Turning integrations on
+
+Four switches, all currently off or restricted. Nothing is user-visible until the first two are set.
+
+1. **`INTEGRATIONS_ENABLED=true`** (backend). While false, every connect/refresh endpoint returns
+   503 and the UI shows "not switched on yet". This is the master switch.
+2. **Provider credentials** for whichever wave you are shipping — see the Google and Microsoft
+   sections below. A provider with no credentials returns a clear 503 at sign-in time rather than
+   failing mysteriously.
+3. **`INTEGRATION_ENABLED_PROVIDERS`** (backend, defaults to `excel_onedrive,google_sheets`).
+   Controls which providers can actually be connected, so a wave ships without dragging every
+   built-but-unreviewed connector live with it. Widen it to add a wave; leave it empty to allow every
+   provider whose connector is available. Enforced server-side, so a hand-rolled request is refused
+   the same way the UI button is hidden.
+4. **`INTEGRATION_AUTO_SYNC_ENABLED`** (backend, default false) — leave this off unless you have done
+   the cost arithmetic below. Sources still refresh on demand while it is off.
+
+Verify after enabling, in this order: the Integrations page lists providers with working Connect
+buttons → sign-in redirects to the provider → the file picker lists real files → connecting produces a
+dashboard → "Refresh now" on the dataset page works → an unchanged source reports "already up to date"
+rather than re-processing.
+
 ## Integration refresh mode (cost control)
 
 - **`INTEGRATION_AUTO_SYNC_ENABLED` defaults to `false`: sources refresh only when a user asks.**

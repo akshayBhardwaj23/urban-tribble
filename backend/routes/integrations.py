@@ -47,7 +47,7 @@ from services.integration_oauth import (
     parse_signed_state,
     pop_oauth_session,
 )
-from services.integration_registry import get_provider, list_catalog
+from services.integration_registry import get_provider, list_catalog, provider_enabled
 from services.integration_scheduler import run_due_syncs_once
 from services.integration_sync import (
     auto_sync_enabled,
@@ -122,10 +122,25 @@ def _require_workspace_capacity(db: Session, workspace_id: str) -> None:
         )
 
 
+def _require_provider_offered(provider_id: str) -> None:
+    """Refuse providers outside the shipped wave.
+
+    The catalog already reports these as unavailable; this is the same check on
+    the write path, so the UI and the API cannot disagree and a request made by
+    hand gets the same answer as the button would.
+    """
+    if not provider_enabled(provider_id):
+        raise HTTPException(
+            400,
+            f"{provider_id} is not available to connect yet.",
+        )
+
+
 def _validate_connection_mode(provider_id: str, mode: str) -> None:
     provider = get_provider(provider_id)
     if not provider:
         raise HTTPException(400, f"Unknown provider: {provider_id}")
+    _require_provider_offered(provider_id)
     modes = {m["id"]: m for m in provider["connection_modes"]}
     if mode not in modes:
         raise HTTPException(400, f"Invalid connection mode for {provider_id}")
@@ -148,6 +163,7 @@ def start_integration_oauth(
 ):
     _require_integrations_enabled()
     user, workspace_id = ws
+    _require_provider_offered(body.provider)
 
     if body.provider == "excel_onedrive":
         if not microsoft_oauth_configured():
