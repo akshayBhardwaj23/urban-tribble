@@ -2757,5 +2757,98 @@ class ManualOnlySyncTests(unittest.TestCase):
             self.assertTrue(auto_sync_enabled())
 
 
+class WaveGatingTests(unittest.TestCase):
+    """Which providers are on offer, so a wave can ship without dragging every
+    built-but-unreviewed connector live with it.
+
+    Enforced server-side rather than hidden in the client: the catalog and the
+    connect endpoints consult the same setting, so a request made by hand gets
+    the same answer the button would.
+    """
+
+    def test_the_default_wave_is_the_two_spreadsheet_providers(self):
+        from config import Settings
+
+        raw = Settings().INTEGRATION_ENABLED_PROVIDERS
+        self.assertEqual(
+            {p.strip() for p in raw.split(",")},
+            {"excel_onedrive", "google_sheets"},
+        )
+
+    def test_catalog_reports_off_wave_providers_as_unavailable(self):
+        catalog = {p["id"]: p for p in list_catalog()}
+        for provider_id in ("stripe", "hubspot", "ga4", "meta_ads", "shopify"):
+            with self.subTest(provider=provider_id):
+                modes = [
+                    m["id"]
+                    for m in catalog[provider_id]["connection_modes"]
+                    if m.get("available", True)
+                ]
+                self.assertEqual(modes, [])
+
+    def test_off_wave_providers_stay_visible_as_roadmap(self):
+        """Hidden and unavailable are different: the catalog is also how users
+        see what is coming."""
+        catalog_ids = {p["id"] for p in list_catalog()}
+        self.assertIn("stripe", catalog_ids)
+        self.assertEqual(catalog_ids, {p["id"] for p in PROVIDERS})
+
+    def test_wave_one_providers_remain_connectable(self):
+        catalog = {p["id"]: p for p in list_catalog()}
+        for provider_id in ("excel_onedrive", "google_sheets"):
+            with self.subTest(provider=provider_id):
+                modes = [
+                    m["id"]
+                    for m in catalog[provider_id]["connection_modes"]
+                    if m.get("available", True)
+                ]
+                self.assertIn("oauth", modes)
+
+    def test_an_empty_setting_means_no_wave_restriction(self):
+        """So a later "everything on" does not need a code change."""
+        from services.integration_registry import provider_enabled
+
+        with mock.patch.object(settings, "INTEGRATION_ENABLED_PROVIDERS", ""):
+            self.assertTrue(provider_enabled("stripe"))
+            catalog = {p["id"]: p for p in list_catalog()}
+            modes = [
+                m["id"]
+                for m in catalog["stripe"]["connection_modes"]
+                if m.get("available", True)
+            ]
+            self.assertEqual(modes, ["api_key"])
+
+    def test_a_wave_can_be_widened_by_configuration_alone(self):
+        with mock.patch.object(
+            settings, "INTEGRATION_ENABLED_PROVIDERS", "google_sheets,stripe"
+        ):
+            catalog = {p["id"]: p for p in list_catalog()}
+            stripe_modes = [
+                m["id"]
+                for m in catalog["stripe"]["connection_modes"]
+                if m.get("available", True)
+            ]
+            onedrive_modes = [
+                m["id"]
+                for m in catalog["excel_onedrive"]["connection_modes"]
+                if m.get("available", True)
+            ]
+        self.assertEqual(stripe_modes, ["api_key"])
+        self.assertEqual(onedrive_modes, [], "dropping a provider must also take effect")
+
+    def test_connecting_an_off_wave_provider_is_refused(self):
+        """The check that matters: the UI hiding a button is not a control."""
+        from routes.integrations import _validate_connection_mode
+
+        with self.assertRaises(Exception) as ctx:
+            _validate_connection_mode("stripe", "api_key")
+        self.assertEqual(getattr(ctx.exception, "status_code", None), 400)
+
+    def test_a_wave_one_provider_still_validates(self):
+        from routes.integrations import _validate_connection_mode
+
+        _validate_connection_mode("google_sheets", "oauth")
+
+
 if __name__ == "__main__":
     unittest.main()

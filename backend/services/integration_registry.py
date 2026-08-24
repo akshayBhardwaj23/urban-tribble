@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from config import settings
+
 ConnectionField = dict[str, Any]
 ProviderDef = dict[str, Any]
 
@@ -623,15 +625,42 @@ def get_provider(provider_id: str) -> ProviderDef | None:
     return _PROVIDER_BY_ID.get(provider_id)
 
 
+def enabled_provider_ids() -> set[str] | None:
+    """Provider ids currently on offer, or None when the list is unrestricted."""
+    raw = (settings.INTEGRATION_ENABLED_PROVIDERS or "").strip()
+    if not raw:
+        return None
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
+def provider_enabled(provider_id: str) -> bool:
+    allowed = enabled_provider_ids()
+    return allowed is None or provider_id in allowed
+
+
 def list_catalog() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": p["id"],
-            "name": p["name"],
-            "tier": p["tier"],
-            "category": p["category"],
-            "description": p["description"],
-            "connection_modes": p["connection_modes"],
-        }
-        for p in PROVIDERS
-    ]
+    """The catalog as clients see it.
+
+    A provider that is built but not yet part of a shipped wave has its modes
+    reported as unavailable rather than being hidden: the roadmap stays visible
+    while nothing off-wave can be connected. This is the same flag the connect
+    endpoints check, so the two cannot disagree.
+    """
+    out: list[dict[str, Any]] = []
+    for p in PROVIDERS:
+        on_offer = provider_enabled(p["id"])
+        modes = [
+            {**mode, "available": bool(mode.get("available", True)) and on_offer}
+            for mode in p["connection_modes"]
+        ]
+        out.append(
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "tier": p["tier"],
+                "category": p["category"],
+                "description": p["description"],
+                "connection_modes": modes,
+            }
+        )
+    return out
