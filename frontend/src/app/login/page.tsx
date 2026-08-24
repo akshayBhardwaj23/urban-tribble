@@ -1,8 +1,8 @@
 "use client";
 
 import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,9 +29,12 @@ function parseResendSeconds(detail: string): number {
   return DEFAULT_RESEND_SECONDS;
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const { status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  /** Set when a lapsed session sent the user back here, so we can explain why. */
+  const sessionExpired = searchParams.get("reason") === "session-expired";
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -188,7 +191,9 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardContent className="flex flex-col gap-4 pt-6 pb-6">
           <p className="text-center text-sm text-muted-foreground">
-            Sign in to open your workspaces
+            {sessionExpired
+              ? "Your session expired. Sign in again to pick up where you left off."
+              : "Sign in to open your workspaces"}
           </p>
 
           {step === "email" ? (
@@ -335,5 +340,19 @@ export default function LoginPage() {
         By signing in, you agree to our Terms of Service and Privacy Policy.
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

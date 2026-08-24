@@ -20,6 +20,22 @@ const NETWORK_ERROR_RE =
 const DEV_LEAK_RE =
   /localhost|127\.0\.0\.1|0\.0\.0\.0|next_public|\.env\.local|port \d{4}|start the api/i;
 
+/** Copy shown once a session can no longer be renewed. */
+export const SESSION_EXPIRED_MESSAGE =
+  "Your session expired. Sign in again to continue.";
+
+/** Thrown when the API rejects our access token and it could not be renewed. */
+export class ApiAuthError extends Error {
+  constructor(message: string = SESSION_EXPIRED_MESSAGE) {
+    super(message);
+    this.name = "ApiAuthError";
+  }
+}
+
+export function isApiAuthError(e: unknown): e is ApiAuthError {
+  return e instanceof ApiAuthError;
+}
+
 /** Thrown when a request exceeds its client-side deadline. */
 export class ApiTimeoutError extends Error {
   constructor(
@@ -62,6 +78,9 @@ export function formatUserFacingApiError(
   error: unknown,
   action?: string
 ): string {
+  if (error instanceof ApiAuthError) {
+    return error.message;
+  }
   if (error instanceof ApiTimeoutError) {
     return `This is taking longer than usual. ${
       action ? `We're still trying to ${action}.` : ""
