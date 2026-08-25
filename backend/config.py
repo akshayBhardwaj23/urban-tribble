@@ -194,6 +194,24 @@ def collect_runtime_setting_errors(s: "Settings") -> list[str]:
     if any("localhost" in o or "127.0.0.1" in o for o in s.CORS_ORIGINS.split(",")):
         errors.append("CORS_ORIGINS still allows localhost.")
 
+    frontend_url = (s.FRONTEND_APP_URL or "").strip()
+    if not frontend_url:
+        errors.append(
+            "FRONTEND_APP_URL is empty. OAuth connect redirects the browser back to this "
+            "address after sign-in, so it must be the real frontend origin."
+        )
+    elif "localhost" in frontend_url or "127.0.0.1" in frontend_url:
+        errors.append(
+            "FRONTEND_APP_URL still points at localhost, so finishing a Google or "
+            "Microsoft connect would send the user to their own machine instead of the "
+            "app. Set it to the public frontend origin, e.g. https://snaptix.ai."
+        )
+    elif not frontend_url.startswith("https://"):
+        errors.append(
+            "FRONTEND_APP_URL must be https in production; the OAuth handoff carries a "
+            "session id in the query string."
+        )
+
     if not (s.INTEGRATION_CRON_SECRET or "").strip():
         errors.append(
             "INTEGRATION_CRON_SECRET is empty, so POST /api/integrations/run-scheduled is open "

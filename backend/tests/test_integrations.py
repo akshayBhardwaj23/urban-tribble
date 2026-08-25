@@ -2850,5 +2850,51 @@ class WaveGatingTests(unittest.TestCase):
         _validate_connection_mode("google_sheets", "oauth")
 
 
+class FrontendRedirectUrlGuardTests(unittest.TestCase):
+    """FRONTEND_APP_URL is where the browser is sent after a provider sign-in.
+
+    Left at its development default it points at the user's own machine, so a
+    production connect completes on the server and then strands the user on a
+    dead localhost page -- everything looks healthy in the logs. It defaults to
+    localhost for local work, which makes forgetting to set it the easy
+    mistake, so production refuses to boot on it rather than failing silently
+    at the one moment a user is trying to connect something.
+    """
+
+    def _errors(self, url: str) -> list[str]:
+        from config import Settings, collect_runtime_setting_errors
+
+        errs = collect_runtime_setting_errors(
+            Settings(APP_ENV="production", FRONTEND_APP_URL=url)
+        )
+        return [e for e in errs if "FRONTEND_APP_URL" in e]
+
+    def test_the_development_default_blocks_production_boot(self):
+        self.assertTrue(self._errors("http://localhost:3000"))
+
+    def test_loopback_ip_is_caught_too(self):
+        self.assertTrue(self._errors("http://127.0.0.1:3000"))
+
+    def test_empty_blocks_production_boot(self):
+        self.assertTrue(self._errors(""))
+
+    def test_plain_http_is_rejected(self):
+        """The handoff puts a session id in the query string."""
+        self.assertTrue(self._errors("http://snaptix.ai"))
+
+    def test_a_real_https_origin_is_accepted(self):
+        self.assertEqual(self._errors("https://snaptix.ai"), [])
+
+    def test_development_is_unaffected(self):
+        from config import Settings, collect_runtime_setting_errors
+
+        self.assertEqual(
+            collect_runtime_setting_errors(
+                Settings(APP_ENV="development", FRONTEND_APP_URL="http://localhost:3000")
+            ),
+            [],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
