@@ -14,7 +14,10 @@ from services.cleaned_parquet import write_cleaned_parquet
 from services.column_detector import ColumnDetector
 from services.column_profile import (
     build_mapping_spec,
+    metadata_from_mapping_spec,
+    preserve_user_mapping,
     roles_from_metadata,
+    user_authored,
 )
 from services.column_semantics import propose_column_roles
 from services.dashboard_planner import DashboardPlanner
@@ -242,6 +245,12 @@ def ingest_dataframe(
                 c["name"]: c["meaning"] for c in old_columns if c.get("name") and c.get("meaning")
             }
 
+    # A person who edited the mapping chose how this file should be *read*, not
+    # just how it should be labelled. Cleaning with the defaults would undo that
+    # on every refresh -- dates re-parsed the other way round, duplicates back.
+    keep_user_mapping = user_authored(old_mapping_spec)
+    policy = old_mapping_spec if keep_user_mapping else {}
+
     processed = process_dataframe(
         df,
         filename=name,
@@ -249,6 +258,8 @@ def ingest_dataframe(
         use_llm=effective_use_llm,
         known_roles=known_roles,
         known_meanings=known_meanings,
+        dayfirst=policy.get("dayfirst"),
+        drop_duplicates=bool(policy.get("drop_duplicates")),
     )
     df = processed["df"]
     validate_frame_size(df, filename=name)
@@ -258,6 +269,17 @@ def ingest_dataframe(
     ingestion = processed["ingestion"]
     mapping_spec = processed["mapping_spec"]
     cls_id = ingestion["classification"]["id"]
+
+    if keep_user_mapping:
+        # Roles, meanings and the chosen primary columns come back from the
+        # stored spec; anything the user never touched stays as freshly
+        # derived, so new columns are still profiled normally.
+        mapping_spec = preserve_user_mapping(old_mapping_spec, mapping_spec)
+        # schema_json, the summary stats and the dashboard plan are all derived
+        # from metadata, so they have to agree with the corrected roles rather
+        # than the ones the heuristic just guessed.
+        metadata = metadata_from_mapping_spec(mapping_spec)
+        stats = column_detector.summary(df, metadata)
 
     rebuild_plan = should_rebuild_dashboard_plan(
         dashboard_plan_locked=dashboard_plan_locked,
