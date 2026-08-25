@@ -33,6 +33,13 @@ Use this before pointing a public domain at Snaptix (or any deployment of this c
 
 ## Turning integrations on
 
+> **`FRONTEND_APP_URL` must be set on the backend before any OAuth connect will work.**
+> It is where the browser is sent after signing in with Google or Microsoft. Its default is
+> `http://localhost:3000`, so leaving it unset in production completes the connect server-side and
+> then strands the user on a dead localhost page — with nothing in the logs looking wrong. Production
+> boot now refuses on a localhost, empty, or non-https value.
+
+
 Four switches, all currently off or restricted. Nothing is user-visible until the first two are set.
 
 1. **`INTEGRATIONS_ENABLED=true`** (backend). While false, every connect/refresh endpoint returns
