@@ -6,7 +6,7 @@ This document is the **authoritative technical map** of the project: how data mo
 
 ## 1. Product mental model (one paragraph)
 
-Users sign in with Google, pick a **workspace** (isolated container), and upload **tabular files** (Excel/CSV/TSV). The backend **cleans** rows, **infers column roles** (date, revenue-like, category, etc.), stores **metadata in SQLite** and **cleaned rows as Parquet on disk**, and optionally builds a **dashboard plan** (KPIs + charts). The UI shows **per-dataset** dashboards, **AI briefings** (structured JSON from the model), **workspace overview** (rollup KPIs/charts + optional workspace-level briefing), **forecasts** (Prophet with linear fallback), and **chat** that turns questions into **pandas code** executed safely on the DataFrame.
+Users sign in with Google, pick a **workspace** (isolated container), and bring in **tabular data** two ways: by uploading **files** (Excel/CSV/TSV), or by **connecting a live source** — a Google Sheet or a Microsoft 365 workbook, over OAuth (§7.7). Both paths converge on the same ingest. The backend **cleans** rows, **infers column roles** (date, revenue-like, category, etc.), stores **metadata in SQLite** and **cleaned rows as Parquet on disk**, and optionally builds a **dashboard plan** (KPIs + charts). The UI shows **per-dataset** dashboards, **AI briefings** (structured JSON from the model), **workspace overview** (rollup KPIs/charts + optional workspace-level briefing), **forecasts** (Prophet with linear fallback), and **chat** that turns questions into **pandas code** executed safely on the DataFrame.
 
 ---
 
@@ -20,6 +20,7 @@ Users sign in with Google, pick a **workspace** (isolated container), and upload
 | Database | SQLite by default (`DATABASE_URL`); PostgreSQL-compatible via SQLAlchemy URL |
 | File storage | Local directory `UPLOAD_DIR` (default `./data/uploads`); original file + `{upload_id}_cleaned.parquet` |
 | AI | OpenAI chat completions (`OPENAI_MODEL`, default `gpt-4o`); JSON responses for analysis and chat pipeline |
+| Integrations | `httpx` for provider calls; OAuth2 authorization-code + refresh against **Google Drive/Sheets** and **Microsoft Graph**; stored credentials sealed with Fernet (`cryptography`) |
 
 Deployment targets mentioned in older docs (Vercel/Railway) are **not enforced in code**—configure via hosting.
 
@@ -40,6 +41,7 @@ flowchart LR
     RC[routes/chat]
     RW[routes/workspaces]
     RAuth[routes/auth]
+    RI[routes/integrations]
   end
   subgraph services [Services]
     FP[file_processor]
@@ -51,6 +53,9 @@ flowchart LR
     QE[query_engine]
     FC[forecaster]
     DE[dashboard_executor]
+    IP[ingest_pipeline]
+    IS[integration_sync]
+    ICon[integration_connectors]
   end
   subgraph persist [Persistence]
     SQL[(SQLite)]
@@ -59,19 +64,28 @@ flowchart LR
   subgraph ai [OpenAI]
     GPT[Chat API]
   end
+  subgraph providers [Third-party sources]
+    GD[Google Drive + Sheets API]
+    MG[Microsoft Graph]
+  end
 
   Next -->|HTTPS + Bearer token| RAuth
-  Next --> RU & RD & RA & RDb & RC & RW
+  Next --> RU & RD & RA & RDb & RC & RW & RI
+  Cron[External cron] -->|X-Integration-Cron-Secret| RI
   RU --> FP & DC & CD & DP & IC
   RD --> FS
   RA --> AA & FC
   RDb --> DE & FS
   RC --> QE & FS
+  RI --> IS
+  IS --> ICon & IP
+  IP --> DC & CD & DP & IC
+  ICon --> GD & MG
   AA --> GPT
   QE --> GPT
   DP --> GPT
-  RU & RD & RA & RDb & RC & RW --> SQL
-  FP & DC --> FS
+  RU & RD & RA & RDb & RC & RW & RI --> SQL
+  FP & DC & IP --> FS
 ```
 
 ---
@@ -112,15 +126,17 @@ ORM: `backend/models/models.py`.
 | **users** | `email` (unique), `name`, `image`, `active_workspace_id` (FK logical to workspaces) |
 | **workspaces** | `name`, `owner_id` → users |
 | **uploads** | Original file metadata: `filename`, `file_type`, **`file_url` (absolute path to saved file)**, `user_description`, `status`, row/column counts, **`workspace_id`** |
-| **datasets** | One per successful upload: `name`, **`schema_json`** (column detector output), **`data_summary`** (aggregates JSON), **`cleaned_report_json`**, **`dashboard_plan_json`** (optional AI/heuristic plan), **`business_classification`** (ingestion classifier id) |
+| **datasets** | One per successful upload: `name`, **`schema_json`** (column detector output), **`data_summary`** (aggregates JSON), **`cleaned_report_json`**, **`dashboard_plan_json`** (optional AI/heuristic plan), **`business_classification`** (ingestion classifier id), **`integration_id`** (set when the dataset is fed by a connected source), **`dashboard_plan_locked`** (keep the existing chart layout across refreshes) |
 | **analyses** | Each run: `dataset_id`, `type` (`overview` = per-dataset briefing, **`workspace_overview`** = whole-workspace briefing—see §7.4 quirk), `result_json`, `ai_summary` |
 | **dashboards** | Table exists; not all features may be driven from UI—check routes if extending |
 | **chat_messages** | Persists `user` / `assistant` turns per `dataset_id` (even workspace chat stores under a dataset in multi-df path—see chat route) |
 | **dataset_relations** | Cross-dataset link metadata; **backend routes exist**; **frontend does not call relations APIs today** |
 | **workspace_recurring_summaries** | Workspace-scoped **weekly** / **monthly** executive digests: `period_start`/`period_end`, JSON **`content_json`** (headline, key changes, risk, opportunity, actions), **`email_html_snapshot`** + **`email_sent_at`** reserved for future transactional email (no sender implemented yet); unique on `(workspace_id, kind, period_start)` |
 | **workspace_timeline_snapshots** | Append-only **history** for the workspace: `event_type` (`upload` \| `briefing` \| `append`), optional **`ref_id`** / **`dataset_id`**, **`metrics_json`** (row totals + revenue KPI extracts), optional **`themes_json`** (briefing headlines / theme buckets for recurrence); one-time **backfill** on startup fills missing rows from existing uploads and `workspace_overview` analyses |
+| **data_source_integrations** | One **connected source** per row: `provider` (`google_sheets`, `excel_onedrive`, …), `name`, `connection_mode` (`oauth` \| `export_url` \| `api_key` \| `service_account`), **`config_json`** (provider credentials + selected file/tab, **encrypted at rest**—see §7.7), `dataset_id` (the dataset it feeds), `refresh_interval_hours`, `auto_analyze`, `dashboard_plan_locked`, `status` (`pending` \| `active` \| `syncing` \| `error` \| `disconnected`), `last_sync_at`, `next_sync_at`, `last_sync_error`, **`syncing_started_at`** (sync heartbeat; a stale value marks a crashed run as reclaimable) |
+| **integration_oauth_sessions** | **Short-lived** handoff between a provider's OAuth callback and the user confirming which file(s) to connect: `provider`, `user_email`, **`payload_json`** (freshly issued provider tokens + listed files, encrypted like `config_json`), `expires_at` (**1 hour**). Lives in the DB rather than process memory because the callback and the confirmation are separate requests that can land on different workers. Consumed single-use and pruned opportunistically |
 
-**Migrations:** `main.py` lifespan runs `create_all` plus small SQLite `ALTER TABLE` backfills for `dashboard_plan_json` and `business_classification`, and a one-time heuristic to set `uploads.workspace_id` for legacy NULLs.
+**Migrations:** **Alembic** (`backend/migrations/`) is the schema source of truth; `main.py` lifespan runs `command.upgrade(cfg, "head")` when `RUN_MIGRATIONS_ON_STARTUP` is true, otherwise it logs that an external migrate step is expected. Startup also runs a one-time timeline-snapshot backfill and, outside production, a heuristic backfill for legacy `uploads.workspace_id` NULLs (`BACKFILL_ORPHAN_UPLOAD_WORKSPACES`).
 
 ---
 
@@ -220,6 +236,35 @@ Almost all analytics **reload Parquet**, not the original Excel, so cleaning ste
 
 If no API key, chat degrades (engine checks `self.client`).
 
+### 7.7 Connected source → dataset (integration sync)
+
+The second way data arrives. A **connected source** (`data_source_integrations`) owns one dataset and re-reads it on demand or on a schedule, so dashboards, briefings, forecasts and chat all work on it exactly as they do on an uploaded file.
+
+**Wave one is `google_sheets` + `excel_onedrive` over OAuth.** The rest of `services/integration_registry.py` (Stripe, Shopify, HubSpot, GA4, Postgres, …) is a visible roadmap whose modes report `available: false`; the catalog and the write path check the same flag, so a hand-rolled request is refused the same way a hidden button is.
+
+**Connect (OAuth), `backend/routes/integrations.py`:**
+
+1. `POST /api/integrations/oauth/start` returns the provider's authorize URL. Connection intent (workspace, name, refresh interval, `auto_analyze`, `dashboard_plan_locked`) travels in a **signed `state`** — HMAC-SHA256 with `INTEGRATION_OAUTH_STATE_SECRET`, 15-minute expiry — so nothing has to be stored before consent.
+2. The provider redirects to **`GET /api/integrations/oauth/callback/{google|microsoft}`** on the **API** host (not the web app). The route verifies `state`, exchanges the code for tokens, lists the account's spreadsheets, writes an **`integration_oauth_sessions`** row, and **303**s the browser to `FRONTEND_APP_URL/integrations?oauth_session=<id>`. Errors here render HTML, since there is no JSON client on the other end of a browser redirect.
+3. The UI reads the session (`GET /api/integrations/oauth/session/{id}`) and shows the file picker.
+4. Google only: **`POST /api/integrations/oauth/tabs/google`** reports, per selected workbook, its tabs with a table-likeness `score`, a `suggested_tab`, and `needs_choice`. Only a workbook where **more than one** tab looks like real data is worth asking about — a cover page plus one table scores below the floor and is auto-picked. This call is read-only and does **not** consume the session, so the user can still change their selection.
+5. **`POST /api/integrations/oauth/complete/google`** takes **up to 20 `item_ids`** plus an optional `sheet_names` map and creates **one source per sheet**, each with its own dataset, dashboard and schedule. The workspace cap is checked for the **whole batch** up front (connecting three of five and then failing would leave the user guessing), the session is **popped single-use** (the `DELETE`'s matched-row count decides the winner, so a double-submit cannot create duplicates), and the response returns as soon as the rows exist with first syncs running in a **background task** — clients poll `GET /api/integrations` to see `pending` clear. Microsoft's `complete/microsoft` is single-file and syncs **inline**.
+
+**Sync (`services/integration_sync.py` → `sync_integration`):**
+
+1. **Claim** the row with a single conditional `UPDATE` (compare-and-swap on `status`), so exactly one caller can hold it in `syncing` on both SQLite and Postgres without `SELECT … FOR UPDATE`. A `syncing` row whose `syncing_started_at` heartbeat is older than `INTEGRATION_STALE_SYNC_MINUTES` counts as abandoned and is claimable again, so a crashed worker cannot brick a connection. A losing caller gets **409**.
+2. **First sync only** (`dataset_id is None`): check the plan's **upload** allowance *before* spending a network call and a model pass. Later refreshes cost no upload credit.
+3. Decrypt `config_json` (see **Credentials at rest** below). On a **scheduled** run, ask the provider for a cheap **change stamp** (Drive `modifiedTime`); if it matches the stored one, finish early as `skipped` without touching the dataset — re-writing identical rows would churn the cache and make `last_sync_at` read as new data. A **manual** refresh always does the real fetch, because "nothing happened" is a worse answer to a button press.
+4. **Fetch** via `fetch_provider_data`. Bodies are **streamed** and abort past `INTEGRATION_MAX_FETCH_MB`, so an oversized sheet never lands in memory. A **native Google Sheet has no downloadable bytes** and is exported as `.xlsx` (preserving multiple tabs and numeric/date typing); files merely *uploaded* to Drive come down through `alt=media`. Providers that rotate tokens mutate `config` during the fetch, so it is re-encrypted and committed straight after.
+5. **Ingest** through the same `ingest_dataframe` the upload path uses, on the upload worker's executor. It **reuses the existing `Upload`/`Dataset` row** when there is one, so the dataset keeps its id, chat history and dashboard identity across refreshes; `dashboard_plan_locked` keeps the chart layout stable instead of re-planning on every sync.
+6. Record a **timeline snapshot** (`append` for manual, `upload` for scheduled), then, when `auto_analyze` is on, run `run_post_sync_analysis` for a fresh briefing. Hitting the **analysis** cap is reported as `analysis_skipped_reason` ("synced, but no new briefing"), not swallowed as an error.
+
+**Failure model:** every path other than a lost claim leaves the row in **`error`** with a readable `last_sync_error` — never stuck in `syncing` — so "Refresh now" and the scheduler can always recover it. Google's own export ceiling, a revoked grant, and a renamed tab each get their own message rather than a generic "reconnect".
+
+**Credentials at rest (`services/integration_credentials.py`):** `config_json` and OAuth-session payloads hold live third-party secrets (Google/Microsoft **refresh** tokens, and for later waves Stripe keys and the like), so they are written as an authenticated **`enc:v1:<fernet token>`** envelope. `INTEGRATION_CREDENTIALS_KEY` accepts a comma-separated list: the **first** key encrypts, **all** are tried on decrypt, which makes rotation two deploys (`new,old` → backfill with `scripts.encrypt_integration_credentials` → `new`) instead of an outage. Anything without the prefix is read as legacy cleartext and upgraded on next write, so local development needs no setup — and **production refuses to boot** with the key unset.
+
+**Scheduling:** unattended refresh is **off by default** (`INTEGRATION_AUTO_SYNC_ENABLED=false`) as a cost decision, and three independent things enforce it: new rows are stored with **no `next_sync_at`**, the due-query returns nothing even for rows written earlier, and `POST /api/integrations/run-scheduled` answers as an explicit no-op. When on, prefer an **external cron** hitting that endpoint with `X-Integration-Cron-Secret` over `INTEGRATION_SCHEDULER_ENABLED`, which runs a loop inside *every* API worker. See [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) for the per-cycle cost arithmetic and the **Google OAuth verification** requirement (`drive.readonly` is a *restricted* scope).
+
 ---
 
 ## 8. AI components compared
@@ -261,6 +306,31 @@ Prefix **`/api`** unless noted. Almost all require **`Authorization: Bearer <acc
 | GET | `/api/datasets/{id}/preview` | Sample rows |
 | POST | `/api/datasets/{id}/append` | Append compatible file; rewrite Parquet; same **413** / **429** rules as `POST /api/uploads/` |
 | DELETE | `/api/datasets/{id}` | Remove dataset + related rows/files per route logic |
+
+### Integrations (connected sources)
+
+Every route below except `/catalog` and the two OAuth callbacks requires Bearer + active workspace. **Connect, sync and mutate** routes additionally **503** while `INTEGRATIONS_ENABLED` is false; **listing, reading and `DELETE` stay open**, so an existing source can always be inspected or removed after the switch is turned off. A provider outside `INTEGRATION_ENABLED_PROVIDERS` is **400**. Provider fetch failures surface as **422** with a user-readable message, a lost sync claim as **409**.
+
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/api/integrations/catalog` | **No auth.** Provider catalog + `enabled` flag; off-wave providers report `available: false` per connection mode |
+| GET | `/api/integrations` | Connected sources in the workspace, newest first |
+| POST | `/api/integrations` | Create a non-OAuth source (`export_url` / `api_key` / `service_account`); runs the first sync inline unless `run_initial_sync: false` |
+| GET | `/api/integrations/{id}` | One source |
+| PATCH | `/api/integrations/{id}` | Name, connection mode, `config`, refresh interval, `auto_analyze`, `dashboard_plan_locked`. **Replaces `config` wholesale**—not the way to change a tab on an OAuth source |
+| DELETE | `/api/integrations/{id}` | Disconnect |
+| POST | `/api/integrations/oauth/start` | Body: provider, name, refresh interval, flags → `{ authorize_url }`. **503** if that provider's OAuth env vars are unset |
+| GET | `/api/integrations/oauth/callback/google` | **No auth** (provider redirect); verifies signed `state`, exchanges tokens, lists files → **303** to `FRONTEND_APP_URL/integrations?oauth_session=…`. Renders HTML on error |
+| GET | `/api/integrations/oauth/callback/microsoft` | As above, via Microsoft Graph |
+| GET | `/api/integrations/oauth/session/{session_id}` | The pending handoff: provider, intended settings, and the listed files to choose from |
+| POST | `/api/integrations/oauth/tabs/google` | Per selected workbook: `tabs` (with table-likeness scores), `needs_choice`, `suggested_tab`. Read-only; does **not** consume the session |
+| POST | `/api/integrations/oauth/complete/google` | Body `{ session_id, item_ids[1..20], sheet_names }` → one source per sheet; returns `{ connected, integrations, syncing: true }` with first syncs in the background. Batch capacity checked up front; session is single-use |
+| POST | `/api/integrations/oauth/complete/microsoft` | Body `{ session_id, item_id }` → single source, synced **inline** |
+| GET | `/api/integrations/{id}/tabs` | Google Sheets only (**400** otherwise): `tabs`, `current_tab`, `suggested_tab`. Rate-limited as a provider fetch—listing tabs of an uploaded `.xlsx` downloads the workbook |
+| POST | `/api/integrations/{id}/sheet` | Body `{ sheet_name }`; **merges** just that key (so OAuth tokens survive), clears the change stamp, and re-syncs immediately since the dashboard was built from the old tab |
+| POST | `/api/integrations/{id}/test` | Fetch without ingesting → `row_count`, `column_count`, first 20 `columns`. Rate-limited |
+| POST | `/api/integrations/{id}/refresh` | Manual sync; always does a real fetch. Rate-limited |
+| POST | `/api/integrations/run-scheduled` | **No user auth**—requires `X-Integration-Cron-Secret` (**403** on mismatch, **503** when `INTEGRATION_CRON_SECRET` is unset). Returns `{ synced, due_remaining, auto_sync_enabled }`, or an explanatory no-op while auto-sync is off |
 
 ### Analysis & dashboards
 
@@ -321,7 +391,8 @@ The **single source of truth for client calls** is `frontend/src/lib/api.ts` (`a
 | History | `/history` | `GET /api/workspace/timeline`, `GET /api/workspace/timeline/compare` |
 | Upload | `/upload` | `POST /api/uploads/` |
 | Sources list | `/datasets` | `GET /api/datasets`, `DELETE` |
-| Dataset hub | `/datasets/[id]` | `GET` dataset, preview, `GET` dashboard data, `GET/POST` analysis, forecast, `PATCH` dataset |
+| Integrations | `/integrations` | `GET /api/integrations/catalog`, `GET /api/integrations`, `POST .../oauth/start`, `GET .../oauth/session/{id}` (read on return from the provider via `?oauth_session=`), `POST .../oauth/tabs/google`, `POST .../oauth/complete/{google,microsoft}`, `POST /api/integrations`, `POST .../{id}/refresh`, `DELETE` |
+| Dataset hub | `/datasets/[id]` | `GET` dataset, preview, `GET` dashboard data, `GET/POST` analysis, forecast, `PATCH` dataset; **`POST /api/integrations/{id}/refresh`** when the dataset is fed by a connected source |
 | Chat page | `/chat` | `GET /api/datasets`, `POST /api/chat` |
 | Floating chat | `ChatOverlay` on overview | `POST /api/chat` or `/api/chat/workspace` |
 
@@ -356,7 +427,21 @@ State: **TanStack Query** caches server data; **WorkspaceContext** holds profile
 | `INTEGRATION_MAX_FETCH_MB` | **50** by default; the sync-side counterpart to `MAX_FILE_SIZE_MB`. Provider downloads are streamed and abort once the body passes this, so an oversized sheet never reaches memory. Uploads are capped at 20 MB; a machine-generated export is allowed to be bigger |
 | `INTEGRATION_FETCH_BURST_PER_MINUTE` | Max provider fetches per user per rolling minute (default **5**); **429** when exceeded. Covers `refresh` / `test` / `tabs` |
 | `INTEGRATION_FETCH_MAX_PER_HOUR` | Max provider fetches per user per rolling hour (default **30**); **429** when exceeded |
-| `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
+| `INTEGRATIONS_ENABLED` | **Master switch, default `false`.** While off, every connect/refresh/patch route returns **503** and the UI shows "coming soon". Reads (`catalog`, list) stay available |
+| `INTEGRATION_ENABLED_PROVIDERS` | Comma-separated allow-list, default **`excel_onedrive,google_sheets`**. Ships a wave without dragging every built-but-unreviewed connector live. Empty = allow every provider whose connector is available. Enforced on the write path, not just in the catalog |
+| `INTEGRATION_DEFAULT_REFRESH_HOURS` | **24**. Requested intervals are clamped to `INTEGRATION_MIN_REFRESH_HOURS` (**1**) … `INTEGRATION_MAX_REFRESH_HOURS` (**168**) |
+| `INTEGRATION_AUTO_SYNC_ENABLED` | **Default `false`:** sources refresh only when a user asks. See §7.7 for the three independent stops this implies |
+| `INTEGRATION_SCHEDULER_ENABLED` | In-process scheduler loop (interval `INTEGRATION_SCHEDULER_INTERVAL_SECONDS`, default **60**). Only consulted when auto-sync is on, and it runs in **every** API worker—prefer external cron |
+| `INTEGRATION_STALE_SYNC_MINUTES` | **30**. A row held in `syncing` longer than this is treated as a crashed run and becomes claimable again |
+| `INTEGRATION_MAX_PER_WORKSPACE` | **10** connected sources, independent of plan tier; bounds worst-case fetch + LLM volume |
+| `INTEGRATION_CRON_SECRET` | Shared secret for `POST /api/integrations/run-scheduled` (`X-Integration-Cron-Secret`). Empty → that route **503**s; **required in production** |
+| `INTEGRATION_CREDENTIALS_KEY` | Fernet key(s) encrypting stored integration credentials. First encrypts, all are tried on decrypt (`new,old` enables rotation). Empty leaves them cleartext, which **production boot refuses** |
+| `INTEGRATION_OAUTH_STATE_SECRET` | Signs the OAuth `state` carrying connection intent across the provider round trip |
+| `FRONTEND_APP_URL` | Where the OAuth callback sends the browser back (default `http://localhost:3000`). Production boot **refuses** empty, localhost, or non-https—otherwise connect succeeds server-side and strands the user on a dead page |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | **Backend** Google OAuth for the Sheets connector—*separate* from the frontend's NextAuth sign-in credentials (different scopes, different consent, redirect lands on the **API**). Unset → `oauth/start` **503**s for that provider |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` / `MICROSOFT_TENANT_ID` / `MICROSOFT_REDIRECT_URI` | Same, for Excel / OneDrive via Microsoft Graph (`offline_access User.Read Files.Read`) |
+| `RUN_MIGRATIONS_ON_STARTUP` | Run Alembic `upgrade head` in the lifespan; set false to use an external migrate step |
+| `ALLOWED_EXTENSIONS` | Default spreadsheet types only. Gates **uploads**; a connected source is read through its provider and bounded by `INTEGRATION_MAX_FETCH_MB` instead |
 | `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
 | `API_JWT_SECRET` | Signs FastAPI Bearer access tokens (override in production) |
 | `API_JWT_EXPIRE_HOURS` | Token lifetime (default **336** = 14 days) |
@@ -370,8 +455,11 @@ Frontend: `NEXT_PUBLIC_API_URL`, NextAuth env vars (`GOOGLE_CLIENT_*`, `NEXTAUTH
 ## 13. What this document does *not* claim
 
 - **Multi-tenant isolation** beyond workspace id + owner check (no row-level security in DB).
-- **PDF or Google Sheets** ingest (not in `ALLOWED_EXTENSIONS`).
-- **Production hardening beyond current upload limits** (virus scan, Redis-backed rate limits for multi-worker, reverse-proxy `limit_req`)—evaluate before a wide public launch.
+- **PDF ingest** (not in `ALLOWED_EXTENSIONS`).
+- **Integrations beyond wave one.** Google Sheets and Excel/OneDrive are implemented over OAuth (§7.7); everything else in the provider catalog reports itself unavailable. Some are deliberately held back for cause—Postgres and Salesforce until their user-supplied hosts are checked against the SSRF blocklist, warehouse tiers until reviewed.
+- **A launched Google integration.** The connector works, but `drive.readonly` is a Google **restricted** scope: unverified apps are capped at 100 users behind a warning screen, and verification (plus possibly an annual CASA assessment) is a prerequisite for public launch, not a config flag. See [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md).
+- **Unattended refresh being on.** `INTEGRATION_AUTO_SYNC_ENABLED` ships `false`; nothing syncs without a user action until someone does the cost arithmetic and turns it on.
+- **Production hardening beyond current upload limits** (virus scan, Redis-backed rate limits for multi-worker, reverse-proxy `limit_req`)—evaluate before a wide public launch. Integration fetch limits share the same per-process rate-limit caveat.
 
 ---
 
