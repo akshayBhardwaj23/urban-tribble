@@ -36,6 +36,7 @@ from models.models import (
     User,
     Workspace,
 )
+from services import ingest_pipeline as ingest_pipeline_module
 from services import integration_connectors as conn
 from services import integration_credentials as creds
 from services import integration_google as gsvc
@@ -1221,6 +1222,171 @@ class IngestDataframeSafetyTests(unittest.TestCase):
         by_name = {c["name"]: c for c in spec["columns"]}
         self.assertEqual(by_name["revenue"]["role"], "amount_inflow")
         self.assertEqual(by_name["revenue"]["meaning"], "Order value")
+
+    def _edit_mapping_like_a_user(self, dataset, **changes):
+        """Stand in for the mapping editor, which is the only thing that writes
+        source="user" (routes/datasets.py)."""
+        spec = json.loads(dataset.mapping_spec_json)
+        spec["source"] = "user"
+        spec.update(changes)
+        dataset.mapping_spec_json = json.dumps(spec)
+        self.db.commit()
+        return spec
+
+    def test_a_resync_keeps_the_primary_columns_the_user_picked(self):
+        """build_mapping_spec falls back to the first date and revenue column,
+        so a deliberate pick of the second one was silently reset every sync."""
+        df = self._df()
+        df["shipped_date"] = pd.to_datetime(["2024-01-04", "2024-01-05", "2024-01-06"])
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m:
+            m.return_value = {
+                "roles": {
+                    "order_date": "timeline",
+                    "shipped_date": "timeline",
+                    "revenue": "amount_inflow",
+                },
+                "meanings": {},
+                "source": "llm",
+            }
+            upload, dataset, _ = ingest_dataframe(
+                self.db, df=df, workspace_id="ws1", name="Orders", use_llm=True
+            )
+        self._edit_mapping_like_a_user(dataset, primary_timeline="shipped_date")
+
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m2:
+            m2.return_value = {
+                "roles": {
+                    "order_date": "timeline",
+                    "shipped_date": "timeline",
+                    "revenue": "amount_inflow",
+                },
+                "meanings": {},
+                "source": "llm",
+            }
+            ingest_dataframe(
+                self.db,
+                df=df,
+                workspace_id="ws1",
+                name="Orders",
+                upload=upload,
+                dataset=dataset,
+                use_llm=True,
+            )
+        self.assertEqual(
+            json.loads(dataset.mapping_spec_json)["primary_timeline"], "shipped_date"
+        )
+        # schema_json feeds the dashboard, so it has to agree with the choice.
+        self.assertEqual(
+            json.loads(dataset.schema_json)["date_columns"][0], "shipped_date"
+        )
+
+    def test_a_resync_keeps_corrected_roles_even_when_the_schema_changed(self):
+        """The existing known_roles shortcut only fires on an *unchanged*
+        schema and a locked dashboard. Add one column and the LLM re-derives
+        everything, which used to overwrite the user's corrections too."""
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m:
+            m.return_value = {"roles": {}, "meanings": {}, "source": "llm"}
+            upload, dataset, _ = ingest_dataframe(
+                self.db, df=self._df(), workspace_id="ws1", name="Orders", use_llm=True
+            )
+        self._edit_mapping_like_a_user(dataset)
+        spec = json.loads(dataset.mapping_spec_json)
+        by_name = {c["name"]: c for c in spec["columns"]}
+        by_name["revenue"]["role"] = "amount_outflow"  # user says it is a cost
+        by_name["revenue"]["meaning"] = "Refunds issued"
+        dataset.mapping_spec_json = json.dumps(spec)
+        self.db.commit()
+
+        grown = self._df()
+        grown["region"] = ["north", "south", "north"]
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m2:
+            m2.return_value = {
+                "roles": {"revenue": "amount_inflow", "region": "dimension"},
+                "meanings": {"revenue": "Gross sales"},
+                "source": "llm",
+            }
+            ingest_dataframe(
+                self.db,
+                df=grown,
+                workspace_id="ws1",
+                name="Orders",
+                upload=upload,
+                dataset=dataset,
+                use_llm=True,
+            )
+        m2.assert_called_once()
+        merged = {c["name"]: c for c in json.loads(dataset.mapping_spec_json)["columns"]}
+        self.assertEqual(merged["revenue"]["role"], "amount_outflow")
+        self.assertEqual(merged["revenue"]["meaning"], "Refunds issued")
+        # The genuinely new column still gets the freshly derived role.
+        self.assertEqual(merged["region"]["role"], "dimension")
+
+    def test_a_machine_derived_spec_is_still_re_derived(self):
+        """Only what a person chose is frozen. Freezing an auto guess would
+        stop a source's labels ever improving."""
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m:
+            m.return_value = {
+                "roles": {"revenue": "quantity"},
+                "meanings": {},
+                "source": "llm",
+            }
+            upload, dataset, _ = ingest_dataframe(
+                self.db, df=self._df(), workspace_id="ws1", name="Orders", use_llm=True
+            )
+        self.assertEqual(json.loads(dataset.mapping_spec_json)["source"], "llm")
+
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m2:
+            m2.return_value = {
+                "roles": {"revenue": "amount_inflow"},
+                "meanings": {},
+                "source": "llm",
+            }
+            ingest_dataframe(
+                self.db,
+                df=self._df(),
+                workspace_id="ws1",
+                name="Orders",
+                upload=upload,
+                dataset=dataset,
+                use_llm=True,
+            )
+        merged = {c["name"]: c for c in json.loads(dataset.mapping_spec_json)["columns"]}
+        self.assertEqual(merged["revenue"]["role"], "amount_inflow")
+
+    def test_a_resync_cleans_with_the_parse_policy_the_user_set(self):
+        """The stored spec is not just a label: dayfirst and drop_duplicates
+        say how the file is read. Re-cleaning with the defaults would undo the
+        choice on every refresh while the spec still claimed it was in force."""
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m:
+            m.return_value = {"roles": {}, "meanings": {}, "source": "llm"}
+            upload, dataset, _ = ingest_dataframe(
+                self.db, df=self._df(), workspace_id="ws1", name="Orders", use_llm=True
+            )
+        self._edit_mapping_like_a_user(dataset, dayfirst=True, drop_duplicates=True)
+
+        real_clean = ingest_pipeline_module.data_cleaner.clean
+        seen: dict = {}
+
+        def _capture(frame, **kwargs):
+            seen.update(kwargs)
+            return real_clean(frame, **kwargs)
+
+        with mock.patch("services.ingest_pipeline.propose_column_roles") as m2, \
+                mock.patch.object(
+                    ingest_pipeline_module.data_cleaner, "clean", side_effect=_capture
+                ):
+            m2.return_value = {"roles": {}, "meanings": {}, "source": "llm"}
+            ingest_dataframe(
+                self.db,
+                df=self._df(),
+                workspace_id="ws1",
+                name="Orders",
+                upload=upload,
+                dataset=dataset,
+                use_llm=True,
+            )
+        self.assertIs(seen.get("dayfirst"), True)
+        self.assertIs(seen.get("drop_duplicates"), True)
 
     def test_changed_schema_on_a_locked_resync_still_calls_the_llm(self):
         with mock.patch("services.ingest_pipeline.propose_column_roles") as m:

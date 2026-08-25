@@ -237,6 +237,67 @@ def metadata_from_mapping_spec(spec: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Fields a person sets by hand in the mapping editor, split by what they mean.
+# Parse policy describes how the file should be *read*, so it has to reach the
+# cleaner as well as the stored spec; the rest only shapes the spec itself.
+USER_PARSE_POLICY = ("dayfirst", "drop_duplicates", "header_row", "sheet")
+_USER_COLUMN_FIELDS = ("role", "meaning", "date_format", "original_name")
+
+
+def user_authored(spec: dict[str, Any] | None) -> bool:
+    """Whether a stored spec carries decisions a person made by hand.
+
+    ``source`` is set to ``"user"`` by the mapping editor and by nothing else,
+    so it is the one signal separating "someone chose this" from "a heuristic
+    guessed this". Re-deriving the second is an improvement; re-deriving the
+    first silently discards work.
+    """
+    return bool(spec) and str((spec or {}).get("source") or "") == "user"
+
+
+def preserve_user_mapping(
+    old_spec: dict[str, Any],
+    new_spec: dict[str, Any],
+) -> dict[str, Any]:
+    """Carry a user's mapping decisions onto a freshly derived spec.
+
+    Only columns that still exist are carried over: a role pinned to a column
+    the source has since dropped is not worth resurrecting, and a primary
+    column that has disappeared falls back to the freshly derived guess rather
+    than pointing at nothing. Everything about columns the user never touched
+    comes from ``new_spec``, so genuinely new columns are still profiled
+    normally.
+    """
+    merged = dict(new_spec)
+    # Shallow-copy the column dicts as well; callers should not see their input
+    # mutated, and the per-column loop below writes into them.
+    merged["columns"] = [dict(c) for c in (new_spec.get("columns") or [])]
+    surviving = {str(c.get("name")) for c in merged["columns"] if c.get("name")}
+
+    merged["source"] = "user"
+    for key in USER_PARSE_POLICY:
+        if key in old_spec:
+            merged[key] = old_spec[key]
+
+    for key in ("primary_timeline", "primary_amount"):
+        chosen = old_spec.get(key)
+        if chosen and str(chosen) in surviving:
+            merged[key] = chosen
+
+    old_by_name = {
+        str(c.get("name")): c for c in (old_spec.get("columns") or []) if c.get("name")
+    }
+    for col in merged["columns"]:
+        prev = old_by_name.get(str(col.get("name") or ""))
+        if not prev:
+            continue
+        for field in _USER_COLUMN_FIELDS:
+            if prev.get(field):
+                col[field] = prev[field]
+
+    return merged
+
+
 def apply_mapping(
     raw_df: pd.DataFrame,
     spec: dict[str, Any],
