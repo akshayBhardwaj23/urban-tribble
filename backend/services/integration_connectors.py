@@ -215,17 +215,11 @@ async def fetch_excel_onedrive(config: dict[str, Any]) -> pd.DataFrame:
 
 
 async def fetch_excel_onedrive_oauth(config: dict[str, Any]) -> pd.DataFrame:
-    from services.integration_microsoft import (
-        IntegrationFetchError as MicrosoftIntegrationFetchError,
-    )
-    from services.integration_microsoft import (
-        microsoft_download_item_as_dataframe,
-    )
+    # Imported here rather than at module scope: integration_microsoft imports
+    # the error types defined in this module.
+    from services.integration_microsoft import microsoft_download_item_as_dataframe
 
-    try:
-        return await microsoft_download_item_as_dataframe(config)
-    except MicrosoftIntegrationFetchError as e:
-        raise IntegrationFetchError(str(e)) from e
+    return await microsoft_download_item_as_dataframe(config)
 
 
 async def remote_change_stamp(

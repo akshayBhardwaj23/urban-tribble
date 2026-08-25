@@ -39,6 +39,7 @@ from models.models import (
 from services import integration_connectors as conn
 from services import integration_credentials as creds
 from services import integration_google as gsvc
+from services import integration_microsoft as msft
 from services import integration_oauth as oauth
 from services.file_validation import FileValidationError
 from services.ingest_pipeline import ingest_dataframe, process_dataframe
@@ -293,9 +294,7 @@ class MicrosoftPayloadParsingTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_whitespace_prefixed_html_is_rejected(self):
-        from services.integration_microsoft import IntegrationFetchError as MsftFetchError
-
-        with self.assertRaises(MsftFetchError) as ctx:
+        with self.assertRaises(IntegrationFetchError) as ctx:
             await self._download_with_body(b"  <html><body>Sign in</body></html>")
         self.assertIn("web page", str(ctx.exception).lower())
 
@@ -3585,6 +3584,112 @@ class IntegrationFetchRateLimitTests(unittest.TestCase):
         self.assertEqual(
             self.client.post("/api/integrations/nope/refresh").status_code, 404
         )
+
+
+class MicrosoftOauthCallbackFailureTests(unittest.TestCase):
+    """A failed Microsoft token exchange or file listing must render the
+    handled 400 page, not blow up as a 500.
+
+    `integration_microsoft` used to define its own `IntegrationFetchError`,
+    which shadowed the one in `integration_connectors` that this route catches.
+    The two classes were unrelated, so every Graph failure raised here sailed
+    straight past `except IntegrationFetchError` and out of the endpoint --
+    in a browser redirect, where there is nobody left to render it.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from sqlalchemy.pool import StaticPool
+
+        cls.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        enable_sqlite_pragmas(cls.engine)
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from database import get_db
+        from routes import integrations as routes_integrations
+        from services.integration_oauth import build_signed_state
+
+        self.routes = routes_integrations
+
+        for key, value in (
+            ("INTEGRATIONS_ENABLED", True),
+            ("INTEGRATION_CREDENTIALS_KEY", ""),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        creds._cipher_cache = None
+        self.addCleanup(setattr, creds, "_cipher_cache", None)
+
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+
+        app = FastAPI()
+        app.include_router(routes_integrations.router)
+        app.dependency_overrides[get_db] = lambda: self.db
+        # Without this the client re-raises an escaped exception instead of
+        # turning it into the 500 the browser would actually receive, which is
+        # exactly the outcome under test.
+        self.client = TestClient(app, raise_server_exceptions=False)
+
+        self.state = build_signed_state(
+            {
+                "provider": "excel_onedrive",
+                "workspace_id": "ws1",
+                "user_email": "o@x.com",
+                "name": "Q4",
+                "refresh_interval_hours": 24,
+                "auto_analyze": False,
+                "dashboard_plan_locked": False,
+            }
+        )
+
+    def _callback(self):
+        return self.client.get(
+            "/api/integrations/oauth/callback/microsoft",
+            params={"code": "abc", "state": self.state},
+        )
+
+    def test_a_failed_token_exchange_renders_the_handled_page(self):
+        with mock.patch.object(
+            self.routes,
+            "microsoft_exchange_code_for_tokens",
+            new=mock.AsyncMock(
+                side_effect=msft.IntegrationFetchError("Microsoft token exchange failed")
+            ),
+        ):
+            resp = self._callback()
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Microsoft token exchange failed", resp.text)
+
+    def test_a_failed_file_listing_renders_the_handled_page(self):
+        with mock.patch.object(
+            self.routes,
+            "microsoft_exchange_code_for_tokens",
+            new=mock.AsyncMock(return_value={"access_token": "tok", "expires_in": 3600}),
+        ), mock.patch.object(
+            self.routes,
+            "microsoft_list_excel_files",
+            new=mock.AsyncMock(
+                side_effect=msft.IntegrationFetchError("Microsoft Graph request failed")
+            ),
+        ):
+            resp = self._callback()
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Microsoft Graph request failed", resp.text)
+
+    def test_the_microsoft_module_does_not_define_a_second_error_class(self):
+        """The shadowing itself, asserted directly: one class, one except."""
+        self.assertIs(msft.IntegrationFetchError, IntegrationFetchError)
 
 
 if __name__ == "__main__":
