@@ -126,7 +126,7 @@ export default function IntegrationsPage() {
   // Populated once the user has chosen files and we have looked at their tabs.
   // Null means we have not asked yet, so the picker is still on file selection.
   const [tabInfo, setTabInfo] = useState<GoogleFileTabs[] | null>(null);
-  const [chosenTabs, setChosenTabs] = useState<Record<string, string>>({});
+  const [chosenTabs, setChosenTabs] = useState<Record<string, string[]>>({});
 
   const oauthSessionId = searchParams.get("oauth_session");
 
@@ -284,6 +284,17 @@ export default function IntegrationsPage() {
     [tabInfo],
   );
 
+  // Once tabs are on screen the count of *sources* stops matching the count of
+  // files: one workbook with three tabs ticked is three. A file with nothing
+  // ticked still contributes one, on the auto-pick.
+  const sourceCount = useMemo(() => {
+    if (tabInfo === null) return selectedIds.length;
+    return selectedIds.reduce(
+      (total, id) => total + Math.max(1, chosenTabs[id]?.length ?? 0),
+      0,
+    );
+  }, [tabInfo, selectedIds, chosenTabs]);
+
   const inspectTabsMutation = useMutation({
     mutationFn: () => {
       if (!oauthSessionId) throw new Error("No sign-in in progress");
@@ -303,7 +314,7 @@ export default function IntegrationsPage() {
         Object.fromEntries(
           needing
             .filter((f) => f.suggested_tab)
-            .map((f) => [f.item_id, f.suggested_tab as string]),
+            .map((f) => [f.item_id, [f.suggested_tab as string]]),
         ),
       );
       setTabInfo(result.files);
@@ -313,7 +324,7 @@ export default function IntegrationsPage() {
   });
 
   const completeOauthMutation = useMutation({
-    mutationFn: async (sheetNames: Record<string, string>) => {
+    mutationFn: async (sheetNames: Record<string, string[]>) => {
       if (!oauthSessionId || selectedIds.length === 0) {
         throw new Error("Select at least one file first");
       }
@@ -490,32 +501,58 @@ export default function IntegrationsPage() {
                           : `${ambiguousFiles.length} workbooks have more than one sheet of data`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        We picked the one that looks most like a data table. Change it
-                        if that is not the one you want — you can also change it later.
+                        We ticked the one that looks most like a data table. Tick more
+                        than one to bring each in as its own source with its own
+                        dashboard — you can also change this later.
                       </p>
                     </div>
-                    {ambiguousFiles.map((file) => (
-                      <div key={file.item_id} className="space-y-1">
-                        <label className="text-xs font-medium">{file.name}</label>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                          value={chosenTabs[file.item_id] ?? file.suggested_tab ?? ""}
-                          onChange={(e) =>
-                            setChosenTabs((prev) => ({
-                              ...prev,
-                              [file.item_id]: e.target.value,
-                            }))
-                          }
-                        >
-                          {file.tabs.map((tab) => (
-                            <option key={tab.name} value={tab.name}>
-                              {tab.name}
-                              {tab.name === file.suggested_tab ? " (suggested)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
+                    {ambiguousFiles.map((file) => {
+                      const picked =
+                        chosenTabs[file.item_id] ??
+                        (file.suggested_tab ? [file.suggested_tab] : []);
+                      return (
+                        <div key={file.item_id} className="space-y-1">
+                          <label className="text-xs font-medium">{file.name}</label>
+                          <div className="space-y-1 rounded-md border p-2">
+                            {file.tabs.map((tab) => (
+                              <label
+                                key={tab.name}
+                                className="flex items-center gap-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-input"
+                                  checked={picked.includes(tab.name)}
+                                  onChange={(e) =>
+                                    setChosenTabs((prev) => {
+                                      const current =
+                                        prev[file.item_id] ?? picked;
+                                      return {
+                                        ...prev,
+                                        [file.item_id]: e.target.checked
+                                          ? [...current, tab.name]
+                                          : current.filter((t) => t !== tab.name),
+                                      };
+                                    })
+                                  }
+                                />
+                                <span>
+                                  {tab.name}
+                                  {tab.name === file.suggested_tab
+                                    ? " (suggested)"
+                                    : ""}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                          {picked.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              Nothing ticked — we will pick the most table-like sheet.
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
 
@@ -546,8 +583,8 @@ export default function IntegrationsPage() {
                     >
                       {completeOauthMutation.isPending
                         ? "Connecting…"
-                        : selectedIds.length > 1
-                          ? `Connect ${selectedIds.length} sheets`
+                        : sourceCount > 1
+                          ? `Connect ${sourceCount} sources`
                           : "Connect"}
                     </Button>
                   )}

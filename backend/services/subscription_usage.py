@@ -390,6 +390,28 @@ def assert_upload_allowed(db: Session, user: User, workspace_id: str) -> None:
         )
 
 
+def remaining_upload_allowance(db: Session, user: User, workspace_id: str) -> int | None:
+    """How many more uploads this user may create, or None when uncapped.
+
+    `assert_upload_allowed` answers "may I create one more?", which is the
+    right question when uploads arrive one at a time. Connecting several
+    sheets at once needs the batch checked before any row is written, or the
+    user gets a partial connection and has to work out which half landed.
+    """
+    plan = get_effective_plan(db, user)
+    if plan == "free":
+        used = _count_user_completed_uploads_all_time(db, user.id)
+        return max(0, _FREE_LIFETIME["uploads"] - used)
+    caps = _MONTHLY_CAPS.get(plan)
+    if not caps:
+        return None
+    lim = caps["uploads"]
+    if lim is None:
+        return None
+    used = _count_workspace_uploads_this_month(db, workspace_id, _month_start_utc())
+    return max(0, lim - used)
+
+
 def assert_analysis_allowed(db: Session, user: User, workspace_id: str) -> None:
     plan = get_effective_plan(db, user)
     if plan == "free":
