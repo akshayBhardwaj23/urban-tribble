@@ -1153,6 +1153,27 @@ export const api = {
       method: "POST",
     }),
 
+  inspectGoogleTabs: (body: { session_id: string; item_ids: string[] }) =>
+    request<{ files: GoogleFileTabs[] }>("/api/integrations/oauth/tabs/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  listIntegrationTabs: (id: string) =>
+    request<{
+      tabs: SheetTab[];
+      current_tab: string | null;
+      suggested_tab: string | null;
+    }>(`/api/integrations/${id}/tabs`),
+
+  updateIntegrationSheet: (id: string, sheetName: string) =>
+    request<IntegrationSyncResult>(`/api/integrations/${id}/sheet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheet_name: sheetName }),
+    }),
+
   completeGoogleOauth: (body: CompleteGoogleOauthBody) =>
     request<GoogleConnectResult>("/api/integrations/oauth/complete/google", {
       method: "POST",
@@ -1237,6 +1258,24 @@ export type CompleteMicrosoftOauthBody = {
 export type CompleteGoogleOauthBody = {
   session_id: string;
   item_ids: string[];
+  /** Chosen tab per file id. Omitted files fall back to the auto-pick. */
+  sheet_names?: Record<string, string>;
+};
+
+export type SheetTab = {
+  name: string;
+  score: number;
+  sampled_rows: number;
+  cols: number;
+};
+
+/** What a workbook's tabs look like, and whether the user should be asked. */
+export type GoogleFileTabs = {
+  item_id: string;
+  name: string;
+  tabs: SheetTab[];
+  needs_choice: boolean;
+  suggested_tab: string | null;
 };
 
 /**

@@ -2896,5 +2896,312 @@ class FrontendRedirectUrlGuardTests(unittest.TestCase):
         )
 
 
+class SheetTabSelectionTests(unittest.TestCase):
+    """Which tab of a multi-tab workbook gets read.
+
+    The reader already auto-picks the most table-like tab, which is right for a
+    cover page plus one table and a coin toss for Jan/Feb/Mar. The rule here is
+    that the user is asked only when there is a real decision to make.
+    """
+
+    def _tab(self, name, score, rows=20, cols=6):
+        return {"name": name, "score": score, "sampled_rows": rows, "cols": cols}
+
+    def test_a_single_data_tab_is_not_ambiguous(self):
+        tabs = [self._tab("Data", 9.0)]
+        self.assertFalse(gsvc.tab_choice_is_ambiguous(tabs))
+        self.assertEqual(gsvc.default_tab_name(tabs), "Data")
+
+    def test_a_cover_page_does_not_make_it_ambiguous(self):
+        """The common shape: a title tab and the real table. Nothing to ask."""
+        tabs = [self._tab("Cover", 0.2, rows=2, cols=1), self._tab("Sales", 8.5)]
+        self.assertFalse(gsvc.tab_choice_is_ambiguous(tabs))
+        self.assertEqual(gsvc.default_tab_name(tabs), "Sales")
+
+    def test_several_real_data_tabs_are_ambiguous(self):
+        """Jan/Feb/Mar: the auto-pick would be arbitrary, so ask."""
+        tabs = [self._tab("Jan", 7.9), self._tab("Feb", 8.1), self._tab("Mar", 7.6)]
+        self.assertTrue(gsvc.tab_choice_is_ambiguous(tabs))
+
+    def test_the_best_scoring_tab_is_suggested(self):
+        tabs = [self._tab("Jan", 7.9), self._tab("Feb", 8.4), self._tab("Mar", 7.6)]
+        self.assertEqual(gsvc.default_tab_name(tabs), "Feb")
+
+    def test_empty_tabs_are_ignored_entirely(self):
+        tabs = [self._tab("Sheet2", 0.0, rows=0, cols=0), self._tab("Data", 6.0)]
+        self.assertFalse(gsvc.tab_choice_is_ambiguous(tabs))
+        self.assertEqual(gsvc.default_tab_name(tabs), "Data")
+
+    def test_a_workbook_with_no_readable_tabs_suggests_nothing(self):
+        self.assertIsNone(gsvc.default_tab_name([]))
+        self.assertFalse(gsvc.tab_choice_is_ambiguous([]))
+
+    def test_sampled_rows_are_scored_like_an_uploaded_workbook(self):
+        """A populated sample should outscore a title-only one, using the same
+        heuristic the upload path applies."""
+        table = [["date", "revenue"], ["2024-01-01", "100"], ["2024-01-02", "200"]]
+        cover = [["Quarterly report"]]
+        table_score, _, _ = gsvc._score_sampled_rows(table)
+        cover_score, _, _ = gsvc._score_sampled_rows(cover)
+        self.assertGreater(table_score, cover_score)
+
+    def test_ragged_sample_rows_do_not_crash(self):
+        """The values API omits trailing empty cells, so rows arrive uneven."""
+        score, rows, cols = gsvc._score_sampled_rows(
+            [["a", "b", "c"], ["1"], ["2", "3"]]
+        )
+        self.assertEqual(rows, 3)
+        self.assertEqual(cols, 3)
+        self.assertGreaterEqual(score, 0.0)
+
+    def test_an_empty_sample_scores_zero(self):
+        self.assertEqual(gsvc._score_sampled_rows([]), (0.0, 0, 0))
+
+
+class SheetTabReadTests(unittest.IsolatedAsyncioTestCase):
+    """Reading the chosen tab, and failing usefully when it is gone."""
+
+    @staticmethod
+    def _workbook(**tabs) -> bytes:
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf) as writer:
+            for name, frame in tabs.items():
+                frame.to_excel(writer, sheet_name=name, index=False)
+        return buf.getvalue()
+
+    def _books(self):
+        return {
+            "Jan": pd.DataFrame({"day": [1, 2], "revenue": [10, 20]}),
+            "Feb": pd.DataFrame({"day": [1, 2], "revenue": [30, 40]}),
+        }
+
+    async def _download(self, config, content):
+        class _Resp:
+            status_code = 200
+            headers = {"content-type": gsvc.XLSX_MIME}
+
+            @property
+            def content(self_inner):
+                return content
+
+            @property
+            def text(self_inner):
+                return ""
+
+        class _Client:
+            def __init__(self_inner, *a, **kw):
+                pass
+
+            async def __aenter__(self_inner):
+                return self_inner
+
+            async def __aexit__(self_inner, *exc):
+                return False
+
+            async def get(self_inner, *a, **kw):
+                return _Resp()
+
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(gsvc.httpx, "AsyncClient", _Client):
+            return await gsvc.google_download_item_as_dataframe(config)
+
+    async def test_the_chosen_tab_is_the_one_read(self):
+        content = self._workbook(**self._books())
+        df = await self._download(
+            {
+                "item_id": "x",
+                "item_name": "Book",
+                "mime_type": gsvc.GOOGLE_SHEET_MIME,
+                "sheet_name": "Feb",
+            },
+            content,
+        )
+        self.assertEqual(df["revenue"].tolist(), [30, 40])
+
+    async def test_choosing_the_other_tab_reads_that_one(self):
+        """Proves the previous test is the selection working, not a default."""
+        content = self._workbook(**self._books())
+        df = await self._download(
+            {
+                "item_id": "x",
+                "item_name": "Book",
+                "mime_type": gsvc.GOOGLE_SHEET_MIME,
+                "sheet_name": "Jan",
+            },
+            content,
+        )
+        self.assertEqual(df["revenue"].tolist(), [10, 20])
+
+    async def test_no_choice_falls_back_to_the_auto_pick(self):
+        """Sources connected before tab selection existed have no stored tab."""
+        content = self._workbook(Data=pd.DataFrame({"a": [1, 2], "b": [3, 4]}))
+        df = await self._download(
+            {"item_id": "x", "item_name": "Book", "mime_type": gsvc.GOOGLE_SHEET_MIME},
+            content,
+        )
+        self.assertEqual(list(df.columns), ["a", "b"])
+
+    async def test_a_tab_renamed_in_google_reports_which_one_is_missing(self):
+        """The stored choice can go stale: someone renames the tab in Sheets."""
+        content = self._workbook(**self._books())
+        with self.assertRaises(IntegrationFetchError) as ctx:
+            await self._download(
+                {
+                    "item_id": "x",
+                    "item_name": "Book",
+                    "mime_type": gsvc.GOOGLE_SHEET_MIME,
+                    "sheet_name": "March",
+                },
+                content,
+            )
+        self.assertIn("March", str(ctx.exception))
+        self.assertIn("no longer exists", str(ctx.exception).lower())
+
+
+class ChangeSheetTabRouteTests(unittest.TestCase):
+    """POST /{id}/sheet — repointing an existing source at a different tab.
+
+    Kept off PATCH /{id} on purpose: that replaces `config` wholesale, which
+    for an OAuth source would throw away the stored access and refresh tokens
+    and silently break the connection. The credential-preservation test below
+    is the one that matters.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from sqlalchemy.pool import StaticPool
+
+        cls.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        enable_sqlite_pragmas(cls.engine)
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from database import get_db
+        from deps import require_active_workspace
+        from routes import integrations as routes_integrations
+
+        for key, value in (
+            ("INTEGRATIONS_ENABLED", True),
+            ("INTEGRATION_CREDENTIALS_KEY", ""),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        creds._cipher_cache = None
+        self.addCleanup(setattr, creds, "_cipher_cache", None)
+
+        sync_patcher = mock.patch.object(
+            routes_integrations, "sync_integration", new=mock.AsyncMock(return_value={"ok": True})
+        )
+        self.mock_sync = sync_patcher.start()
+        self.addCleanup(sync_patcher.stop)
+
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+        self.addCleanup(self._wipe)
+        self.user = User(id="u1", email="o@x.com")
+        self.db.add_all([self.user, Workspace(id="ws1", name="W", owner_id="u1")])
+        self.db.commit()
+
+        self.integration = DataSourceIntegration(
+            id="int1",
+            workspace_id="ws1",
+            provider="google_sheets",
+            name="Q4",
+            connection_mode="oauth",
+            config_json=creds.encrypt_config(
+                {
+                    "access_token": "ms_access",
+                    "refresh_token": "ms_refresh",
+                    "item_id": "file1",
+                    "mime_type": gsvc.GOOGLE_SHEET_MIME,
+                    "sheet_name": "Jan",
+                    "last_change_stamp": "STAMP-1",
+                }
+            ),
+            refresh_interval_hours=24,
+            status=IntegrationStatus.active,
+        )
+        self.db.add(self.integration)
+        self.db.commit()
+
+        app = FastAPI()
+        app.include_router(routes_integrations.router)
+        app.dependency_overrides[get_db] = lambda: self.db
+        app.dependency_overrides[require_active_workspace] = lambda: (self.user, "ws1")
+        self.client = TestClient(app)
+
+    def _wipe(self):
+        db = self.Session()
+        try:
+            for model in (DataSourceIntegration, Workspace, User):
+                db.query(model).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    def _config(self):
+        self.db.refresh(self.integration)
+        return decrypt_config(self.integration.config_json)
+
+    def _post(self, tab):
+        return self.client.post(
+            "/api/integrations/int1/sheet", json={"sheet_name": tab}
+        )
+
+    def test_the_tab_is_updated(self):
+        self.assertEqual(self._post("Feb").status_code, 200)
+        self.assertEqual(self._config()["sheet_name"], "Feb")
+
+    def test_the_google_credentials_survive(self):
+        """The reason this is not a plain config PATCH."""
+        self._post("Feb")
+        config = self._config()
+        self.assertEqual(config["access_token"], "ms_access")
+        self.assertEqual(config["refresh_token"], "ms_refresh")
+        self.assertEqual(config["item_id"], "file1")
+
+    def test_the_change_marker_is_cleared_so_the_re_read_is_not_skipped(self):
+        """Otherwise the unchanged-source check would see the same file and skip,
+        leaving the dashboard built from the old tab."""
+        self._post("Feb")
+        self.assertNotIn("last_change_stamp", self._config())
+
+    def test_it_re_syncs_immediately(self):
+        """The dashboard was built from the old tab's columns."""
+        self._post("Feb")
+        self.mock_sync.assert_awaited_once()
+
+    def test_an_unknown_source_is_a_404(self):
+        self.assertEqual(
+            self.client.post(
+                "/api/integrations/nope/sheet", json={"sheet_name": "Feb"}
+            ).status_code,
+            404,
+        )
+
+    def test_an_empty_tab_name_is_rejected(self):
+        self.assertEqual(self._post("").status_code, 422)
+
+    def test_it_is_gated_by_the_feature_flag(self):
+        with mock.patch.object(settings, "INTEGRATIONS_ENABLED", False):
+            self.assertEqual(self._post("Feb").status_code, 503)
+
+    def test_tabs_are_only_listable_for_google_sources(self):
+        self.integration.provider = "stripe"
+        self.db.commit()
+        resp = self.client.get("/api/integrations/int1/tabs")
+        self.assertEqual(resp.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

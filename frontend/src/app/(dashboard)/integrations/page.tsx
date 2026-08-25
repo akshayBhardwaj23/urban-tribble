@@ -19,6 +19,7 @@ import {
 import {
   api,
   type IntegrationConnectionField,
+  type GoogleFileTabs,
   type IntegrationProvider,
   type IntegrationRecord,
 } from "@/lib/api";
@@ -122,6 +123,10 @@ export default function IntegrationsPage() {
   // deselected everything -- otherwise clearing a single auto-selected file
   // would immediately re-select it.
   const [selectedFileIds, setSelectedFileIds] = useState<string[] | null>(null);
+  // Populated once the user has chosen files and we have looked at their tabs.
+  // Null means we have not asked yet, so the picker is still on file selection.
+  const [tabInfo, setTabInfo] = useState<GoogleFileTabs[] | null>(null);
+  const [chosenTabs, setChosenTabs] = useState<Record<string, string>>({});
 
   const oauthSessionId = searchParams.get("oauth_session");
 
@@ -244,11 +249,48 @@ export default function IntegrationsPage() {
 
   const clearOauthSession = () => {
     setSelectedFileIds(null);
+    setTabInfo(null);
+    setChosenTabs({});
     router.replace("/integrations");
   };
 
+  // Only workbooks with more than one data-like tab are worth interrupting for;
+  // the rest are connected on their auto-pick without a question.
+  const ambiguousFiles = useMemo(
+    () => (tabInfo ?? []).filter((f) => f.needs_choice),
+    [tabInfo],
+  );
+
+  const inspectTabsMutation = useMutation({
+    mutationFn: () => {
+      if (!oauthSessionId) throw new Error("No sign-in in progress");
+      return api.inspectGoogleTabs({
+        session_id: oauthSessionId,
+        item_ids: selectedIds,
+      });
+    },
+    onSuccess: (result) => {
+      const needing = result.files.filter((f) => f.needs_choice);
+      if (needing.length === 0) {
+        // Nothing to decide: go straight to connecting.
+        completeOauthMutation.mutate({});
+        return;
+      }
+      setChosenTabs(
+        Object.fromEntries(
+          needing
+            .filter((f) => f.suggested_tab)
+            .map((f) => [f.item_id, f.suggested_tab as string]),
+        ),
+      );
+      setTabInfo(result.files);
+    },
+    onError: (e: Error) =>
+      toast.error(formatUserFacingApiError(e, "read those spreadsheets")),
+  });
+
   const completeOauthMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (sheetNames: Record<string, string>) => {
       if (!oauthSessionId || selectedIds.length === 0) {
         throw new Error("Select at least one file first");
       }
@@ -256,6 +298,7 @@ export default function IntegrationsPage() {
         return api.completeGoogleOauth({
           session_id: oauthSessionId,
           item_ids: selectedIds,
+          sheet_names: sheetNames,
         });
       }
       return api.completeMicrosoftOauth({
@@ -371,7 +414,7 @@ export default function IntegrationsPage() {
                     : "Pick the workbook to sync."}
                 </p>
 
-                <div className="grid gap-2">
+                <div className={`grid gap-2 ${tabInfo ? "hidden" : ""}`}>
                   {oauthFiles.map((file) => {
                     const checked = selectedIds.includes(file.id);
                     return (
@@ -415,21 +458,88 @@ export default function IntegrationsPage() {
                   </p>
                 ) : null}
 
+                {ambiguousFiles.length > 0 ? (
+                  <div className="space-y-3 rounded-md border p-3">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {ambiguousFiles.length === 1
+                          ? "This workbook has more than one sheet of data"
+                          : `${ambiguousFiles.length} workbooks have more than one sheet of data`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        We picked the one that looks most like a data table. Change it
+                        if that is not the one you want — you can also change it later.
+                      </p>
+                    </div>
+                    {ambiguousFiles.map((file) => (
+                      <div key={file.item_id} className="space-y-1">
+                        <label className="text-xs font-medium">{file.name}</label>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          value={chosenTabs[file.item_id] ?? file.suggested_tab ?? ""}
+                          onChange={(e) =>
+                            setChosenTabs((prev) => ({
+                              ...prev,
+                              [file.item_id]: e.target.value,
+                            }))
+                          }
+                        >
+                          {file.tabs.map((tab) => (
+                            <option key={tab.name} value={tab.name}>
+                              {tab.name}
+                              {tab.name === file.suggested_tab ? " (suggested)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={() => completeOauthMutation.mutate()}
-                    disabled={
-                      completeOauthMutation.isPending ||
-                      selectedIds.length === 0
-                    }
-                  >
-                    {completeOauthMutation.isPending
-                      ? "Connecting…"
-                      : selectedIds.length > 1
-                        ? `Connect ${selectedIds.length} sheets`
-                        : "Connect"}
-                  </Button>
-                  <Button variant="outline" onClick={clearOauthSession}>
+                  {tabInfo === null && multiSelect ? (
+                    <Button
+                      onClick={() => inspectTabsMutation.mutate()}
+                      disabled={
+                        inspectTabsMutation.isPending ||
+                        completeOauthMutation.isPending ||
+                        selectedIds.length === 0
+                      }
+                    >
+                      {inspectTabsMutation.isPending
+                        ? "Reading sheets…"
+                        : completeOauthMutation.isPending
+                          ? "Connecting…"
+                          : selectedIds.length > 1
+                            ? `Continue with ${selectedIds.length} sheets`
+                            : "Continue"}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => completeOauthMutation.mutate(chosenTabs)}
+                      disabled={
+                        completeOauthMutation.isPending || selectedIds.length === 0
+                      }
+                    >
+                      {completeOauthMutation.isPending
+                        ? "Connecting…"
+                        : selectedIds.length > 1
+                          ? `Connect ${selectedIds.length} sheets`
+                          : "Connect"}
+                    </Button>
+                  )}
+                  {tabInfo !== null ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setTabInfo(null);
+                        setChosenTabs({});
+                      }}
+                    >
+                      Back
+                    </Button>
+                  ) : null}
+                  <Button variant="ghost" onClick={clearOauthSession}>
                     Cancel
                   </Button>
                 </div>
