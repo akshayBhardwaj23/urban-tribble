@@ -12,6 +12,10 @@ import pandas as pd
 from config import settings
 from services.file_processor import FileProcessor
 
+# Safe at module scope: integration_connectors imports this module only from
+# inside functions, precisely so this direction can be a normal import.
+from services.integration_connectors import read_body_limited
+
 
 class IntegrationFetchError(Exception):
     pass
@@ -153,17 +157,22 @@ async def microsoft_download_item_as_dataframe(config: dict[str, Any]) -> Any:
     item_id = str(config.get("item_id") or "").strip()
     if not item_id:
         raise IntegrationFetchError("Microsoft workbook item is not selected.")
+    # Streamed and capped for the same reason as the Google path: a workbook in
+    # OneDrive has no size ceiling of its own, and the row/column caps in ingest
+    # only apply once the whole thing has already been parsed into a frame.
     async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
-        resp = await client.get(
+        async with client.stream(
+            "GET",
             f"{GRAPH_BASE}/me/drive/items/{item_id}/content",
             headers={"Authorization": f"Bearer {token}"},
-        )
-    if resp.status_code >= 400:
-        raise IntegrationFetchError(
-            f"Microsoft workbook download failed: {resp.text[:300]}"
-        )
-    content = resp.content
-    content_type = resp.headers.get("content-type", "")
+        ) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                raise IntegrationFetchError(
+                    f"Microsoft workbook download failed: {resp.text[:300]}"
+                )
+            content_type = resp.headers.get("content-type", "")
+            content = await read_body_limited(resp, source="OneDrive")
     name = str(config.get("item_name") or item_id)
     head = content.lstrip()
     if head[:15].startswith(b"<!DOCTYPE") or head[:6].startswith(b"<html"):

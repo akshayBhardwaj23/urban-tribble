@@ -353,6 +353,9 @@ State: **TanStack Query** caches server data; **WorkspaceContext** holds profile
 | `MAX_FILE_SIZE_MB` | **20** by default; server streams uploads and rejects larger bodies with **413**; frontend `upload-config.ts` should stay in sync |
 | `UPLOAD_RATE_BURST_PER_MINUTE` | Max uploads per user per rolling minute (default **5**); **429** when exceeded |
 | `UPLOAD_RATE_MAX_PER_HOUR` | Max uploads per user per rolling hour (default **30**); **429** when exceeded |
+| `INTEGRATION_MAX_FETCH_MB` | **50** by default; the sync-side counterpart to `MAX_FILE_SIZE_MB`. Provider downloads are streamed and abort once the body passes this, so an oversized sheet never reaches memory. Uploads are capped at 20 MB; a machine-generated export is allowed to be bigger |
+| `INTEGRATION_FETCH_BURST_PER_MINUTE` | Max provider fetches per user per rolling minute (default **5**); **429** when exceeded. Covers `refresh` / `test` / `tabs` |
+| `INTEGRATION_FETCH_MAX_PER_HOUR` | Max provider fetches per user per rolling hour (default **30**); **429** when exceeded |
 | `ALLOWED_EXTENSIONS` | Default spreadsheet types only |
 | `CORS_ORIGINS` | Comma-separated; must include frontend origin when using cookies/credentials |
 | `API_JWT_SECRET` | Signs FastAPI Bearer access tokens (override in production) |

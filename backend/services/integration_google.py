@@ -36,6 +36,7 @@ from services.file_processor import FileProcessor
 from services.integration_connectors import (
     IntegrationFetchError,
     IntegrationNotConfiguredError,
+    read_body_limited,
 )
 
 _file_processor = FileProcessor()
@@ -472,12 +473,37 @@ def _download_target(config: dict[str, Any]) -> tuple[str, dict[str, Any], str]:
 
 
 async def _download_file_bytes(config: dict[str, Any]) -> bytes:
+    """Fetch the connected file's bytes, refusing anything past the fetch cap.
+
+    Streamed rather than buffered: an uploaded .xlsx in Drive is served through
+    ``alt=media``, which has no size ceiling of Google's own, so without a cap
+    here a large workbook would be pulled entirely into memory and only rejected
+    afterwards by the row/column caps in ingest.
+    """
     token = await google_ensure_access_token(config)
     url, params, _ = _download_target(config)
 
     async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
-        resp = await client.get(
-            url, params=params, headers={"Authorization": f"Bearer {token}"}
+        async with client.stream(
+            "GET", url, params=params, headers={"Authorization": f"Bearer {token}"}
+        ) as resp:
+            if resp.status_code >= 400:
+                # On an error the body is a small JSON payload, not file bytes,
+                # so reading it in full is safe and makes resp.text usable.
+                await resp.aread()
+                _raise_for_download_error(resp)
+            return await read_body_limited(resp, source="Google")
+
+
+def _raise_for_download_error(resp: httpx.Response) -> None:
+    body = resp.text or ""
+    if "exportSizeLimitExceeded" in body:
+        # Google's own ceiling on exporting a native Sheet, which it reports as
+        # a 403. Saying "denied access, reconnect" here would send someone off
+        # to re-authorise a connection that is working fine.
+        raise IntegrationFetchError(
+            "This Google Sheet is too large for Google to export in one piece. "
+            "Split it into smaller sheets, or connect a specific tab."
         )
     if resp.status_code in (401, 403):
         raise IntegrationFetchError(
@@ -489,9 +515,7 @@ async def _download_file_bytes(config: dict[str, Any]) -> bytes:
             "This Google file no longer exists, or was moved out of reach of the "
             "connected account."
         )
-    if resp.status_code >= 400:
-        raise IntegrationFetchError(f"Google download failed: {resp.text[:300]}")
-    return resp.content
+    raise IntegrationFetchError(f"Google download failed: {body[:300]}")
 
 
 async def google_download_item_as_dataframe(config: dict[str, Any]) -> pd.DataFrame:

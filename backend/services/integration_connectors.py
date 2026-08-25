@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import httpx
 import pandas as pd
 
+from config import settings
 from services.file_processor import FileProcessor
 
 _file_processor = FileProcessor()
@@ -26,12 +27,68 @@ class IntegrationNotConfiguredError(IntegrationFetchError):
     pass
 
 
+class IntegrationTooLargeError(IntegrationFetchError):
+    """The remote file is past INTEGRATION_MAX_FETCH_MB.
+
+    A subclass rather than a plain fetch error so callers that already handle
+    IntegrationFetchError keep working (sync records it and releases the row
+    like any other fetch failure) while anything that wants to treat "too big"
+    as its own outcome still can.
+    """
+
+
 class IntegrationSyncInProgressError(IntegrationFetchError):
     """Another caller already holds the sync claim on this row.
 
     Raised instead of letting two syncs run concurrently and interleave
     writes to the same dataset -- see integration_sync.claim_integration_for_sync.
     """
+
+
+def max_fetch_bytes() -> int:
+    return max(1, int(getattr(settings, "INTEGRATION_MAX_FETCH_MB", 50))) * 1024 * 1024
+
+
+def too_large_error(source: str, limit_bytes: int) -> IntegrationTooLargeError:
+    return IntegrationTooLargeError(
+        f"This {source} file is larger than the "
+        f"{limit_bytes // (1024 * 1024)} MB limit for connected sources. "
+        "Trim the sheet, or split it across separate sources."
+    )
+
+
+async def read_body_limited(
+    resp: httpx.Response,
+    *,
+    source: str,
+    max_bytes: int | None = None,
+) -> bytes:
+    """Read a streaming response body, stopping the moment it exceeds the cap.
+
+    Content-Length is consulted first, so an oversized file costs one round trip
+    instead of a full download; a provider that streams without declaring a
+    length is caught by the running total instead. Either way the whole file
+    never lands in memory -- which is the failure the frame-size cap in
+    ``ingest_dataframe`` cannot prevent, since it only runs once a DataFrame has
+    already been built.
+
+    The response must come from ``client.stream(...)``; a plain ``client.get``
+    has already buffered the body by the time this could refuse it.
+    """
+    limit = max_fetch_bytes() if max_bytes is None else max_bytes
+
+    declared = (resp.headers.get("content-length") or "").strip()
+    if declared.isdigit() and int(declared) > limit:
+        raise too_large_error(source, limit)
+
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in resp.aiter_bytes():
+        total += len(chunk)
+        if total > limit:
+            raise too_large_error(source, limit)
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _resolve_google_sheets_url(config: dict[str, Any]) -> str:
@@ -111,23 +168,23 @@ async def _fetch_onedrive_via_graph_share(url: str) -> pd.DataFrame:
     token = _encode_onedrive_share_token(url)
     graph_url = f"https://graph.microsoft.com/v1.0/shares/{token}/driveItem/content"
     async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
-        resp = await client.get(graph_url)
-        if resp.status_code == 401:
-            raise IntegrationFetchError(
-                "OneDrive file is not publicly accessible. "
-                "In Share settings, choose 'Anyone with the link can view', then copy that link."
-            )
-        if resp.status_code == 404:
-            raise IntegrationFetchError(
-                "OneDrive file not found. Check the sharing link is still valid."
-            )
-        if resp.status_code >= 400:
-            raise IntegrationFetchError(
-                f"OneDrive could not download this file (HTTP {resp.status_code}). "
-                "Use a Share link from OneDrive, not the excel.cloud.microsoft editor URL."
-            )
-        content = resp.content
-        ctype = resp.headers.get("content-type", "")
+        async with client.stream("GET", graph_url) as resp:
+            if resp.status_code == 401:
+                raise IntegrationFetchError(
+                    "OneDrive file is not publicly accessible. "
+                    "In Share settings, choose 'Anyone with the link can view', then copy that link."
+                )
+            if resp.status_code == 404:
+                raise IntegrationFetchError(
+                    "OneDrive file not found. Check the sharing link is still valid."
+                )
+            if resp.status_code >= 400:
+                raise IntegrationFetchError(
+                    f"OneDrive could not download this file (HTTP {resp.status_code}). "
+                    "Use a Share link from OneDrive, not the excel.cloud.microsoft editor URL."
+                )
+            content = await read_body_limited(resp, source="OneDrive")
+            ctype = resp.headers.get("content-type", "")
     return _dataframe_from_bytes(content, url, ctype)
 
 
@@ -269,18 +326,25 @@ async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
     # Follow redirects manually so every hop is re-checked against the SSRF blocklist.
     async with httpx.AsyncClient(timeout=90.0, follow_redirects=False) as client:
         current = url
-        resp: httpx.Response | None = None
+        content: bytes | None = None
+        ctype = ""
         try:
             for _ in range(5):
                 _assert_safe_export_url(current)
-                resp = await client.get(current)
-                if resp.status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers.get("location")
-                    if not location:
-                        raise IntegrationFetchError("Redirect missing Location header.")
-                    current = str(resp.url.join(location))
-                    continue
-                resp.raise_for_status()
+                async with client.stream("GET", current) as resp:
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("location")
+                        if not location:
+                            raise IntegrationFetchError("Redirect missing Location header.")
+                        current = str(resp.url.join(location))
+                        continue
+                    if resp.status_code >= 400:
+                        # Small error payload, and raise_for_status reads better
+                        # with it available.
+                        await resp.aread()
+                    resp.raise_for_status()
+                    ctype = resp.headers.get("content-type", "")
+                    content = await read_body_limited(resp, source="export URL")
                 break
             else:
                 raise IntegrationFetchError("Too many redirects while fetching export URL.")
@@ -291,9 +355,7 @@ async def fetch_from_export_url(config: dict[str, Any]) -> pd.DataFrame:
                 f"Could not download file from URL: {e}. "
                 "Check the link is public and points directly to a CSV or Excel file."
             ) from e
-        assert resp is not None
-        content = resp.content
-        ctype = resp.headers.get("content-type", "")
+        assert content is not None
     return _dataframe_from_bytes(content, url, ctype)
 
 

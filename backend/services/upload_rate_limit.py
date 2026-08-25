@@ -94,19 +94,26 @@ def check_rate_limit(
     scope: str,
     per_minute: int,
     per_hour: int,
+    label: str | None = None,
 ) -> None:
-    """Raise 429 when ``subject`` exceeds either window for ``scope``."""
+    """Raise 429 when ``subject`` exceeds either window for ``scope``.
+
+    ``scope`` keys the stored counter and must stay stable; ``label`` is what
+    the user reads, so a scope like ``integration_fetch`` can still produce a
+    sentence rather than an identifier.
+    """
     if not subject:
         return
 
     key = subject.strip().lower()
     now = datetime.utcnow()
+    shown = label or scope
 
     minute_key = f"{scope}:{key}:m:{_slot(now, 60)}"
     if per_minute > 0 and _hit(db, minute_key, 60, now) > per_minute:
         raise HTTPException(
             429,
-            detail=f"Too many {scope} requests. Wait a minute and try again.",
+            detail=f"Too many {shown} requests. Wait a minute and try again.",
             headers={"Retry-After": "60"},
         )
 
@@ -114,7 +121,7 @@ def check_rate_limit(
     if per_hour > 0 and _hit(db, hour_key, 3600, now) > per_hour:
         raise HTTPException(
             429,
-            detail=f"Hourly {scope} limit reached. Try again later.",
+            detail=f"Hourly {shown} limit reached. Try again later.",
             headers={"Retry-After": "600"},
         )
 
@@ -128,6 +135,24 @@ def check_upload_rate_limit(db: Session, user_email: str | None) -> None:
         scope="upload",
         per_minute=settings.UPLOAD_RATE_BURST_PER_MINUTE,
         per_hour=settings.UPLOAD_RATE_MAX_PER_HOUR,
+    )
+
+
+def check_integration_fetch_rate_limit(db: Session, user_email: str | None) -> None:
+    """Throttle the endpoints that pull data from a connected provider.
+
+    Refresh / test / tabs each trigger an outbound download and, for refresh, a
+    model call. None of them consumed an upload credit -- only the first sync of
+    a connection does -- so before this there was nothing bounding how often one
+    user could set that work going.
+    """
+    check_rate_limit(
+        db,
+        user_email or "",
+        scope="integration_fetch",
+        label="data source refresh",
+        per_minute=settings.INTEGRATION_FETCH_BURST_PER_MINUTE,
+        per_hour=settings.INTEGRATION_FETCH_MAX_PER_HOUR,
     )
 
 

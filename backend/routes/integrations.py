@@ -61,6 +61,7 @@ from services.integration_sync import (
     next_sync_at_for,
     sync_integration,
 )
+from services.upload_rate_limit import check_integration_fetch_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -826,7 +827,10 @@ async def list_integration_tabs(
 ):
     """Tabs available to an already-connected source, for changing the choice."""
     _require_integrations_enabled()
-    _, workspace_id = ws
+    user, workspace_id = ws
+    # Listing tabs for an uploaded .xlsx downloads the whole workbook, so this
+    # is a provider fetch like any other, not a cheap metadata read.
+    check_integration_fetch_rate_limit(db, user.email)
     integration = (
         db.query(DataSourceIntegration)
         .filter(
@@ -860,7 +864,8 @@ async def test_integration(
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     _require_integrations_enabled()
-    _, workspace_id = ws
+    user, workspace_id = ws
+    check_integration_fetch_rate_limit(db, user.email)
     integration = (
         db.query(DataSourceIntegration)
         .filter(
@@ -895,7 +900,11 @@ async def refresh_integration(
     ws: tuple[User, str] = Depends(require_active_workspace),
 ):
     _require_integrations_enabled()
-    _, workspace_id = ws
+    user, workspace_id = ws
+    # A refresh downloads the source again and, with auto_analyze on, spends a
+    # model call. Only the first sync of a connection costs an upload credit,
+    # so the plan caps alone leave this endpoint effectively unbounded.
+    check_integration_fetch_rate_limit(db, user.email)
     integration = (
         db.query(DataSourceIntegration)
         .filter(
