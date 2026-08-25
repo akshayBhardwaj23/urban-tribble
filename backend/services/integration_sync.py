@@ -29,6 +29,7 @@ from models.models import (
     IntegrationStatus,
     Upload,
 )
+from services import overview_cache
 from services.ingest_pipeline import ingest_dataframe
 from services.integration_connectors import (
     IntegrationFetchError,
@@ -323,6 +324,13 @@ async def sync_integration(
     db.commit()
     db.refresh(integration)
     db.refresh(dataset)
+
+    # The cache key fingerprints row counts, so new rows evict it on their own.
+    # An edit that changes values in place without changing the row count -- a
+    # corrected figure, a fixed date -- produces an identical fingerprint, and
+    # the workspace overview would serve pre-sync numbers for up to the cache
+    # TTL. Every other write path invalidates explicitly; this one did not.
+    overview_cache.invalidate(integration.workspace_id)
 
     try:
         if trigger == "manual" and integration.dataset_id and upload:

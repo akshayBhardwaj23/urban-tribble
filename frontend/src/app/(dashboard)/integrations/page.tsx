@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -149,6 +149,25 @@ export default function IntegrationsPage() {
     },
   });
 
+  // A first sync runs in the background, so `completeOauthMutation` resolves
+  // before any data exists -- invalidating there is too early to help. The
+  // poll settling from pending/syncing to done is the only signal that the
+  // rows have actually landed, so that transition is where the derived
+  // queries get refreshed.
+  const wasBusyRef = useRef(false);
+  useEffect(() => {
+    const rows = listQuery.data;
+    if (!rows) return;
+    const busy = rows.some(
+      (r) => r.status === "pending" || r.status === "syncing",
+    );
+    if (wasBusyRef.current && !busy) {
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      queryClient.invalidateQueries({ queryKey: ["overview"] });
+    }
+    wasBusyRef.current = busy;
+  }, [listQuery.data, queryClient]);
+
   const oauthSessionQuery = useQuery({
     queryKey: ["integration-oauth-session", oauthSessionId],
     queryFn: () => api.getIntegrationOauthSession(oauthSessionId!),
@@ -200,6 +219,10 @@ export default function IntegrationsPage() {
   const invalidateAfterChange = (datasetId?: string | null) => {
     queryClient.invalidateQueries({ queryKey: ["integrations"] });
     queryClient.invalidateQueries({ queryKey: ["datasets"] });
+    // The workspace overview aggregates every dataset, so a sync moves its
+    // numbers too. Without this it keeps serving the pre-sync figures until
+    // staleTime lapses -- every upload and edit path already invalidates it.
+    queryClient.invalidateQueries({ queryKey: ["overview"] });
     if (datasetId) {
       queryClient.invalidateQueries({ queryKey: ["dataset", datasetId] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-data", datasetId] });

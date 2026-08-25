@@ -41,6 +41,7 @@ from services import integration_credentials as creds
 from services import integration_google as gsvc
 from services import integration_microsoft as msft
 from services import integration_oauth as oauth
+from services import overview_cache
 from services.file_validation import FileValidationError
 from services.ingest_pipeline import ingest_dataframe, process_dataframe
 from services.integration_connectors import (
@@ -1597,6 +1598,11 @@ class SyncIntegrationEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.mock_llm.return_value = {"roles": {}, "meanings": {}, "source": "auto"}
         self.addCleanup(llm_patcher.stop)
 
+        # overview_cache keeps entries in a module-level dict, so one test's
+        # primed cache would otherwise leak into the next.
+        overview_cache.invalidate()
+        self.addCleanup(overview_cache.invalidate)
+
     def _wipe(self):
         db = self.Session()
         try:
@@ -1635,6 +1641,57 @@ class SyncIntegrationEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.db.commit()
         self.db.refresh(row)
         return row
+
+    async def _sync_with(self, integration, df, *, trigger="manual"):
+        with mock.patch(
+            "services.integration_sync.fetch_provider_data",
+            new=mock.AsyncMock(return_value=df),
+        ):
+            return await sync_integration(self.db, integration, trigger=trigger)
+
+    async def test_an_in_place_edit_still_refreshes_the_workspace_overview(self):
+        """A sync that changes values but not the row count must not leave the
+        overview serving pre-sync numbers.
+
+        The cache key is a fingerprint of dataset/upload counts and row totals,
+        so new rows evict it on their own. Correcting a figure in place -- the
+        most ordinary spreadsheet edit there is -- produces an identical
+        fingerprint, which is why the sync path has to invalidate explicitly
+        like every other write path already does.
+        """
+        integration = self._integration()
+        await self._sync_with(integration, self._df())
+
+        before = overview_cache.fingerprint(self.db, "ws1")
+        overview_cache.get_or_build(self.db, "ws1", lambda: "STALE")
+
+        edited = self._df()
+        edited.loc[0, "revenue"] = 999.0
+        await self._sync_with(integration, edited, trigger="scheduled")
+
+        # Same row count and same dataset count: the fingerprint on its own
+        # would have handed back the stale entry.
+        self.assertEqual(overview_cache.fingerprint(self.db, "ws1"), before)
+        self.assertEqual(
+            overview_cache.get_or_build(self.db, "ws1", lambda: "REBUILT"), "REBUILT"
+        )
+
+    async def test_the_invalidation_is_scoped_to_the_synced_workspace(self):
+        """`invalidate()` with no argument clears every tenant's entry. Passing
+        the workspace id is what keeps one source's refresh from throwing away
+        unrelated workspaces' cached overviews."""
+        self.db.add_all(
+            [User(id="u2", email="other@x.com"), Workspace(id="ws2", name="Other", owner_id="u2")]
+        )
+        self.db.commit()
+        overview_cache.get_or_build(self.db, "ws2", lambda: "OTHER")
+
+        integration = self._integration()
+        await self._sync_with(integration, self._df())
+
+        self.assertEqual(
+            overview_cache.get_or_build(self.db, "ws2", lambda: "REBUILT"), "OTHER"
+        )
 
     async def test_first_sync_succeeds_and_creates_a_dataset(self):
         integration = self._integration()

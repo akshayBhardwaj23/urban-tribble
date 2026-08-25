@@ -230,6 +230,9 @@ export default function DatasetPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["analysis", workspaceId, params.id] });
       queryClient.invalidateQueries({ queryKey: ["integrations"] });
+      // Same reason as the integrations page: the refreshed rows feed the
+      // workspace overview, not just this dataset's own dashboard.
+      queryClient.invalidateQueries({ queryKey: ["overview"] });
     },
     onError: (e: Error) =>
       toast.error(formatUserFacingApiError(e, "refresh this integration")),
