@@ -29,9 +29,12 @@ from services.integration_google import (
 )
 from services.integration_google import (
     build_google_authorize_url,
+    default_tab_name,
     google_exchange_code_for_tokens,
+    google_list_sheet_tabs,
     google_list_spreadsheets,
     google_oauth_configured,
+    tab_choice_is_ambiguous,
 )
 from services.integration_microsoft import (
     _apply_token_payload,
@@ -102,6 +105,18 @@ class CompleteGoogleOauthBody(BaseModel):
     # Several sheets can be connected from a single sign-in; each becomes its
     # own source with its own dashboard and refresh schedule.
     item_ids: list[str] = Field(min_length=1, max_length=20)
+    # Chosen tab per file, for workbooks where more than one tab looks like
+    # data. Files left out fall back to the reader's own auto-pick.
+    sheet_names: dict[str, str] = Field(default_factory=dict)
+
+
+class InspectGoogleTabsBody(BaseModel):
+    session_id: str
+    item_ids: list[str] = Field(min_length=1, max_length=20)
+
+
+class UpdateIntegrationSheetBody(BaseModel):
+    sheet_name: str = Field(min_length=1, max_length=200)
 
 
 def _require_integrations_enabled() -> None:
@@ -373,6 +388,62 @@ async def _sync_new_integrations(integration_ids: list[str]) -> None:
         db.close()
 
 
+@router.post("/oauth/tabs/google")
+async def inspect_google_tabs(
+    body: InspectGoogleTabsBody,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    """Which tab each selected workbook would use, and whether to ask.
+
+    Read-only and does not consume the sign-in, so the user can still change
+    their file selection afterwards. Only workbooks where more than one tab
+    looks like a data table are worth interrupting for; everything else
+    reports its auto-pick so the client can connect it without a question.
+    """
+    _require_integrations_enabled()
+    user, workspace_id = ws
+
+    session = get_oauth_session(db, body.session_id)
+    if not session:
+        raise HTTPException(404, "OAuth session not found or expired")
+    if session.get("workspace_id") != workspace_id or session.get("user_email") != user.email:
+        raise HTTPException(403, "OAuth session does not belong to this workspace")
+
+    files_by_id = {f.get("id"): f for f in session.get("files", []) if f.get("id")}
+    base_config = dict(session.get("config") or {})
+
+    results: list[dict[str, Any]] = []
+    for item_id in body.item_ids:
+        entry = files_by_id.get(item_id)
+        if not entry:
+            continue
+        config = {
+            **base_config,
+            "item_id": entry["id"],
+            "item_name": entry.get("name"),
+            "mime_type": entry.get("mime_type"),
+        }
+        try:
+            tabs = await google_list_sheet_tabs(config)
+        except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+            # Inspecting is a convenience: a workbook we cannot read the tabs
+            # of should still be connectable, falling back to the auto-pick.
+            logger.info("Could not list tabs for %s: %s", item_id, e)
+            tabs = []
+        results.append(
+            {
+                "item_id": entry["id"],
+                "name": entry.get("name"),
+                "tabs": tabs,
+                "needs_choice": tab_choice_is_ambiguous(tabs),
+                "suggested_tab": default_tab_name(tabs),
+            }
+        )
+
+    return {"files": results}
+
+
 @router.post("/oauth/complete/google")
 def complete_google_oauth(
     body: CompleteGoogleOauthBody,
@@ -433,6 +504,9 @@ def complete_google_oauth(
                 "web_url": entry.get("web_url"),
             }
         )
+        chosen_tab = (body.sheet_names.get(entry["id"]) or "").strip()
+        if chosen_tab:
+            config["sheet_name"] = chosen_tab
         # With several sheets in one go, the user's single display name would
         # collide across all of them; the file's own name is more useful.
         display_name = entry.get("name") or base_name or "Google Sheets data"
@@ -692,6 +766,91 @@ def delete_integration(
     db.delete(integration)
     db.commit()
     return {"ok": True, "id": integration_id}
+
+
+@router.post("/{integration_id}/sheet")
+async def update_integration_sheet(
+    integration_id: str,
+    body: UpdateIntegrationSheetBody,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    """Point an existing source at a different tab, then re-read it.
+
+    Deliberately not part of PATCH /{id}: that replaces `config` wholesale,
+    which for an OAuth source would discard the stored access and refresh
+    tokens and break the connection. This merges a single key instead.
+
+    Re-syncs immediately because the dashboard was built from the old tab's
+    columns; leaving it in place would show numbers from a tab the source no
+    longer reads.
+    """
+    _require_integrations_enabled()
+    _, workspace_id = ws
+    integration = (
+        db.query(DataSourceIntegration)
+        .filter(
+            DataSourceIntegration.id == integration_id,
+            DataSourceIntegration.workspace_id == workspace_id,
+        )
+        .first()
+    )
+    if not integration:
+        raise HTTPException(404, "Integration not found")
+
+    try:
+        config = decrypt_config(integration.config_json)
+    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+        raise HTTPException(422, str(e)) from e
+
+    config["sheet_name"] = body.sheet_name.strip()
+    # The stored change marker refers to content already read from the old tab;
+    # clearing it stops the unchanged-source check from skipping this re-read.
+    config.pop("last_change_stamp", None)
+    integration.config_json = encrypt_config(config)
+    db.commit()
+
+    try:
+        return await sync_integration(db, integration, trigger="manual")
+    except IntegrationSyncInProgressError as e:
+        raise HTTPException(409, str(e)) from e
+    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@router.get("/{integration_id}/tabs")
+async def list_integration_tabs(
+    integration_id: str,
+    db: Session = Depends(get_db),
+    ws: tuple[User, str] = Depends(require_active_workspace),
+):
+    """Tabs available to an already-connected source, for changing the choice."""
+    _require_integrations_enabled()
+    _, workspace_id = ws
+    integration = (
+        db.query(DataSourceIntegration)
+        .filter(
+            DataSourceIntegration.id == integration_id,
+            DataSourceIntegration.workspace_id == workspace_id,
+        )
+        .first()
+    )
+    if not integration:
+        raise HTTPException(404, "Integration not found")
+    if integration.provider != "google_sheets":
+        raise HTTPException(400, "Tab selection is only available for Google Sheets.")
+
+    try:
+        config = decrypt_config(integration.config_json)
+        tabs = await google_list_sheet_tabs(config)
+    except (IntegrationFetchError, IntegrationNotConfiguredError) as e:
+        raise HTTPException(422, str(e)) from e
+
+    return {
+        "tabs": tabs,
+        "current_tab": config.get("sheet_name"),
+        "suggested_tab": default_tab_name(tabs),
+    }
 
 
 @router.post("/{integration_id}/test")

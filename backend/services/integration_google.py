@@ -41,6 +41,7 @@ from services.integration_connectors import (
 _file_processor = FileProcessor()
 
 DRIVE_BASE = "https://www.googleapis.com/drive/v3"
+SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
@@ -236,7 +237,9 @@ async def google_list_spreadsheets(config: dict[str, Any]) -> list[dict[str, Any
     return out
 
 
-def _dataframe_from_bytes(content: bytes, *, name: str, content_type: str) -> pd.DataFrame:
+def _dataframe_from_bytes(
+    content: bytes, *, name: str, sheet_name: str | None = None
+) -> pd.DataFrame:
     head = content.lstrip()
     if head[:15].startswith(b"<!DOCTYPE") or head[:6].startswith(b"<html"):
         raise IntegrationFetchError(
@@ -244,7 +247,7 @@ def _dataframe_from_bytes(content: bytes, *, name: str, content_type: str) -> pd
             "Reconnect the source."
         )
     lower = name.lower()
-    if lower.endswith(".csv") or "text/csv" in content_type:
+    if lower.endswith(".csv"):
         return pd.read_csv(io.BytesIO(content))
 
     import tempfile
@@ -255,9 +258,168 @@ def _dataframe_from_bytes(content: bytes, *, name: str, content_type: str) -> pd
         fh.write(content)
         path = fh.name
     try:
-        return _file_processor.read(path)
+        try:
+            return _file_processor.read(path, sheet_name=sheet_name)
+        except ValueError as e:
+            # A chosen tab can be renamed or deleted in Google after connecting.
+            # Saying which tab is missing is more use than pandas' raw error.
+            if sheet_name and sheet_name in str(e):
+                raise IntegrationFetchError(
+                    f"The tab \"{sheet_name}\" no longer exists in this spreadsheet. "
+                    "Choose a different tab for this source."
+                ) from e
+            raise
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+# How much of each tab to sample when deciding which one holds the data. Enough
+# to tell a populated table from a cover page, small enough that the check stays
+# cheap on a workbook with many tabs.
+_TAB_SAMPLE_RANGE = "A1:J20"
+# A tab scoring at or below this is treated as not a data table (a cover sheet,
+# notes, an empty tab), so it does not make a workbook look ambiguous.
+_TAB_DATA_SCORE_FLOOR = 1.0
+
+
+def _score_sampled_rows(rows: list[list[Any]]) -> tuple[float, int, int]:
+    """Score a sampled tab with the same heuristic used for uploaded workbooks."""
+    if not rows:
+        return 0.0, 0, 0
+    width = max((len(r) for r in rows), default=0)
+    if width == 0:
+        return 0.0, 0, 0
+    padded = [list(r) + [None] * (width - len(r)) for r in rows]
+    frame = pd.DataFrame(padded).replace("", None)
+    return (
+        float(_file_processor.score_sheet_as_table(frame)),
+        int(len(frame)),
+        int(width),
+    )
+
+
+async def _sheets_get_json(
+    access_token: str, path: str, *, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.get(
+            f"{SHEETS_BASE}{path}",
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if resp.status_code in (401, 403):
+        raise IntegrationFetchError(
+            "Google denied access to this spreadsheet's tabs. If this deployment has "
+            "only just enabled the Google Sheets API, reconnect the source."
+        )
+    if resp.status_code >= 400:
+        raise IntegrationFetchError(f"Google Sheets request failed: {resp.text[:300]}")
+    return resp.json()
+
+
+async def _native_sheet_tabs(config: dict[str, Any], file_id: str) -> list[dict[str, Any]]:
+    """Tabs of a native Google Sheet, without exporting the workbook.
+
+    Two bounded calls regardless of tab count. Deliberately does not use
+    gridProperties: that reports the sheet's canvas (1000x26 by default whether
+    or not anything is in it), so it cannot distinguish a populated tab from an
+    empty one. A small sample of real cells can.
+    """
+    token = await google_ensure_access_token(config)
+    meta = await _sheets_get_json(
+        token, f"/{file_id}", params={"fields": "sheets.properties.title"}
+    )
+    titles = [
+        str((sheet.get("properties") or {}).get("title") or "")
+        for sheet in meta.get("sheets", [])
+    ]
+    titles = [t for t in titles if t]
+    if not titles:
+        return []
+
+    values = await _sheets_get_json(
+        token,
+        f"/{file_id}/values:batchGet",
+        params={
+            "ranges": [f"'{t.replace(chr(39), chr(39) * 2)}'!{_TAB_SAMPLE_RANGE}" for t in titles],
+            "majorDimension": "ROWS",
+        },
+    )
+    ranges = values.get("valueRanges", [])
+
+    tabs: list[dict[str, Any]] = []
+    for index, title in enumerate(titles):
+        rows = ranges[index].get("values", []) if index < len(ranges) else []
+        score, sampled_rows, cols = _score_sampled_rows(rows)
+        tabs.append(
+            {"name": title, "score": score, "sampled_rows": sampled_rows, "cols": cols}
+        )
+    return tabs
+
+
+async def _uploaded_workbook_tabs(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Tabs of an .xlsx/.xls uploaded to Drive.
+
+    There is no metadata API for these, so the file has to come down. Reuses the
+    same scoring the upload path applies to a workbook.
+    """
+    import tempfile
+    from pathlib import Path as _Path
+
+    name = str(config.get("item_name") or "")
+    if name.lower().endswith(".csv"):
+        return []
+
+    content = await _download_file_bytes(config)
+    suffix = ".xls" if name.lower().endswith(".xls") else ".xlsx"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as fh:
+        fh.write(content)
+        path = fh.name
+    try:
+        return [
+            {
+                "name": entry["name"],
+                "score": float(entry["score"]),
+                "sampled_rows": int(entry["rows"]),
+                "cols": int(entry["cols"]),
+            }
+            for entry in _file_processor.list_sheets(path)
+        ]
+    except Exception:
+        return []
+    finally:
+        _Path(path).unlink(missing_ok=True)
+
+
+async def google_list_sheet_tabs(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every tab in the connected workbook, scored by how much it looks like data."""
+    file_id = str(config.get("item_id") or "").strip()
+    if not file_id:
+        return []
+    if str(config.get("mime_type") or "") == GOOGLE_SHEET_MIME:
+        return await _native_sheet_tabs(config, file_id)
+    return await _uploaded_workbook_tabs(config)
+
+
+def data_tabs(tabs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tabs that plausibly hold a table, best first."""
+    candidates = [t for t in tabs if float(t.get("score") or 0) > _TAB_DATA_SCORE_FLOOR]
+    return sorted(candidates, key=lambda t: -float(t.get("score") or 0))
+
+
+def tab_choice_is_ambiguous(tabs: list[dict[str, Any]]) -> bool:
+    """Whether the user should be asked which tab to use.
+
+    Only when more than one tab actually looks like a data table. A workbook
+    with a cover page and one table is not a decision worth interrupting for --
+    the cover page scores below the floor and the table is taken automatically.
+    """
+    return len(data_tabs(tabs)) > 1
+
+
+def default_tab_name(tabs: list[dict[str, Any]]) -> str | None:
+    best = data_tabs(tabs)
+    return best[0]["name"] if best else None
 
 
 async def google_remote_change_stamp(config: dict[str, Any]) -> str | None:
@@ -286,25 +448,32 @@ async def google_remote_change_stamp(config: dict[str, Any]) -> str | None:
     return str(stamp) if stamp else None
 
 
-async def google_download_item_as_dataframe(config: dict[str, Any]) -> pd.DataFrame:
-    token = await google_ensure_access_token(config)
+def _download_target(config: dict[str, Any]) -> tuple[str, dict[str, Any], str]:
+    """URL, query and filename for fetching the connected file's bytes."""
     file_id = str(config.get("item_id") or "").strip()
     if not file_id:
         raise IntegrationNotConfiguredError("No Google file is selected for this source.")
-
-    mime_type = str(config.get("mime_type") or "")
     name = str(config.get("item_name") or file_id)
 
-    if mime_type == GOOGLE_SHEET_MIME:
+    if str(config.get("mime_type") or "") == GOOGLE_SHEET_MIME:
         # A native Sheet has no downloadable bytes; it has to be exported.
         # xlsx rather than CSV so multi-tab workbooks survive the round trip
         # and numeric/date typing is preserved.
-        url = f"{DRIVE_BASE}/files/{file_id}/export"
-        params: dict[str, Any] = {"mimeType": XLSX_MIME}
-        name = f"{name}.xlsx"
-    else:
-        url = f"{DRIVE_BASE}/files/{file_id}"
-        params = {"alt": "media", "supportsAllDrives": "true"}
+        return (
+            f"{DRIVE_BASE}/files/{file_id}/export",
+            {"mimeType": XLSX_MIME},
+            f"{name}.xlsx",
+        )
+    return (
+        f"{DRIVE_BASE}/files/{file_id}",
+        {"alt": "media", "supportsAllDrives": "true"},
+        name,
+    )
+
+
+async def _download_file_bytes(config: dict[str, Any]) -> bytes:
+    token = await google_ensure_access_token(config)
+    url, params, _ = _download_target(config)
 
     async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
         resp = await client.get(
@@ -322,7 +491,18 @@ async def google_download_item_as_dataframe(config: dict[str, Any]) -> pd.DataFr
         )
     if resp.status_code >= 400:
         raise IntegrationFetchError(f"Google download failed: {resp.text[:300]}")
+    return resp.content
 
-    return _dataframe_from_bytes(
-        resp.content, name=name, content_type=resp.headers.get("content-type", "")
-    )
+
+async def google_download_item_as_dataframe(config: dict[str, Any]) -> pd.DataFrame:
+    """Read the connected workbook.
+
+    When the user picked a tab at connect time it is read explicitly; otherwise
+    the reader's own auto-pick chooses the most table-like tab, which is what
+    happens for single-tab workbooks and for anything connected before tab
+    selection existed.
+    """
+    content = await _download_file_bytes(config)
+    _, _, name = _download_target(config)
+    sheet_name = str(config.get("sheet_name") or "").strip() or None
+    return _dataframe_from_bytes(content, name=name, sheet_name=sheet_name)
