@@ -14,12 +14,7 @@ from services.file_processor import FileProcessor
 
 # Safe at module scope: integration_connectors imports this module only from
 # inside functions, precisely so this direction can be a normal import.
-from services.integration_connectors import read_body_limited
-
-
-class IntegrationFetchError(Exception):
-    pass
-
+from services.integration_connectors import IntegrationFetchError, read_body_limited
 
 _file_processor = FileProcessor()
 
