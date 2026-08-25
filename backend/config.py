@@ -117,6 +117,21 @@ class Settings(BaseSettings):
     # Hard ceiling on connections per workspace, independent of plan tier --
     # bounds worst-case scheduled fetch + LLM volume regardless of caps elsewhere.
     INTEGRATION_MAX_PER_WORKSPACE: int = 10
+    # Ceiling on bytes pulled from a connected source in one fetch, and the
+    # sync-side counterpart to MAX_FILE_SIZE_MB. An upload is capped while it
+    # streams, before anything parses it; a sync had no equivalent, and the
+    # row/column caps in file_validation only apply to a DataFrame that already
+    # exists -- so an oversized workbook sitting in a connected Drive was
+    # downloaded and parsed in full before anything could reject it. Higher than
+    # the upload cap because a machine-generated export is legitimately larger
+    # than what someone would hand-upload.
+    INTEGRATION_MAX_FETCH_MB: int = 50
+    # Per authenticated user, on the endpoints that make a user-triggered
+    # provider fetch (refresh / test / tabs). Scheduled syncs are paced by
+    # next_sync_at and INTEGRATION_MIN_REFRESH_HOURS instead, so they are not
+    # counted here.
+    INTEGRATION_FETCH_BURST_PER_MINUTE: int = 5
+    INTEGRATION_FETCH_MAX_PER_HOUR: int = 30
     # Required in production for POST /api/integrations/run-scheduled
     INTEGRATION_CRON_SECRET: str = ""
     # Encryption at rest for DataSourceIntegration.config_json (third-party secrets).

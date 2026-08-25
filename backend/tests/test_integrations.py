@@ -259,8 +259,21 @@ class MicrosoftPayloadParsingTests(unittest.IsolatedAsyncioTestCase):
 
         class _FakeResponse:
             status_code = 200
-            content = body
-            headers = {"content-type": content_type}
+            headers = {"content-type": content_type, "content-length": str(len(body))}
+            text = ""
+
+            async def aread(self):
+                return body
+
+            async def aiter_bytes(self):
+                yield body
+
+        class _FakeStream:
+            async def __aenter__(self):
+                return _FakeResponse()
+
+            async def __aexit__(self, *exc):
+                return False
 
         class _FakeClient:
             async def __aenter__(self):
@@ -269,8 +282,8 @@ class MicrosoftPayloadParsingTests(unittest.IsolatedAsyncioTestCase):
             async def __aexit__(self, *exc):
                 return False
 
-            async def get(self, *_a, **_kw):
-                return _FakeResponse()
+            def stream(self, *_a, **_kw):
+                return _FakeStream()
 
         with mock.patch.object(
             msft, "microsoft_ensure_access_token", new=mock.AsyncMock(return_value="tok")
@@ -2046,25 +2059,59 @@ class GoogleTokenExchangeTests(unittest.IsolatedAsyncioTestCase):
                 await gsvc.google_ensure_access_token({"access_token": "at"})
 
 
-class GoogleDownloadTests(unittest.IsolatedAsyncioTestCase):
-    """A native Google Sheet has no bytes to download and must be exported;
-    a genuinely uploaded file must not be. Sending either down the other's
-    path fails."""
+class _GoogleDownloadStubMixin:
+    """Shared stub of the streaming httpx client used by the Google download path.
 
-    def _capture_client(self, *, content=b"a,b\n1,2\n", status=200, content_type="text/csv"):
+    A mixin rather than a base TestCase so the size-cap suite can reuse it
+    without re-running the routing assertions in GoogleDownloadTests.
+    """
+
+    def _capture_client(
+        self,
+        *,
+        content=b"a,b\n1,2\n",
+        status=200,
+        content_type="text/csv",
+        error_body="error body",
+        declared_length=None,
+        chunk_size=None,
+    ):
+        """Stub of the streaming client the download path now uses.
+
+        ``declared_length`` sets Content-Length independently of the body, so a
+        server that lies about the size (or streams without one) can be tested
+        separately from one that reports it honestly.
+        """
         seen: dict = {}
 
         class _Resp:
             status_code = status
-            headers = {"content-type": content_type}
 
-            @property
-            def content(self):
+            def __init__(self_inner):
+                self_inner.headers = {"content-type": content_type}
+                length = (
+                    len(content) if declared_length is None else declared_length
+                )
+                if length is not False:
+                    self_inner.headers["content-length"] = str(length)
+                self_inner.text = ""
+
+            async def aread(self_inner):
+                self_inner.text = error_body
                 return content
 
-            @property
-            def text(self):
-                return "error body"
+            async def aiter_bytes(self_inner):
+                step = chunk_size or max(1, len(content))
+                for i in range(0, len(content), step):
+                    seen["chunks"] = seen.get("chunks", 0) + 1
+                    yield content[i : i + step]
+
+        class _Stream:
+            async def __aenter__(self_inner):
+                return _Resp()
+
+            async def __aexit__(self_inner, *exc):
+                return False
 
         class _Client:
             def __init__(self_inner, *a, **kw):
@@ -2076,10 +2123,11 @@ class GoogleDownloadTests(unittest.IsolatedAsyncioTestCase):
             async def __aexit__(self_inner, *exc):
                 return False
 
-            async def get(self_inner, url, params=None, headers=None):
+            def stream(self_inner, method, url, params=None, headers=None):
+                seen["method"] = method
                 seen["url"] = url
                 seen["params"] = params or {}
-                return _Resp()
+                return _Stream()
 
         return _Client, seen
 
@@ -2096,6 +2144,12 @@ class GoogleDownloadTests(unittest.IsolatedAsyncioTestCase):
         buf = io.BytesIO()
         pd.DataFrame({"a": [1, 2], "b": [3, 4]}).to_excel(buf, index=False)
         return buf.getvalue()
+
+
+class GoogleDownloadTests(_GoogleDownloadStubMixin, unittest.IsolatedAsyncioTestCase):
+    """A native Google Sheet has no bytes to download and must be exported;
+    a genuinely uploaded file must not be. Sending either down the other's
+    path fails."""
 
     async def test_native_sheet_uses_the_export_endpoint_as_xlsx(self):
         """CSV export would silently return only the first tab, so xlsx it is.
@@ -2155,6 +2209,176 @@ class GoogleDownloadTests(unittest.IsolatedAsyncioTestCase):
                 content_type="text/html",
             )
         self.assertIn("web page", str(ctx.exception).lower())
+
+
+class IntegrationFetchSizeCapTests(
+    _GoogleDownloadStubMixin, unittest.IsolatedAsyncioTestCase
+):
+    """A sync must refuse an oversized source the way an upload does.
+
+    An upload is capped while it streams (MAX_FILE_SIZE_MB, 413 before anything
+    parses). A sync had no equivalent: the only size check was
+    ``validate_frame_size``, which runs inside ``ingest_dataframe`` on a
+    DataFrame that has already been downloaded in full and parsed. These pin
+    that the refusal now happens during the transfer instead.
+    """
+
+    CSV = b"a,b\n1,2\n3,4\n"
+
+    def setUp(self):
+        patcher = mock.patch.object(settings, "INTEGRATION_MAX_FETCH_MB", 1)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def _oversized() -> bytes:
+        return b"x" * (2 * 1024 * 1024)
+
+    async def _refused(self, **kw) -> dict:
+        """Run a download expected to be refused; return what the stub saw."""
+        client_cls, seen = self._capture_client(**kw)
+        with mock.patch.object(
+            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
+        ), mock.patch.object(gsvc.httpx, "AsyncClient", client_cls):
+            with self.assertRaises(conn.IntegrationTooLargeError):
+                await gsvc.google_download_item_as_dataframe(
+                    {"item_id": "abc", "mime_type": "text/csv"}
+                )
+        return seen
+
+    async def test_a_declared_oversize_is_refused(self):
+        """Content-Length is the cheap path: refuse before reading any body."""
+        with self.assertRaises(conn.IntegrationTooLargeError) as ctx:
+            await self._download(
+                {"item_id": "abc", "mime_type": "text/csv"},
+                content=self._oversized(),
+            )
+        self.assertIn("1 MB", str(ctx.exception))
+
+    async def test_the_body_is_not_read_when_the_length_gives_it_away(self):
+        """Otherwise the cap would still cost a full download to enforce."""
+        seen = await self._refused(content=self._oversized())
+        self.assertNotIn("chunks", seen)
+
+    async def test_an_undeclared_oversize_is_caught_mid_stream(self):
+        """A chunked response carries no Content-Length, so the running total is
+        the only thing standing between it and memory."""
+        seen = await self._refused(
+            content=self._oversized(),
+            declared_length=False,
+            chunk_size=64 * 1024,
+        )
+        # Stopped partway rather than after buffering all 32 chunks.
+        self.assertLess(seen["chunks"], 32)
+
+    async def test_a_lied_about_length_is_still_caught(self):
+        """A server understating its size must not buy its way past the cap."""
+        seen = await self._refused(
+            content=self._oversized(),
+            declared_length=10,
+            chunk_size=64 * 1024,
+        )
+        self.assertLess(seen["chunks"], 32)
+
+    async def test_a_normal_file_is_unaffected(self):
+        df, _ = await self._download(
+            {"item_id": "abc", "item_name": "data.csv", "mime_type": "text/csv"},
+            content=self.CSV,
+        )
+        self.assertEqual(len(df), 2)
+
+    async def test_a_file_exactly_at_the_cap_is_allowed(self):
+        """The cap is a ceiling, not a strict inequality on the boundary."""
+        body = b"a\n" + b"1\n" * ((1024 * 1024 - 2) // 2)
+        self.assertEqual(len(body), 1024 * 1024)
+        df, _ = await self._download(
+            {"item_id": "abc", "item_name": "data.csv", "mime_type": "text/csv"},
+            content=body,
+        )
+        self.assertGreater(len(df), 0)
+
+    async def test_googles_own_export_ceiling_does_not_say_reconnect(self):
+        """Google reports it as a 403, which previously read as revoked access
+        and sent the user off to re-authorise a connection that was fine."""
+        with self.assertRaises(IntegrationFetchError) as ctx:
+            await self._download(
+                {"item_id": "abc", "mime_type": gsvc.GOOGLE_SHEET_MIME},
+                status=403,
+                error_body='{"error": {"errors": [{"reason": "exportSizeLimitExceeded"}]}}',
+            )
+        message = str(ctx.exception).lower()
+        self.assertIn("too large", message)
+        self.assertNotIn("reconnect", message)
+
+
+class ReadBodyLimitedTests(unittest.IsolatedAsyncioTestCase):
+    """The shared cap helper, exercised directly.
+
+    Every provider download routes through this, so the boundary conditions are
+    pinned here once rather than per connector.
+    """
+
+    class _Resp:
+        def __init__(self, body: bytes, *, declared=True, chunk=1024):
+            self.headers = {"content-length": str(len(body))} if declared else {}
+            self._body = body
+            self._chunk = chunk
+            self.read_chunks = 0
+
+        async def aiter_bytes(self):
+            for i in range(0, len(self._body), self._chunk):
+                self.read_chunks += 1
+                yield self._body[i : i + self._chunk]
+
+    async def test_under_the_cap_returns_the_whole_body(self):
+        resp = self._Resp(b"hello world")
+        out = await conn.read_body_limited(resp, source="X", max_bytes=1024)
+        self.assertEqual(out, b"hello world")
+
+    async def test_exactly_at_the_cap_is_allowed(self):
+        resp = self._Resp(b"x" * 100)
+        out = await conn.read_body_limited(resp, source="X", max_bytes=100)
+        self.assertEqual(len(out), 100)
+
+    async def test_one_byte_over_is_refused(self):
+        resp = self._Resp(b"x" * 101)
+        with self.assertRaises(conn.IntegrationTooLargeError):
+            await conn.read_body_limited(resp, source="X", max_bytes=100)
+
+    async def test_a_declared_oversize_reads_nothing(self):
+        resp = self._Resp(b"x" * 5000)
+        with self.assertRaises(conn.IntegrationTooLargeError):
+            await conn.read_body_limited(resp, source="X", max_bytes=100)
+        self.assertEqual(resp.read_chunks, 0)
+
+    async def test_an_undeclared_oversize_stops_early(self):
+        resp = self._Resp(b"x" * 5000, declared=False, chunk=100)
+        with self.assertRaises(conn.IntegrationTooLargeError):
+            await conn.read_body_limited(resp, source="X", max_bytes=1000)
+        # 11 chunks to cross 1000 bytes, not the 50 a full read would take.
+        self.assertLessEqual(resp.read_chunks, 12)
+
+    async def test_a_non_numeric_content_length_does_not_crash_the_fetch(self):
+        """A malformed header must fall through to the running total, not raise."""
+        resp = self._Resp(b"ok")
+        resp.headers["content-length"] = "not-a-number"
+        self.assertEqual(
+            await conn.read_body_limited(resp, source="X", max_bytes=100), b"ok"
+        )
+
+    async def test_the_message_names_the_limit_in_mb(self):
+        resp = self._Resp(b"x" * (3 * 1024 * 1024))
+        with self.assertRaises(conn.IntegrationTooLargeError) as ctx:
+            await conn.read_body_limited(resp, source="Google", max_bytes=2 * 1024 * 1024)
+        self.assertIn("2 MB", str(ctx.exception))
+        self.assertIn("Google", str(ctx.exception))
+
+    async def test_it_is_a_fetch_error_so_sync_records_it_normally(self):
+        """sync_integration catches IntegrationFetchError to release the row;
+        a too-large error that escaped that would leave it stuck in `syncing`."""
+        self.assertTrue(
+            issubclass(conn.IntegrationTooLargeError, IntegrationFetchError)
+        )
 
 
 class GoogleFileListingTests(unittest.IsolatedAsyncioTestCase):
@@ -2958,7 +3182,7 @@ class SheetTabSelectionTests(unittest.TestCase):
         self.assertEqual(gsvc._score_sampled_rows([]), (0.0, 0, 0))
 
 
-class SheetTabReadTests(unittest.IsolatedAsyncioTestCase):
+class SheetTabReadTests(_GoogleDownloadStubMixin, unittest.IsolatedAsyncioTestCase):
     """Reading the chosen tab, and failing usefully when it is gone."""
 
     @staticmethod
@@ -2976,35 +3200,10 @@ class SheetTabReadTests(unittest.IsolatedAsyncioTestCase):
         }
 
     async def _download(self, config, content):
-        class _Resp:
-            status_code = 200
-            headers = {"content-type": gsvc.XLSX_MIME}
-
-            @property
-            def content(self_inner):
-                return content
-
-            @property
-            def text(self_inner):
-                return ""
-
-        class _Client:
-            def __init__(self_inner, *a, **kw):
-                pass
-
-            async def __aenter__(self_inner):
-                return self_inner
-
-            async def __aexit__(self_inner, *exc):
-                return False
-
-            async def get(self_inner, *a, **kw):
-                return _Resp()
-
-        with mock.patch.object(
-            gsvc, "google_ensure_access_token", new=mock.AsyncMock(return_value="tok")
-        ), mock.patch.object(gsvc.httpx, "AsyncClient", _Client):
-            return await gsvc.google_download_item_as_dataframe(config)
+        df, _ = await super()._download(
+            config, content=content, content_type=gsvc.XLSX_MIME
+        )
+        return df
 
     async def test_the_chosen_tab_is_the_one_read(self):
         content = self._workbook(**self._books())
@@ -3201,6 +3400,191 @@ class ChangeSheetTabRouteTests(unittest.TestCase):
         self.db.commit()
         resp = self.client.get("/api/integrations/int1/tabs")
         self.assertEqual(resp.status_code, 400)
+
+
+class IntegrationFetchRateLimitTests(unittest.TestCase):
+    """The endpoints that pull from a provider are throttled per user.
+
+    Only the *first* sync of a connection spends an upload credit, so the plan
+    caps do not bound how often someone can set an outbound download (and, for
+    refresh, a model call) going. Uploads have had a rate limit for this reason
+    since the beginning; these three had none.
+
+    Scheduled syncs are deliberately not covered: they are paced by
+    `next_sync_at` and INTEGRATION_MIN_REFRESH_HOURS, and counting them here
+    would let a burst of manual refreshes starve the scheduler.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from sqlalchemy.pool import StaticPool
+
+        cls.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        enable_sqlite_pragmas(cls.engine)
+        Base.metadata.create_all(bind=cls.engine)
+        cls.Session = sessionmaker(bind=cls.engine)
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from database import get_db
+        from deps import require_active_workspace
+        from routes import integrations as routes_integrations
+        from services.upload_rate_limit import reset_upload_rate_limit_for_tests
+
+        for key, value in (
+            ("INTEGRATIONS_ENABLED", True),
+            ("INTEGRATION_CREDENTIALS_KEY", ""),
+            ("INTEGRATION_FETCH_BURST_PER_MINUTE", 3),
+            ("INTEGRATION_FETCH_MAX_PER_HOUR", 5),
+        ):
+            patcher = mock.patch.object(settings, key, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        creds._cipher_cache = None
+        self.addCleanup(setattr, creds, "_cipher_cache", None)
+
+        sync_patcher = mock.patch.object(
+            routes_integrations,
+            "sync_integration",
+            new=mock.AsyncMock(return_value={"ok": True}),
+        )
+        self.mock_sync = sync_patcher.start()
+        self.addCleanup(sync_patcher.stop)
+
+        tabs_patcher = mock.patch.object(
+            routes_integrations,
+            "google_list_sheet_tabs",
+            new=mock.AsyncMock(return_value=[]),
+        )
+        self.mock_tabs = tabs_patcher.start()
+        self.addCleanup(tabs_patcher.stop)
+
+        self.db = self.Session()
+        self.addCleanup(self.db.close)
+        self.addCleanup(self._wipe)
+        reset_upload_rate_limit_for_tests(self.db)
+
+        self.user = User(id="u1", email="o@x.com")
+        self.db.add_all([self.user, Workspace(id="ws1", name="W", owner_id="u1")])
+        self.db.commit()
+        self.db.add(
+            DataSourceIntegration(
+                id="int1",
+                workspace_id="ws1",
+                provider="google_sheets",
+                name="Q4",
+                connection_mode="oauth",
+                config_json=creds.encrypt_config({"item_id": "f1"}),
+                refresh_interval_hours=24,
+                status=IntegrationStatus.active,
+            )
+        )
+        self.db.commit()
+
+        app = FastAPI()
+        app.include_router(routes_integrations.router)
+        app.dependency_overrides[get_db] = lambda: self.db
+        app.dependency_overrides[require_active_workspace] = lambda: (self.user, "ws1")
+        self.client = TestClient(app)
+
+    def _wipe(self):
+        from services.upload_rate_limit import reset_upload_rate_limit_for_tests
+
+        db = self.Session()
+        try:
+            reset_upload_rate_limit_for_tests(db)
+            for model in (DataSourceIntegration, Workspace, User):
+                db.query(model).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    def _refresh(self):
+        return self.client.post("/api/integrations/int1/refresh")
+
+    def test_refreshes_within_the_burst_are_allowed(self):
+        for _ in range(3):
+            self.assertEqual(self._refresh().status_code, 200)
+
+    def test_the_fourth_refresh_in_a_minute_is_429(self):
+        for _ in range(3):
+            self._refresh()
+        resp = self._refresh()
+        self.assertEqual(resp.status_code, 429)
+
+    def test_a_throttled_refresh_never_reaches_the_provider(self):
+        """The whole point: the download and the model call must not happen."""
+        for _ in range(3):
+            self._refresh()
+        self._refresh()
+        self.assertEqual(self.mock_sync.await_count, 3)
+
+    def test_the_429_says_when_to_retry(self):
+        for _ in range(4):
+            self._refresh()
+        self.assertEqual(self._refresh().headers.get("retry-after"), "60")
+
+    def test_the_message_reads_as_a_sentence_not_a_scope_key(self):
+        for _ in range(4):
+            self._refresh()
+        detail = self._refresh().json()["detail"]
+        self.assertIn("data source refresh", detail)
+        self.assertNotIn("integration_fetch", detail)
+
+    def test_test_and_tabs_share_the_budget_with_refresh(self):
+        """All three trigger a provider fetch; separate budgets would just move
+        the hole rather than close it. /tabs in particular downloads the entire
+        workbook for an uploaded .xlsx."""
+        self.assertEqual(self._refresh().status_code, 200)
+        self.assertEqual(
+            self.client.get("/api/integrations/int1/tabs").status_code, 200
+        )
+        self.assertEqual(self.mock_tabs.await_count, 1)
+        for _ in range(3):
+            self.client.post("/api/integrations/int1/test")
+        self.assertEqual(self._refresh().status_code, 429)
+
+    def test_the_hourly_ceiling_also_applies(self):
+        """The per-minute window alone would let a patient caller run all day."""
+        with mock.patch.object(settings, "INTEGRATION_FETCH_BURST_PER_MINUTE", 0):
+            for _ in range(5):
+                self.assertEqual(self._refresh().status_code, 200)
+            resp = self._refresh()
+        self.assertEqual(resp.status_code, 429)
+        self.assertEqual(resp.headers.get("retry-after"), "600")
+
+    def test_the_limit_is_per_user_not_per_integration(self):
+        """Otherwise connecting ten sources would multiply the budget by ten."""
+        self.db.add(
+            DataSourceIntegration(
+                id="int2",
+                workspace_id="ws1",
+                provider="google_sheets",
+                name="Q3",
+                connection_mode="oauth",
+                config_json=creds.encrypt_config({"item_id": "f2"}),
+                refresh_interval_hours=24,
+                status=IntegrationStatus.active,
+            )
+        )
+        self.db.commit()
+        for _ in range(3):
+            self._refresh()
+        self.assertEqual(
+            self.client.post("/api/integrations/int2/refresh").status_code, 429
+        )
+
+    def test_an_unknown_source_is_still_a_404(self):
+        """The throttle must not turn a wrong id into a confusing 429."""
+        self.assertEqual(
+            self.client.post("/api/integrations/nope/refresh").status_code, 404
+        )
 
 
 if __name__ == "__main__":
