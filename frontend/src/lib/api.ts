@@ -1258,8 +1258,12 @@ export type CompleteMicrosoftOauthBody = {
 export type CompleteGoogleOauthBody = {
   session_id: string;
   item_ids: string[];
-  /** Chosen tab per file id. Omitted files fall back to the auto-pick. */
-  sheet_names?: Record<string, string>;
+  /**
+   * Chosen tabs per file id. A workbook whose tabs hold separate datasets can
+   * contribute several, each becoming its own source. Omitted files fall back
+   * to the auto-pick.
+   */
+  sheet_names?: Record<string, string[]>;
 };
 
 export type SheetTab = {

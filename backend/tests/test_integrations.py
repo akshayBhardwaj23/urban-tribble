@@ -2680,6 +2680,11 @@ class GoogleMultiConnectRouteTests(unittest.TestCase):
             ("INTEGRATIONS_ENABLED", True),
             ("INTEGRATION_CREDENTIALS_KEY", ""),
             ("INTEGRATION_MAX_PER_WORKSPACE", 10),
+            # These cover routing and naming, not billing. Free allows two
+            # uploads for a lifetime, so without headroom every multi-select
+            # case here would be answered by the plan gate instead of the
+            # behaviour under test. The gate has its own tests below.
+            ("FORCE_SUBSCRIPTION_PLAN", "internal"),
         ):
             patcher = mock.patch.object(settings, key, value)
             patcher.start()
@@ -2750,11 +2755,22 @@ class GoogleMultiConnectRouteTests(unittest.TestCase):
             for i in range(1, n + 1)
         ]
 
-    def _post(self, session_id, item_ids):
+    def _post(self, session_id, item_ids, sheet_names=None):
+        payload = {"session_id": session_id, "item_ids": item_ids}
+        if sheet_names is not None:
+            payload["sheet_names"] = sheet_names
         return self.client.post(
-            "/api/integrations/oauth/complete/google",
-            json={"session_id": session_id, "item_ids": item_ids},
+            "/api/integrations/oauth/complete/google", json=payload
         )
+
+    def _names(self, resp):
+        return sorted(i["name"] for i in resp.json()["integrations"])
+
+    def _configs(self):
+        return [
+            decrypt_config(row.config_json)
+            for row in self.db.query(DataSourceIntegration).all()
+        ]
 
     def test_connecting_several_sheets_creates_one_source_each(self):
         sid = self._session_with(self._files(3))
@@ -2763,6 +2779,101 @@ class GoogleMultiConnectRouteTests(unittest.TestCase):
         body = resp.json()
         self.assertEqual(body["connected"], 3)
         self.assertEqual(self.db.query(DataSourceIntegration).count(), 3)
+
+    def test_several_tabs_of_one_workbook_become_separate_sources(self):
+        """Jan/Feb/Mar in one file are three datasets, not one. Each gets its
+        own row so it can have its own dashboard, schedule and error state."""
+        sid = self._session_with(self._files(1))
+        resp = self._post(sid, ["f1"], {"f1": ["Jan", "Feb", "Mar"]})
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json()["connected"], 3)
+        self.assertEqual(
+            sorted(c.get("sheet_name") for c in self._configs()),
+            ["Feb", "Jan", "Mar"],
+        )
+
+    def test_a_split_workbook_names_each_source_after_its_tab(self):
+        """Without the suffix all three rows read "Sheet 1.xlsx"."""
+        sid = self._session_with(self._files(1))
+        resp = self._post(sid, ["f1"], {"f1": ["Jan", "Feb"]})
+        self.assertEqual(
+            self._names(resp), ["Sheet 1.xlsx - Feb", "Sheet 1.xlsx - Jan"]
+        )
+
+    def test_a_single_tab_choice_does_not_get_a_suffix(self):
+        """Picking one tab of an ambiguous workbook is the common case and
+        reads better without the workbook name repeated back."""
+        sid = self._session_with(self._files(2))
+        resp = self._post(sid, ["f1", "f2"], {"f1": ["Q4"]})
+        self.assertEqual(self._names(resp), ["Sheet 1.xlsx", "Sheet 2.xlsx"])
+
+    def test_files_and_tabs_fan_out_together(self):
+        sid = self._session_with(self._files(2))
+        resp = self._post(sid, ["f1", "f2"], {"f1": ["Jan", "Feb"], "f2": ["Q1"]})
+        self.assertEqual(resp.json()["connected"], 3)
+        self.assertEqual(
+            self._names(resp),
+            ["Sheet 1.xlsx - Feb", "Sheet 1.xlsx - Jan", "Sheet 2.xlsx"],
+        )
+
+    def test_a_file_with_no_chosen_tab_still_connects_on_the_auto_pick(self):
+        """`sheet_name` left unset is what tells the reader to choose, which is
+        how single-tab workbooks have always connected."""
+        sid = self._session_with(self._files(1))
+        self._post(sid, ["f1"])
+        self.assertNotIn("sheet_name", self._configs()[0])
+
+    def test_the_same_tab_twice_connects_once(self):
+        """A UI slip should not produce two identical sources."""
+        sid = self._session_with(self._files(1))
+        resp = self._post(sid, ["f1"], {"f1": ["Jan", "Jan", " Jan "]})
+        self.assertEqual(resp.json()["connected"], 1)
+
+    def test_the_older_single_tab_payload_is_still_accepted(self):
+        """sheet_names used to be dict[str, str]. A client still sending that
+        shape must not start getting a 422 on a field it always sent."""
+        sid = self._session_with(self._files(1))
+        resp = self._post(sid, ["f1"], {"f1": "Jan"})
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(self._configs()[0]["sheet_name"], "Jan")
+
+    def test_the_workspace_cap_counts_tabs_not_files(self):
+        """Two files could be twelve sources. Counting files would let a
+        multi-tab selection walk straight past the limit."""
+        with mock.patch.object(settings, "INTEGRATION_MAX_PER_WORKSPACE", 3):
+            sid = self._session_with(self._files(1))
+            resp = self._post(sid, ["f1"], {"f1": ["Jan", "Feb", "Mar", "Apr"]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("4 more source(s)", resp.json()["detail"])
+        self.assertEqual(self.db.query(DataSourceIntegration).count(), 0)
+
+    def test_a_batch_past_the_plan_quota_is_refused_before_anything_is_created(self):
+        """The rows would otherwise be created and the background syncs would
+        fail one at a time, leaving half a connection and no explanation."""
+        with mock.patch.object(settings, "FORCE_SUBSCRIPTION_PLAN", "free"):
+            sid = self._session_with(self._files(1))
+            resp = self._post(sid, ["f1"], {"f1": ["Jan", "Feb", "Mar"]})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(self.db.query(DataSourceIntegration).count(), 0)
+        self.mock_bg_sync.assert_not_called()
+
+    def test_the_quota_refusal_uses_the_shape_the_client_handles(self):
+        """The frontend renders `code: plan_limit` as an upgrade prompt; a bare
+        403 would surface as a generic error toast instead."""
+        with mock.patch.object(settings, "FORCE_SUBSCRIPTION_PLAN", "free"):
+            sid = self._session_with(self._files(1))
+            resp = self._post(sid, ["f1"], {"f1": ["Jan", "Feb", "Mar"]})
+        detail = resp.json()["detail"]
+        self.assertEqual(detail["code"], "plan_limit")
+        self.assertEqual(detail["limit"], "uploads")
+        self.assertIn("2 more", detail["message"])
+
+    def test_a_batch_within_the_plan_quota_still_connects(self):
+        with mock.patch.object(settings, "FORCE_SUBSCRIPTION_PLAN", "free"):
+            sid = self._session_with(self._files(1))
+            resp = self._post(sid, ["f1"], {"f1": ["Jan", "Feb"]})
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json()["connected"], 2)
 
     def test_each_source_is_named_after_its_own_file(self):
         """One display name across a multi-select would make three identical

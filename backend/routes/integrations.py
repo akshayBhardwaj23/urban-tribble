@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -61,6 +61,11 @@ from services.integration_sync import (
     next_sync_at_for,
     sync_integration,
 )
+from services.plan_limits import raise_plan_limit
+from services.subscription_usage import (
+    get_effective_plan,
+    remaining_upload_allowance,
+)
 from services.upload_rate_limit import check_integration_fetch_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -106,9 +111,23 @@ class CompleteGoogleOauthBody(BaseModel):
     # Several sheets can be connected from a single sign-in; each becomes its
     # own source with its own dashboard and refresh schedule.
     item_ids: list[str] = Field(min_length=1, max_length=20)
-    # Chosen tab per file, for workbooks where more than one tab looks like
-    # data. Files left out fall back to the reader's own auto-pick.
-    sheet_names: dict[str, str] = Field(default_factory=dict)
+    # Chosen tabs per file. A workbook whose tabs hold different datasets --
+    # Jan/Feb/Mar, or one tab per region -- can contribute several, each
+    # becoming its own source. Files left out fall back to the auto-pick.
+    sheet_names: dict[str, list[str]] = Field(default_factory=dict)
+
+    @field_validator("sheet_names", mode="before")
+    @classmethod
+    def _accept_a_single_tab(cls, value: Any) -> Any:
+        """Tolerate the older one-tab-per-file shape.
+
+        This used to be dict[str, str]. Coercing rather than rejecting means a
+        client still holding the old shape keeps working instead of 422-ing on
+        a field it has always sent.
+        """
+        if not isinstance(value, dict):
+            return value
+        return {k: [v] if isinstance(v, str) else v for k, v in value.items()}
 
 
 class InspectGoogleTabsBody(BaseModel):
@@ -136,6 +155,37 @@ def _require_workspace_capacity(db: Session, workspace_id: str) -> None:
             f"This workspace has reached the limit of {cap} connected sources. "
             "Remove one before connecting another.",
         )
+
+
+def _expand_tab_selection(
+    selected: list[dict[str, Any]],
+    sheet_names: dict[str, list[str]],
+) -> list[tuple[dict[str, Any], str | None, bool]]:
+    """Expand chosen files into one (file, tab, file_is_split) triple per source.
+
+    A file with no chosen tabs contributes a single source on the reader's own
+    auto-pick, which is what happens for single-tab workbooks and for anything
+    connected before tab selection existed -- so `None` here means "let the
+    reader decide", not "no tab".
+
+    `file_is_split` says whether this file is contributing more than one
+    source, which is the only case where the tab has to appear in the name.
+    Duplicate tabs are dropped rather than rejected: selecting the same tab
+    twice is a UI slip, and two identical sources is a worse answer than
+    silently connecting one.
+    """
+    pairs: list[tuple[dict[str, Any], str | None, bool]] = []
+    for entry in selected:
+        chosen = sheet_names.get(entry["id"]) or []
+        tabs: list[str] = []
+        for raw in chosen:
+            tab = str(raw or "").strip()
+            if tab and tab not in tabs:
+                tabs.append(tab)
+        split = len(tabs) > 1
+        for tab in tabs or [None]:
+            pairs.append((entry, tab, split))
+    return pairs
 
 
 def _require_provider_offered(provider_id: str) -> None:
@@ -478,24 +528,42 @@ def complete_google_oauth(
             "Start the connection again.",
         )
 
+    # One source per (file, tab): a workbook whose tabs hold different datasets
+    # is several sources, not one with a hidden extra dimension. Keeping them
+    # separate is what lets each have its own dashboard, its own refresh
+    # schedule, and its own error -- a tab renamed in Google breaks only itself.
+    pairs = _expand_tab_selection(selected, body.sheet_names)
+
     # Check the whole batch up front: connecting three of five and then failing
     # would leave the user to work out which ones landed.
     cap = int(settings.INTEGRATION_MAX_PER_WORKSPACE)
     if cap:
         existing = count_workspace_integrations(db, workspace_id)
-        if existing + len(selected) > cap:
+        if existing + len(pairs) > cap:
             raise HTTPException(
                 400,
-                f"Connecting {len(selected)} more source(s) would exceed the limit "
+                f"Connecting {len(pairs)} more source(s) would exceed the limit "
                 f"of {cap} for this workspace ({existing} already connected). "
                 "Select fewer, or remove an existing source first.",
             )
+
+    # The same, for the plan's upload quota. Without this the rows are created,
+    # then the background syncs fail one by one once the cap is reached, and
+    # the user is left with half a connection and no explanation.
+    allowance = remaining_upload_allowance(db, user, workspace_id)
+    if allowance is not None and len(pairs) > allowance:
+        raise_plan_limit(
+            get_effective_plan(db, user),
+            "uploads",
+            f"Connecting {len(pairs)} sheet(s) would pass your plan's limit. "
+            f"You can connect {allowance} more.",
+        )
 
     base_config = dict(session.get("config") or {})
     base_name = str(session.get("name") or "").strip()
     created: list[dict[str, Any]] = []
 
-    for entry in selected:
+    for entry, tab, file_is_split in pairs:
         config = dict(base_config)
         config.update(
             {
@@ -505,14 +573,17 @@ def complete_google_oauth(
                 "web_url": entry.get("web_url"),
             }
         )
-        chosen_tab = (body.sheet_names.get(entry["id"]) or "").strip()
-        if chosen_tab:
-            config["sheet_name"] = chosen_tab
+        if tab:
+            config["sheet_name"] = tab
         # With several sheets in one go, the user's single display name would
         # collide across all of them; the file's own name is more useful.
         display_name = entry.get("name") or base_name or "Google Sheets data"
-        if len(selected) == 1 and base_name:
+        if len(pairs) == 1 and base_name:
             display_name = base_name
+        elif file_is_split and tab:
+            # Four tabs of one workbook would otherwise be four sources all
+            # called "2026 Plan".
+            display_name = f"{display_name} - {tab}"
 
         integration = DataSourceIntegration(
             workspace_id=workspace_id,
