@@ -87,6 +87,11 @@ export default function UploadPage() {
         row_count: result.row_count,
         column_count: result.column_count,
         all_columns: result.all_columns,
+        // Carried through so the review step can offer the workbook's other
+        // tabs as datasets of their own.
+        upload_id: result.id,
+        sheet: result.sheet ?? null,
+        importable_sheets: result.importable_sheets ?? [],
       };
     },
     [queryClient]

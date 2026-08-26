@@ -13,6 +13,7 @@ import {
   dimensionSummary,
 } from "@/lib/ingestion";
 import { api } from "@/lib/api";
+import { formatUserFacingApiError } from "@/lib/api-errors";
 import { CheckCircle2, CircleAlert, CircleHelp } from "lucide-react";
 
 interface IngestionReviewCardProps {
@@ -22,6 +23,12 @@ interface IngestionReviewCardProps {
   columnCount: number;
   allColumns: string[];
   ingestion: IngestionProfile;
+  /** The upload row, needed to import further tabs of the same workbook. */
+  uploadId?: string;
+  /** Which tab this dataset read. Null for CSV and single-tab workbooks. */
+  sheet?: string | null;
+  /** Tabs of this workbook that do not have a dataset yet. */
+  importableSheets?: string[];
   onConfirmed: (datasetId: string) => void;
   className?: string;
 }
@@ -41,6 +48,9 @@ export function IngestionReviewCard({
   columnCount,
   allColumns,
   ingestion,
+  uploadId,
+  sheet,
+  importableSheets,
   onConfirmed,
   className,
 }: IngestionReviewCardProps) {
@@ -61,6 +71,33 @@ export function IngestionReviewCard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [pickedSheets, setPickedSheets] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
+
+  // Only Excel workbooks have tabs, and only an upload row can be fanned out.
+  const canImportSheets = Boolean(
+    uploadId && importableSheets && importableSheets.length > 0
+  );
+
+  const handleImportSheets = useCallback(async () => {
+    if (!uploadId || pickedSheets.length === 0) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await api.importUploadSheets(uploadId, pickedSheets);
+      setImportedCount(result.imported);
+      if (result.imported === 0) {
+        // The server skips tabs that already have a dataset, so this is a
+        // real outcome rather than a failure.
+        setError("Those sheets have already been imported.");
+      }
+    } catch (err) {
+      setError(formatUserFacingApiError(err, "import those sheets"));
+    } finally {
+      setImporting(false);
+    }
+  }, [uploadId, pickedSheets]);
 
   const readiness = interpretationReadiness(ingestion);
 
@@ -307,6 +344,62 @@ export function IngestionReviewCard({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {canImportSheets && (
+        <div className="space-y-2 rounded-lg border border-dashed p-3">
+          <div>
+            <p className="text-sm font-medium">
+              This workbook has {importableSheets!.length} other sheet
+              {importableSheets!.length === 1 ? "" : "s"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              We read {sheet ? <strong>{sheet}</strong> : "the one that looks most like a table"}.
+              Bring in others as their own datasets, each with its own dashboard.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {importableSheets!.map((name) => (
+              <label
+                key={name}
+                className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 rounded border-input"
+                  checked={pickedSheets.includes(name)}
+                  disabled={importing || importedCount > 0}
+                  onChange={(e) =>
+                    setPickedSheets((prev) =>
+                      e.target.checked
+                        ? [...prev, name]
+                        : prev.filter((n) => n !== name)
+                    )
+                  }
+                />
+                <span>{name}</span>
+              </label>
+            ))}
+          </div>
+          {importedCount > 0 ? (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              Imported {importedCount} sheet{importedCount === 1 ? "" : "s"}. They are
+              processing now and will appear with your other data.
+            </p>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pickedSheets.length === 0 || importing}
+              onClick={() => void handleImportSheets()}
+            >
+              {importing
+                ? "Importing…"
+                : `Import ${pickedSheets.length || ""} selected`.trim()}
+            </Button>
+          )}
         </div>
       )}
 
