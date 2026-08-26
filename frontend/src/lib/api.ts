@@ -502,6 +502,10 @@ export const api = {
       all_columns: string[];
       mapping_spec?: unknown;
       sheets?: unknown[];
+      /** Which tab of a workbook this dataset read; null for CSV. */
+      sheet?: string | null;
+      /** Tabs of the same workbook that do not have a dataset yet. */
+      importable_sheets?: string[];
       poll_url?: string;
       error?: string | null;
     };
@@ -574,6 +578,23 @@ export const api = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+    }),
+
+  /**
+   * Import further tabs of an already-uploaded workbook, each as its own
+   * dataset. Returns how many were created; tabs that already have a dataset
+   * are skipped rather than duplicated.
+   */
+  importUploadSheets: (uploadId: string, sheetNames: string[]) =>
+    request<{
+      imported: number;
+      uploads: { id: string; filename: string; sheet: string }[];
+      skipped_reason: string | null;
+    }>(`/api/uploads/${uploadId}/sheets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheet_names: sheetNames }),
+      action: "import those sheets",
     }),
 
   getUpload: (id: string) =>

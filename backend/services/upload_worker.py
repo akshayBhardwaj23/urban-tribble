@@ -49,15 +49,44 @@ def shutdown_executor() -> None:
         _executor = None
 
 
-def enqueue(upload_id: str, workspace_id: str) -> None:
-    get_executor().submit(_run_safely, upload_id, workspace_id)
+def enqueue(upload_id: str, workspace_id: str, sheet_name: str | None = None) -> None:
+    get_executor().submit(_run_safely, upload_id, workspace_id, sheet_name)
 
 
-def _run_safely(upload_id: str, workspace_id: str) -> None:
+def _run_safely(
+    upload_id: str, workspace_id: str, sheet_name: str | None = None
+) -> None:
     try:
-        process_upload(upload_id, workspace_id)
+        process_upload(upload_id, workspace_id, sheet_name=sheet_name)
     except Exception:  # noqa: BLE001 — worker threads must never raise
         logger.exception("upload %s failed in background worker", upload_id)
+
+
+def resolve_sheet(local_path: str, sheet_name: str | None) -> tuple[str | None, int | None]:
+    """Which tab to read, and the header row that goes with it.
+
+    ``FileProcessor.read`` auto-picks the most table-like tab when given no
+    name, but does not say which one it chose -- so the dataset could never
+    record where its rows came from, and nothing could tell which tabs of a
+    workbook were still unimported.
+
+    ``list_sheets`` scores and sorts by exactly the same rule, so its first
+    entry *is* that auto-pick. Naming it explicitly also means passing the
+    header row along: ``read`` only runs its own header detection on the
+    auto-pick path, and would otherwise silently fall back to row 0 the moment
+    a sheet is named.
+    """
+    sheets = _file_processor.list_sheets(local_path)
+    if not sheets:
+        # CSV/TSV, or a workbook whose tabs could not be listed.
+        return None, None
+    by_name = {s["name"]: s for s in sheets}
+    entry = by_name.get(sheet_name) if sheet_name else sheets[0]
+    if entry is None:
+        raise FileValidationError(
+            f'This file has no tab called "{sheet_name}".'
+        )
+    return entry["name"], entry.get("suggested_header_row")
 
 
 def _set_stage(db, upload: Upload, stage: str) -> None:
@@ -65,8 +94,14 @@ def _set_stage(db, upload: Upload, stage: str) -> None:
     db.commit()
 
 
-def process_upload(upload_id: str, workspace_id: str) -> None:
-    """Parse, clean, profile and persist one upload. Safe to call synchronously."""
+def process_upload(
+    upload_id: str, workspace_id: str, sheet_name: str | None = None
+) -> None:
+    """Parse, clean, profile and persist one upload. Safe to call synchronously.
+
+    ``sheet_name`` names the tab to read; without it the most table-like tab is
+    used, which is what a plain single-file upload does.
+    """
     db = SessionLocal()
     try:
         upload = db.query(Upload).filter(Upload.id == upload_id).first()
@@ -78,7 +113,10 @@ def process_upload(upload_id: str, workspace_id: str) -> None:
         try:
             _set_stage(db, upload, "reading")
             local = storage.materialize(source_key)
-            df = _file_processor.read(str(local))
+            chosen_sheet, header_row = resolve_sheet(str(local), sheet_name)
+            df = _file_processor.read(
+                str(local), sheet_name=chosen_sheet, header_row=header_row
+            )
             validate_frame_size(df, filename=upload.filename)
 
             _set_stage(db, upload, "cleaning")
@@ -86,6 +124,9 @@ def process_upload(upload_id: str, workspace_id: str) -> None:
                 df,
                 filename=upload.filename or "dataset",
                 description=upload.user_description,
+                # Recorded on the mapping spec so the dataset knows which tab
+                # it came from; it read as None for every upload before this.
+                sheet=chosen_sheet,
             )
             df = processed["df"]
             validate_frame_size(df, filename=upload.filename)

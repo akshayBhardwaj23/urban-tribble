@@ -38,6 +38,12 @@ export interface UploadFileResult {
   row_count: number;
   column_count: number;
   all_columns: string[];
+  /** The upload row, needed to import further tabs of the same workbook. */
+  upload_id?: string;
+  /** Which tab was read. Null for CSV, and for workbooks with a single tab. */
+  sheet?: string | null;
+  /** Tabs of this workbook that do not have a dataset yet. */
+  importable_sheets?: string[];
 }
 
 interface FileEntry {
@@ -276,6 +282,9 @@ export function FileDropzone({
           row_count: raw.row_count,
           column_count: raw.column_count,
           all_columns: raw.all_columns,
+          upload_id: raw.upload_id,
+          sheet: raw.sheet ?? null,
+          importable_sheets: raw.importable_sheets ?? [],
         };
         updateEntry(i, { status: "done", result, processingStage: null });
         anySuccess = true;
@@ -449,6 +458,9 @@ export function FileDropzone({
               columnCount={entry.result!.column_count}
               allColumns={entry.result!.all_columns}
               ingestion={entry.result!.ingestion}
+              uploadId={entry.result!.upload_id}
+              sheet={entry.result!.sheet}
+              importableSheets={entry.result!.importable_sheets}
               onConfirmed={markFileConfirmed}
             />
           ))}

@@ -16,6 +16,8 @@ frontend/.env.local
 # Database & uploads (dev)
 # WAL mode also writes app.db-shm / app.db-wal
 backend/data/app.db*
+# CI and local test runs point DATABASE_URL here.
+backend/data/ci.db*
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 
